@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="logo.svg" alt="DesKit Logo" width="120" />
+  <img src="resources/logo.svg" alt="DesKit Logo" width="120" />
 </p>
 <h1 align="center">DesKit</h1>
 
@@ -110,6 +110,14 @@ pnpm lint
 pnpm typecheck
 pnpm test
 pnpm build
+```
+
+## Assets
+
+The system-tray icon (`resources/tray.png`, `tray@2x.png`, `tray@3x.png`) is generated from [resources/logo.svg](resources/logo.svg). Re-run the rasterizer whenever the logo changes — it uses the bundled Electron as a headless Chromium, no extra dependencies:
+
+```bash
+pnpm exec electron scripts/build-tray-icons.cjs
 ```
 
 ## Documentation
