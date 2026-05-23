@@ -24,6 +24,31 @@ export function LauncherPanel() {
   const inputRef = useRef<HTMLInputElement | null>(null)
   const requestSeqRef = useRef(0)
 
+  // The renderer's <body> defaults to bg-background (opaque white) which
+  // bleeds through Electron's transparent launcher window. Force html/body
+  // transparent while this panel is mounted so the popover is the only
+  // painted surface.
+  useEffect(() => {
+    const html = document.documentElement
+    const body = document.body
+    const prev = {
+      htmlBg: html.style.background,
+      bodyBg: body.style.background,
+      htmlOverflow: html.style.overflow,
+      bodyOverflow: body.style.overflow,
+    }
+    html.style.background = "transparent"
+    body.style.background = "transparent"
+    html.style.overflow = "hidden"
+    body.style.overflow = "hidden"
+    return () => {
+      html.style.background = prev.htmlBg
+      body.style.background = prev.bodyBg
+      html.style.overflow = prev.htmlOverflow
+      body.style.overflow = prev.bodyOverflow
+    }
+  }, [])
+
   // cmdk does its own client-side filtering by default; we already filter
   // in main using fuzzy scoring, so we disable cmdk's filter and pass the
   // backend results straight through.
@@ -87,13 +112,10 @@ export function LauncherPanel() {
   }, [])
 
   return (
-    <div
-      className="flex h-screen w-screen items-start justify-center bg-transparent pt-0"
-      onKeyDown={onKeyDown}
-    >
+    <div className="flex h-screen w-screen flex-col" onKeyDown={onKeyDown}>
       <Command
         shouldFilter={false}
-        className="w-full max-w-2xl overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
+        className="flex h-full w-full flex-col overflow-hidden rounded-xl border border-border bg-popover text-popover-foreground shadow-2xl"
       >
         <CommandInput
           ref={inputRef}
@@ -101,7 +123,7 @@ export function LauncherPanel() {
           onValueChange={setQuery}
           placeholder={t("launcher.placeholder")}
         />
-        <CommandList className="max-h-[60vh]">
+        <CommandList className="max-h-none flex-1">
           {!loading && items.length === 0 && <CommandEmpty>{t("launcher.empty")}</CommandEmpty>}
           <CommandGroup heading={t("launcher.installed")}>
             {items.map((item) => (
