@@ -1,6 +1,8 @@
-# Default owners — every PR requests review from these accounts.
-* @AstroAir @MaxQian888
+# Default owner. Every PR requests review from the repository maintainer.
+* @WiIIiamWei
 
-# Example: scope-specific owners (uncomment + edit when growing the team).
-# /electron/   @AstroAir @MaxQian888
-# /docs/       @AstroAir
+# Add scope-specific owners when the team has stable module ownership.
+# /src/main/      @WiIIiamWei
+# /src/preload/   @WiIIiamWei
+# /src/renderer/  @WiIIiamWei
+# /docs/          @WiIIiamWei

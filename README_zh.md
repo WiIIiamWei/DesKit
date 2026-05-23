@@ -59,7 +59,6 @@ src/
       └─ lib/
 
 docs/                     # Fumadocs 文档站
-DesKit/                   # 产品、架构、实施、质量文档
 resources/                # electron-builder 图标和资源
 ```
 
@@ -115,10 +114,9 @@ pnpm build
 
 ## 文档
 
-- [DesKit 文档导航](./DesKit/README.md)
+- [贡献指南](./CONTRIBUTING.md)
 - [测试说明](./TESTING.md)
 - [CI/CD 说明](./CI_CD.md)
-- [贡献指南](./CONTRIBUTING.md)
 
 ## 许可证
 

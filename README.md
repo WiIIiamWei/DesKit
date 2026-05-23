@@ -59,7 +59,6 @@ src/
       └─ lib/
 
 docs/                     # Fumadocs documentation site
-DesKit/                   # Product, architecture, implementation, and quality docs
 resources/                # electron-builder icons and resources
 ```
 
@@ -115,10 +114,9 @@ pnpm build
 
 ## Documentation
 
-- [DesKit Documentation Map](./DesKit/README.md)
+- [Contributing Guide](./CONTRIBUTING.md)
 - [Testing Guide](./TESTING.md)
 - [CI/CD Guide](./CI_CD.md)
-- [Contributing Guide](./CONTRIBUTING.md)
 
 ## License
 
