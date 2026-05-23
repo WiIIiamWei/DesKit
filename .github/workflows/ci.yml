@@ -19,12 +19,10 @@ name: CI/CD Pipeline
 on:
   push:
     branches:
-      - master
-      - develop
+      - main
   pull_request:
     branches:
-      - master
-      - develop
+      - main
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
