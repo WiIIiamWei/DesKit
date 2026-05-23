@@ -1,9 +1,20 @@
+import type { SearchWindowDeps } from "./search-window"
 import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
 import { app, BrowserWindow, ipcMain, net, protocol, session, shell } from "electron"
 import { greet } from "./ipc/greet"
+import { LauncherService } from "./ipc/launcher-service"
+import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
+import {
+  ensureSearchWindow,
+  hideSearchWindow,
+  showSearchWindow,
+  toggleSearchWindow,
+} from "./search-window"
+import { bindGlobalShortcut, unbindGlobalShortcut } from "./shortcut"
+import { createTray, defaultTrayIcon, destroyTray, refreshTrayMenu } from "./tray"
 
 const isDev = !app.isPackaged
 // electron-vite injects this in dev (Vite dev server URL). Undefined in prod.
@@ -91,6 +102,13 @@ function registerStaticProtocol(): void {
   })
 }
 
+const launcher = new LauncherService()
+let mainWindow: BrowserWindow | null = null
+// Tracks whether quit was explicitly requested through the tray menu, so
+// the main-window close handler can distinguish "user clicked X" (hide)
+// from "user picked Quit" (let the close go through).
+let quitRequested = false
+
 function registerIpc(): void {
   ipcMain.handle("greet", (_event, name: unknown) => {
     if (typeof name !== "string") {
@@ -98,6 +116,40 @@ function registerIpc(): void {
     }
     return greet(name)
   })
+
+  ipcMain.handle("launcher:search", (_event, query: unknown) => {
+    return launcher.search(typeof query === "string" ? query : "")
+  })
+
+  ipcMain.handle("launcher:launch", async (_event, id: unknown) => {
+    if (typeof id !== "string") return false
+    const ok = await launcher.launchById(id)
+    if (ok) hideSearchWindow()
+    return ok
+  })
+
+  ipcMain.handle("launcher:refresh", () => launcher.refreshApps())
+
+  ipcMain.handle("launcher:hide", () => {
+    hideSearchWindow()
+  })
+
+  ipcMain.handle("settings:get", () => launcher.getSettings())
+
+  ipcMain.handle("settings:update", async (_event, patch: unknown) => {
+    const next = await launcher.updateSettings(coercePatch(patch))
+    rebindHotkey(next.hotkey)
+    refreshTrayMenu(trayActions())
+    return next
+  })
+}
+
+function coercePatch(value: unknown): { hotkey?: string } {
+  if (!value || typeof value !== "object") return {}
+  const v = value as Record<string, unknown>
+  const out: { hotkey?: string } = {}
+  if (typeof v.hotkey === "string") out.hotkey = v.hotkey
+  return out
 }
 
 function attachWindowSecurity(win: BrowserWindow, allowedOrigin: string): void {
@@ -137,14 +189,18 @@ function attachWindowSecurity(win: BrowserWindow, allowedOrigin: string): void {
   })
 }
 
-function createWindow(): BrowserWindow {
+function searchWindowDeps(): SearchWindowDeps {
+  return { rendererDevUrl, appOrigin: APP_ORIGIN }
+}
+
+function createMainWindow(): BrowserWindow {
   const win = new BrowserWindow({
     width: 1024,
     height: 720,
     minWidth: 640,
     minHeight: 480,
     title: "DesKit",
-    show: false, // wait for ready-to-show to avoid white flash
+    show: false, // launcher app stays in tray; window is shown on demand
     backgroundColor: "#0a0a0a",
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
@@ -155,7 +211,14 @@ function createWindow(): BrowserWindow {
     },
   })
 
-  win.once("ready-to-show", () => win.show())
+  // Closing the main window should hide it, not quit the app — quitting is
+  // reserved for the tray menu.
+  win.on("close", (event) => {
+    if (!quitRequested) {
+      event.preventDefault()
+      win.hide()
+    }
+  })
 
   if (rendererDevUrl) {
     void win.loadURL(rendererDevUrl)
@@ -169,6 +232,37 @@ function createWindow(): BrowserWindow {
   return win
 }
 
+function showMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) {
+    mainWindow = createMainWindow()
+  }
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+}
+
+function rebindHotkey(accelerator: string): void {
+  const ok = bindGlobalShortcut(accelerator, () => toggleSearchWindow(searchWindowDeps()))
+  if (!ok) {
+    console.warn(`[deskit] failed to register global shortcut: ${accelerator}`)
+  }
+}
+
+function trayActions() {
+  return {
+    onOpenSearch: () => showSearchWindow(searchWindowDeps()),
+    onShowMainWindow: showMainWindow,
+    onRefreshApps: () => {
+      void launcher.refreshApps()
+    },
+    onQuit: () => {
+      quitRequested = true
+      app.quit()
+    },
+    getHotkey: () => launcher.getSettings().hotkey,
+  }
+}
+
 // Single-instance lock: focusing the existing window is friendlier than
 // silently launching a duplicate process that fights for the same resources.
 const gotLock = app.requestSingleInstanceLock()
@@ -176,25 +270,49 @@ if (!gotLock) {
   app.quit()
 } else {
   app.on("second-instance", () => {
-    const [first] = BrowserWindow.getAllWindows()
-    if (first) {
-      if (first.isMinimized()) first.restore()
-      first.focus()
-    }
+    // Second launch should re-open the launcher rather than steal focus
+    // from whatever the user is doing — matches PowerToys behaviour.
+    showSearchWindow(searchWindowDeps())
   })
 
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     applyCsp()
     registerStaticProtocol()
     registerIpc()
-    createWindow()
+
+    const settings = await launcher.init()
+
+    // Pre-warm both the main window (so the first show is instant) and the
+    // app cache (so the first launcher query has results).
+    mainWindow = createMainWindow()
+    ensureSearchWindow(searchWindowDeps())
+    void launcher.refreshApps()
+
+    createTray(defaultTrayIcon(), trayActions())
+    rebindHotkey(settings.hotkey)
+    showStartupNotification({ hotkey: settings.hotkey, iconPath: defaultNotificationIcon() })
 
     app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) createWindow()
+      if (BrowserWindow.getAllWindows().length === 0) {
+        mainWindow = createMainWindow()
+      }
+      showMainWindow()
     })
   })
 
+  app.on("will-quit", () => {
+    unbindGlobalShortcut()
+    destroyTray()
+  })
+
+  app.on("before-quit", () => {
+    quitRequested = true
+  })
+
+  // Tray-resident launcher: do NOT quit when all windows are closed.
+  // Subscribing with a no-op handler suppresses Electron's default
+  // "quit when last window closes" behaviour on Windows/Linux.
   app.on("window-all-closed", () => {
-    if (process.platform !== "darwin") app.quit()
+    // intentionally empty
   })
 }
