@@ -46,3 +46,6 @@ skills-lock.json
 
 # docs
 DesKit/
+/.idea
+/.codex
+/.pnpm-store
