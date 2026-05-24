@@ -37,6 +37,10 @@ jobs:
   # Step 2: Test Suite & Build
   test:
     name: Test
+    permissions:
+      contents: read
+      pull-requests: write
+      checks: write
     uses: ./.github/workflows/test.yml
 
   # Step 3: Build Electron Desktop Apps (after quality & test pass)
