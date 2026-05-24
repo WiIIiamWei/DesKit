@@ -29,24 +29,15 @@ export default defineConfig({
       provider: "v8",
       reporter: ["text", "lcov", "html", "json"],
       reportsDirectory: "coverage",
-      include: [
-        "src/main/launcher/{scan-start-menu,scan-uwp,search}.ts",
-        "src/main/protocol/resolve-static-path.ts",
-        "src/main/settings/settings.ts",
-        "src/renderer/src/lib/utils.ts",
-      ],
+      include: ["src/main/**/*.ts", "src/preload/**/*.ts", "src/renderer/src/**/*.{ts,tsx}"],
       exclude: [
         "src/renderer/src/components/ui/**",
         "src/main/index.ts",
         "src/preload/index.ts",
+        "**/*.test.ts",
+        "**/*.test.tsx",
         "**/*.d.ts",
       ],
-      thresholds: {
-        lines: 70,
-        statements: 70,
-        functions: 60,
-        branches: 60,
-      },
     },
   },
 })

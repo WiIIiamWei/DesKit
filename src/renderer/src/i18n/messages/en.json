@@ -46,6 +46,12 @@
     "placeholder": "Search apps and commands…",
     "empty": "No matches",
     "installed": "Installed apps",
+    "kind": {
+      "win32": "App",
+      "uwp": "Store",
+      "url": "Web",
+      "macos": "App"
+    },
     "settings": {
       "title": "Launcher",
       "subtitle": "Summon the command palette from anywhere with a global shortcut.",

@@ -55,6 +55,7 @@ export async function loadSettings(filePath: string): Promise<UserSettings> {
     return normalizeSettings(JSON.parse(raw))
   } catch (err) {
     if (isFileNotFound(err)) return { ...defaultSettings }
+    if (err instanceof SyntaxError) return { ...defaultSettings }
     throw err
   }
 }

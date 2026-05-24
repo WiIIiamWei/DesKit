@@ -2,7 +2,7 @@ import type { SearchWindowDeps } from "./search-window"
 import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
-import { app, BrowserWindow, ipcMain, net, protocol, session, shell } from "electron"
+import { app, BrowserWindow, ipcMain, net, protocol, session } from "electron"
 import { LauncherService } from "./ipc/launcher-service"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
@@ -15,6 +15,7 @@ import {
 } from "./search-window"
 import { bindGlobalShortcut, unbindGlobalShortcut } from "./shortcut"
 import { createTray, defaultTrayIcon, destroyTray, refreshTrayMenu } from "./tray"
+import { attachWindowSecurity } from "./window-security"
 
 const isDev = !app.isPackaged
 // electron-vite injects this in dev (Vite dev server URL). Undefined in prod.
@@ -180,43 +181,6 @@ function coercePatch(value: unknown): Partial<{
     out.accent = v.accent
   }
   return out
-}
-
-function attachWindowSecurity(win: BrowserWindow, allowedOrigin: string): void {
-  // window.open / target=_blank: never spawn a new BrowserWindow. Hand
-  // off http(s) URLs to the OS browser; deny everything else.
-  win.webContents.setWindowOpenHandler(({ url }) => {
-    if (url.startsWith("http://") || url.startsWith("https://")) {
-      void shell.openExternal(url)
-    }
-    return { action: "deny" }
-  })
-
-  // Prevent the renderer from navigating away from the app origin.
-  // Plain <a href="https://..."> (no target=_blank) would otherwise replace
-  // the renderer document with an external page.
-  win.webContents.on("will-navigate", (event, url) => {
-    let target: URL
-    try {
-      target = new URL(url)
-    } catch {
-      event.preventDefault()
-      return
-    }
-    if (target.origin === allowedOrigin) return
-    event.preventDefault()
-    if (target.protocol === "http:" || target.protocol === "https:") {
-      void shell.openExternal(url)
-    }
-  })
-
-  // Reject privilege escalation requests from preload/renderer.
-  win.webContents.on("will-attach-webview", (event, webPreferences) => {
-    delete webPreferences.preload
-    webPreferences.nodeIntegration = false
-    webPreferences.contextIsolation = true
-    event.preventDefault()
-  })
 }
 
 function searchWindowDeps(): SearchWindowDeps {

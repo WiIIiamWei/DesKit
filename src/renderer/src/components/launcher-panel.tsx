@@ -10,13 +10,6 @@ import {
 } from "@/components/ui/command"
 import { hideLauncher, launchApp, onLauncherFocus, searchApps } from "@/lib/electron"
 
-const KIND_LABEL: Record<LauncherAppKind, string> = {
-  win32: "App",
-  uwp: "Store",
-  url: "Web",
-  macos: "App",
-}
-
 export function LauncherPanel() {
   const { t } = useTranslation()
   const [query, setQuery] = useState("")
@@ -140,7 +133,7 @@ export function LauncherPanel() {
                   )}
                 </div>
                 <span className="ml-2 rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase text-muted-foreground">
-                  {KIND_LABEL[item.entry.kind]}
+                  {t(`launcher.kind.${item.entry.kind}`)}
                 </span>
               </CommandItem>
             ))}
