@@ -288,17 +288,22 @@ function trayActions() {
   }
 }
 
-// Single-instance lock: focusing the existing window is friendlier than
+// Single-instance lock: focusing the existing packaged app is friendlier than
 // silently launching a duplicate process that fights for the same resources.
-const gotLock = app.requestSingleInstanceLock()
+// In dev, skip the lock so stale Electron processes do not steal restarts and
+// leave the visible window stuck on only the BrowserWindow background.
+const shouldUseSingleInstanceLock = app.isPackaged
+const gotLock = !shouldUseSingleInstanceLock || app.requestSingleInstanceLock()
 if (!gotLock) {
   app.quit()
 } else {
-  app.on("second-instance", () => {
-    // Second launch should re-open the launcher rather than steal focus
-    // from whatever the user is doing — matches PowerToys behaviour.
-    showSearchWindow(searchWindowDeps())
-  })
+  if (shouldUseSingleInstanceLock) {
+    app.on("second-instance", () => {
+      // Second launch should re-open the launcher rather than steal focus
+      // from whatever the user is doing — matches PowerToys behaviour.
+      showSearchWindow(searchWindowDeps())
+    })
+  }
 
   void app.whenReady().then(async () => {
     // Match package.json build.appId so Windows recognises the app
