@@ -5,7 +5,7 @@
 export {}
 
 declare global {
-  type LauncherAppKind = "win32" | "uwp" | "url"
+  type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
 
   interface LauncherAppEntry {
     id: string

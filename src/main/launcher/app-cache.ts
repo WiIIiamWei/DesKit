@@ -1,12 +1,13 @@
 import type { AppEntry } from "./types"
 import { shell } from "electron"
+import { macosApplicationDirectories, scanMacosApplicationsDir } from "./scan-macos-apps"
 import { dedupeEntries, scanStartMenuDir, startMenuDirectories } from "./scan-start-menu"
 import { scanUwpApps } from "./scan-uwp"
 
 /**
- * In-memory inventory of installed apps. Built in parallel from the two
- * sources PowerToys CmdPal also uses: Win32 shortcuts under the two
- * Start-menu roots, and packaged (UWP/MSIX) apps via Get-StartApps.
+ * In-memory inventory of installed apps. On Windows, uses Start-menu
+ * shortcuts plus packaged (UWP/MSIX) apps. On macOS, uses .app bundles
+ * under the standard application directories.
  */
 export class AppCache {
   private apps: readonly AppEntry[] = []
@@ -31,15 +32,17 @@ export class AppCache {
 
   private async runRefresh(): Promise<readonly AppEntry[]> {
     const dirs = startMenuDirectories()
-    const [uwp, ...win32Groups] = await Promise.all([
+    const macDirs = macosApplicationDirectories()
+    const [uwp, ...groups] = await Promise.all([
       scanUwpApps().catch(() => [] as AppEntry[]),
       ...dirs.map((dir) =>
         scanStartMenuDir(dir, { readShortcutLink: (p) => shell.readShortcutLink(p) }).catch(
           () => [] as AppEntry[]
         )
       ),
+      ...macDirs.map((dir) => scanMacosApplicationsDir(dir).catch(() => [] as AppEntry[])),
     ])
-    const merged = dedupeEntries([...uwp, ...win32Groups.flat()])
+    const merged = dedupeEntries([...uwp, ...groups.flat()])
     this.apps = merged
     return merged
   }

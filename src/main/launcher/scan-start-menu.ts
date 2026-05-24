@@ -28,7 +28,7 @@ const NOISE_PATTERN =
 const LAUNCHABLE_TARGET_EXT = new Set([".exe", ".bat", ".cmd", ".com", ".msc"])
 
 function isLaunchableTarget(target: string): boolean {
-  const ext = path.extname(target).toLowerCase()
+  const ext = path.win32.extname(target).toLowerCase()
   if (!ext) return false
   return LAUNCHABLE_TARGET_EXT.has(ext)
 }
