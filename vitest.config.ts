@@ -18,6 +18,13 @@ export default defineConfig({
     globals: false,
     setupFiles: ["./vitest.setup.ts"],
     css: false,
+    // junit reporter writes a single XML file so the workflow can upload it
+    // as the "test-results" artifact and feed it to publish-unit-test-result
+    // for a PR comment. "default" keeps the terminal output local devs expect.
+    reporters: ["default", "junit"],
+    outputFile: {
+      junit: "coverage/junit.xml",
+    },
     coverage: {
       provider: "v8",
       reporter: ["text", "lcov", "html", "json"],
