@@ -14,6 +14,7 @@ const KIND_LABEL: Record<LauncherAppKind, string> = {
   win32: "App",
   uwp: "Store",
   url: "Web",
+  macos: "App",
 }
 
 export function LauncherPanel() {

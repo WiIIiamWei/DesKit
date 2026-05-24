@@ -38,7 +38,7 @@
       "title": "App Launcher",
       "subtitle": "Summon a command palette from anywhere to launch installed apps.",
       "aboutTitle": "About this feature",
-      "aboutBody": "Press the global shortcut to open a search box. Start menu shortcuts and Microsoft Store apps are indexed automatically.",
+      "aboutBody": "Press the global shortcut to open a search box. Installed apps are indexed automatically.",
       "openSettings": "Configure in Settings"
     }
   },

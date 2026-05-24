@@ -2,7 +2,7 @@
 // so both main-process modules and the renderer (via preload typings)
 // can import the same shape.
 
-export type AppKind = "win32" | "uwp" | "url"
+export type AppKind = "win32" | "uwp" | "url" | "macos"
 
 export interface AppEntry {
   /** Stable id used by IPC: kind + target path / AppUserModelId. */
@@ -15,6 +15,7 @@ export interface AppEntry {
   /**
    * For win32: path to .lnk / .url / .exe (the thing we open).
    * For uwp:   `shell:AppsFolder\\<AppUserModelId>`.
+   * For macos: path to the .app bundle.
    */
   target: string
   /** Optional description (folder for .lnk, publisher for UWP). */
