@@ -1,6 +1,7 @@
 import * as path from "node:path"
 import process from "node:process"
 import { BrowserWindow, screen } from "electron"
+import { attachWindowSecurity } from "./window-security"
 
 const SEARCH_WIDTH = 720
 const SEARCH_HEIGHT = 480
@@ -66,6 +67,9 @@ export function ensureSearchWindow(deps: SearchWindowDeps): BrowserWindow {
     if (process.env.DESKIT_KEEP_SEARCH_OPEN) return
     hideSearchWindow()
   })
+
+  const allowedOrigin = deps.rendererDevUrl ? new URL(deps.rendererDevUrl).origin : deps.appOrigin
+  attachWindowSecurity(searchWindow, allowedOrigin)
 
   const url = deps.rendererDevUrl
     ? `${deps.rendererDevUrl}#${SEARCH_HASH}`

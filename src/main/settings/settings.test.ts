@@ -84,4 +84,12 @@ describe("loadSettings / saveSettings", () => {
     const settings = await loadSettings(file)
     expect(settings).toEqual(defaultSettings)
   })
+
+  it("loads defaults when settings JSON is corrupted", async () => {
+    const file = settingsFilePath(dir)
+    await fs.mkdir(path.dirname(file), { recursive: true })
+    await fs.writeFile(file, "{not-json", "utf-8")
+    const settings = await loadSettings(file)
+    expect(settings).toEqual(defaultSettings)
+  })
 })

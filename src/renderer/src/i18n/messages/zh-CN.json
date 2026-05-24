@@ -46,6 +46,12 @@
     "placeholder": "搜索应用与命令…",
     "empty": "没有匹配项",
     "installed": "已安装应用",
+    "kind": {
+      "win32": "应用",
+      "uwp": "商店",
+      "url": "网页",
+      "macos": "应用"
+    },
     "settings": {
       "title": "启动器",
       "subtitle": "设置一个全局快捷键，在任意位置唤出命令面板。",
