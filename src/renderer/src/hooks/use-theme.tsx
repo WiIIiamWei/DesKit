@@ -55,12 +55,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
       return
     }
     let cancelled = false
-    void getSettings().then((s) => {
-      if (cancelled) return
-      setMode(s.themeMode)
-      setAccentState(s.accent)
-      setLoaded(true)
-    })
+    void getSettings()
+      .then((s) => {
+        if (cancelled) return
+        setMode(s.themeMode)
+        setAccentState(s.accent)
+        setLoaded(true)
+      })
+      .catch((err: unknown) => {
+        if (cancelled) return
+        console.warn("[deskit] failed to load settings; using defaults", err)
+        setLoaded(true)
+      })
     return () => {
       cancelled = true
     }
