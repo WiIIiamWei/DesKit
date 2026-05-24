@@ -4,7 +4,7 @@
   "private": true,
   "packageManager": "pnpm@11.0.8",
   "description": "DesKit — desktop productivity toolbox (Electron + React + electron-vite)",
-  "author": "DesKit Team",
+  "author": "DesKit Team <1397784681@qq.com>",
   "license": "MIT",
   "main": "out/main/index.js",
   "engines": {

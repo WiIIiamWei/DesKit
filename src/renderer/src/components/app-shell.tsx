@@ -1,6 +1,7 @@
 import { House, Search, Settings as SettingsIcon } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import logoUrl from "@/assets/logo.svg"
 import { AppLauncherPage } from "@/components/pages/app-launcher-page"
 import { HomePage } from "@/components/pages/home-page"
 import { SettingsPage } from "@/components/pages/settings-page"
@@ -19,7 +20,6 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
-import logoUrl from "../../../../resources/logo.svg"
 
 export type NavId = "home" | "settings" | "app-launcher"
 

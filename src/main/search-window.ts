@@ -14,6 +14,11 @@ export interface SearchWindowDeps {
 }
 
 let searchWindow: BrowserWindow | null = null
+let searchWindowQuitting = false
+
+export function setSearchWindowQuitting(quitting: boolean): void {
+  searchWindowQuitting = quitting
+}
 
 export function ensureSearchWindow(deps: SearchWindowDeps): BrowserWindow {
   if (searchWindow && !searchWindow.isDestroyed()) return searchWindow
@@ -46,8 +51,13 @@ export function ensureSearchWindow(deps: SearchWindowDeps): BrowserWindow {
   // press makes the first show feel sluggish.
   searchWindow.on("close", (event) => {
     if (!searchWindow) return
+    if (searchWindowQuitting) return
     event.preventDefault()
     hideSearchWindow()
+  })
+
+  searchWindow.on("closed", () => {
+    searchWindow = null
   })
 
   // Auto-hide when the user clicks elsewhere — same behaviour as

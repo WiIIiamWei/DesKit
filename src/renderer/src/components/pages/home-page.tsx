@@ -2,10 +2,10 @@ import type { NavId } from "../app-shell"
 import { RefreshCw, Settings as SettingsIcon, Sparkles } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
+import logoUrl from "@/assets/logo.svg"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { isElectron, refreshApps } from "@/lib/electron"
-import logoUrl from "../../../../../resources/logo.svg"
 
 export function HomePage({ onNavigate }: { onNavigate: (id: NavId) => void }) {
   const { t } = useTranslation()

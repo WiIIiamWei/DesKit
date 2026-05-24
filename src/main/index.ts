@@ -9,6 +9,7 @@ import { getContentType, resolveStaticPath } from "./protocol/resolve-static-pat
 import {
   ensureSearchWindow,
   hideSearchWindow,
+  setSearchWindowQuitting,
   showSearchWindow,
   toggleSearchWindow,
 } from "./search-window"
@@ -129,8 +130,13 @@ function registerIpc(): void {
   ipcMain.handle("settings:get", () => launcher.getSettings())
 
   ipcMain.handle("settings:update", async (_event, patch: unknown) => {
-    const next = await launcher.updateSettings(coercePatch(patch))
-    rebindHotkey(next.hotkey)
+    const previous = launcher.getSettings()
+    let next = await launcher.updateSettings(coercePatch(patch))
+
+    if (next.hotkey !== previous.hotkey && !rebindHotkey(next.hotkey)) {
+      next = await launcher.updateSettings({ hotkey: previous.hotkey })
+    }
+
     refreshTrayMenu(trayActions())
     broadcastSettingsChanged(next)
     return next
@@ -265,11 +271,12 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
-function rebindHotkey(accelerator: string): void {
+function rebindHotkey(accelerator: string): boolean {
   const ok = bindGlobalShortcut(accelerator, () => toggleSearchWindow(searchWindowDeps()))
   if (!ok) {
     console.warn(`[deskit] failed to register global shortcut: ${accelerator}`)
   }
+  return ok
 }
 
 function trayActions() {
@@ -281,6 +288,7 @@ function trayActions() {
     },
     onQuit: () => {
       quitRequested = true
+      setSearchWindowQuitting(true)
       app.quit()
     },
     getHotkey: () => launcher.getSettings().hotkey,
@@ -343,12 +351,14 @@ if (!gotLock) {
   })
 
   app.on("will-quit", () => {
+    setSearchWindowQuitting(true)
     unbindGlobalShortcut()
     destroyTray()
   })
 
   app.on("before-quit", () => {
     quitRequested = true
+    setSearchWindowQuitting(true)
   })
 
   // Tray-resident launcher: do NOT quit when all windows are closed.
