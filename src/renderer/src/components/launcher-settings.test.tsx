@@ -27,8 +27,18 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
   return api
 }
 
+function mockPlatform(platform: string): void {
+  Object.defineProperty(window.navigator, "platform", {
+    configurable: true,
+    value: platform,
+  })
+}
+
 describe("launcher settings", () => {
+  const originalPlatform = window.navigator.platform
+
   beforeEach(() => {
+    mockPlatform("Win32")
     installElectronApi({
       hotkey: "Control+Space",
       themeMode: "system",
@@ -39,6 +49,7 @@ describe("launcher settings", () => {
   afterEach(() => {
     cleanup()
     delete window.electronAPI
+    mockPlatform(originalPlatform)
   })
 
   it("keeps the hotkey field editable until capture is requested", async () => {
@@ -63,5 +74,28 @@ describe("launcher settings", () => {
     fireEvent.keyDown(input, { altKey: true, code: "Space", key: " " })
 
     expect(input).toHaveValue("Alt+Space")
+  })
+
+  it("captures the command key as an Electron macOS accelerator on macOS", async () => {
+    mockPlatform("MacIntel")
+    const user = userEvent.setup()
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
+
+    expect(input).toHaveValue("Command+K")
+  })
+
+  it("keeps meta as the Windows key accelerator off macOS", async () => {
+    const user = userEvent.setup()
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
+
+    expect(input).toHaveValue("Meta+K")
   })
 })

@@ -23,7 +23,8 @@ import { getSettings, isElectron, refreshApps, updateSettings } from "@/lib/elec
  * (Ctrl, Alt, ⌘ on macOS).
  */
 function HotkeyChips({ accelerator }: { accelerator: string }) {
-  const tokens = useMemo(() => splitAccelerator(accelerator), [accelerator])
+  const isMac = isMacPlatform()
+  const tokens = useMemo(() => splitAccelerator(accelerator, isMac), [accelerator, isMac])
   if (tokens.length === 0) {
     return <span className="text-xs text-muted-foreground">—</span>
   }
@@ -43,7 +44,7 @@ function HotkeyChips({ accelerator }: { accelerator: string }) {
   )
 }
 
-function splitAccelerator(accelerator: string): string[] {
+function splitAccelerator(accelerator: string, isMac = isMacPlatform()): string[] {
   return accelerator
     .split("+")
     .map((part) => part.trim())
@@ -63,7 +64,7 @@ function splitAccelerator(accelerator: string): string[] {
           return "⌘"
         case "alt":
         case "option":
-          return "Alt"
+          return isMac ? "⌥" : "Alt"
         case "shift":
           return "Shift"
         case "space":
@@ -86,10 +87,15 @@ function acceleratorFromKeyboardEvent(event: KeyboardEvent<HTMLInputElement>): s
   if (event.ctrlKey) modifiers.push("Control")
   if (event.altKey) modifiers.push("Alt")
   if (event.shiftKey) modifiers.push("Shift")
-  if (event.metaKey) modifiers.push("Meta")
+  if (event.metaKey) modifiers.push(isMacPlatform() ? "Command" : "Meta")
 
   if (modifiers.length === 0) return null
   return [...modifiers, key].join("+")
+}
+
+function isMacPlatform(): boolean {
+  if (typeof navigator === "undefined") return false
+  return /Mac|iPhone|iPad|iPod/.test(navigator.platform)
 }
 
 function normalizeAcceleratorKey(event: KeyboardEvent<HTMLInputElement>): string | null {
