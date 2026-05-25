@@ -212,7 +212,7 @@ export function LauncherSettings() {
               value={hotkey}
               onChange={(e) => setHotkey(e.target.value)}
               onKeyDown={onHotkeyKeyDown}
-              placeholder="Alt+Space"
+              placeholder="Control+Space"
               spellCheck={false}
               autoComplete="off"
               className="font-mono text-sm"
@@ -221,7 +221,9 @@ export function LauncherSettings() {
               {t("launcher.settings.save")}
             </Button>
           </div>
-          <FieldDescription>{t("launcher.settings.hotkeyHint")}</FieldDescription>
+          <FieldDescription className="text-xs">
+            {t("launcher.settings.hotkeyHint")}
+          </FieldDescription>
           <FieldDescription className="text-xs">{t("launcher.settings.examples")}</FieldDescription>
         </Field>
 
