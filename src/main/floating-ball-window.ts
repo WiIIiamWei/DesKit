@@ -129,7 +129,7 @@ export function moveFloatingBallBy(delta: { x: number; y: number }): void {
     width: bounds.width,
     height: bounds.height,
   }
-  win.setBounds(clampBounds(next, combinedWorkArea()))
+  win.setBounds(clampBounds(next, screen.getDisplayMatching(next).workArea))
 }
 
 export function syncFloatingBallWindow(deps: FloatingBallWindowDeps): void {
@@ -169,30 +169,6 @@ function clampBounds(bounds: Electron.Rectangle, workArea: Electron.Rectangle): 
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
-}
-
-function combinedWorkArea(): Electron.Rectangle {
-  const displays = screen.getAllDisplays()
-  const first = displays[0]?.workArea ?? screen.getPrimaryDisplay().workArea
-  let left = first.x
-  let top = first.y
-  let right = first.x + first.width
-  let bottom = first.y + first.height
-
-  for (const display of displays.slice(1)) {
-    const area = display.workArea
-    left = Math.min(left, area.x)
-    top = Math.min(top, area.y)
-    right = Math.max(right, area.x + area.width)
-    bottom = Math.max(bottom, area.y + area.height)
-  }
-
-  return {
-    x: left,
-    y: top,
-    width: right - left,
-    height: bottom - top,
-  }
 }
 
 function showFloatingBallContextMenu(): void {
