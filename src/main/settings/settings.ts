@@ -27,7 +27,7 @@ export interface UserSettings {
 }
 
 export const defaultSettings: UserSettings = {
-  hotkey: "Alt+Space",
+  hotkey: "Control+Space",
   themeMode: "system",
   accent: "neutral",
   floatingBallEnabled: false,
