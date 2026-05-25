@@ -3,6 +3,14 @@ import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
 import { app, BrowserWindow, ipcMain, net, protocol, session } from "electron"
+import {
+  destroyFloatingBallWindow,
+  hideFloatingBallWindow,
+  moveFloatingBallBy,
+  openFloatingBallFeature,
+  syncFloatingBallWindow,
+  toggleFloatingBallMenu,
+} from "./floating-ball-window"
 import { LauncherService } from "./ipc/launcher-service"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
@@ -128,6 +136,27 @@ function registerIpc(): void {
     hideSearchWindow()
   })
 
+  ipcMain.handle("floating-ball:toggle-menu", () => {
+    toggleFloatingBallMenu()
+  })
+
+  ipcMain.handle("floating-ball:open-feature", (_event, feature: unknown) => {
+    if (feature === "appLauncher") {
+      openFloatingBallFeature(feature)
+    }
+  })
+
+  ipcMain.handle("floating-ball:hide", async () => {
+    await disableFloatingBall()
+  })
+
+  ipcMain.handle("floating-ball:move-by", (_event, delta: unknown) => {
+    if (!delta || typeof delta !== "object") return
+    const value = delta as Record<string, unknown>
+    if (typeof value.x !== "number" || typeof value.y !== "number") return
+    moveFloatingBallBy({ x: value.x, y: value.y })
+  })
+
   ipcMain.handle("settings:get", () => launcher.getSettings())
 
   ipcMain.handle("settings:update", async (_event, patch: unknown) => {
@@ -139,16 +168,13 @@ function registerIpc(): void {
     }
 
     refreshTrayMenu(trayActions())
+    syncFloatingBallWindow(floatingBallDeps())
     broadcastSettingsChanged(next)
     return next
   })
 }
 
-function broadcastSettingsChanged(settings: {
-  hotkey: string
-  themeMode: string
-  accent: string
-}): void {
+function broadcastSettingsChanged(settings: ReturnType<typeof launcher.getSettings>): void {
   // Notify every renderer (main shell + long-lived launcher window) so
   // they can re-apply theme/hotkey state without reloading. Skip
   // destroyed windows defensively to avoid sending to torn-down webContents.
@@ -163,6 +189,8 @@ function coercePatch(value: unknown): Partial<{
   hotkey: string
   themeMode: "light" | "dark" | "system"
   accent: "neutral" | "blue" | "green" | "rose" | "violet"
+  floatingBallEnabled: boolean
+  floatingBallFeatures: "appLauncher"[]
 }> {
   if (!value || typeof value !== "object") return {}
   const v = value as Record<string, unknown>
@@ -180,11 +208,39 @@ function coercePatch(value: unknown): Partial<{
   ) {
     out.accent = v.accent
   }
+  if (typeof v.floatingBallEnabled === "boolean") out.floatingBallEnabled = v.floatingBallEnabled
+  if (Array.isArray(v.floatingBallFeatures)) {
+    out.floatingBallFeatures = v.floatingBallFeatures.filter(
+      (feature): feature is "appLauncher" => feature === "appLauncher"
+    )
+  }
   return out
 }
 
 function searchWindowDeps(): SearchWindowDeps {
   return { rendererDevUrl, appOrigin: APP_ORIGIN }
+}
+
+function floatingBallDeps() {
+  return {
+    rendererDevUrl,
+    appOrigin: APP_ORIGIN,
+    getSettings: () => launcher.getSettings(),
+    getLocale: () => app.getLocale(),
+    onOpenFeature: (feature: "appLauncher") => {
+      if (feature === "appLauncher") showSearchWindow(searchWindowDeps())
+    },
+    onDisable: () => {
+      void disableFloatingBall()
+    },
+  }
+}
+
+async function disableFloatingBall(): Promise<void> {
+  const next = await launcher.updateSettings({ floatingBallEnabled: false })
+  hideFloatingBallWindow()
+  refreshTrayMenu(trayActions())
+  broadcastSettingsChanged(next)
 }
 
 function createMainWindow(): BrowserWindow {
@@ -300,6 +356,7 @@ if (!gotLock) {
 
     createTray(defaultTrayIcon(), trayActions())
     rebindHotkey(settings.hotkey)
+    syncFloatingBallWindow(floatingBallDeps())
     showStartupNotification({
       hotkey: settings.hotkey,
       locale: app.getLocale(),
@@ -316,6 +373,7 @@ if (!gotLock) {
 
   app.on("will-quit", () => {
     setSearchWindowQuitting(true)
+    destroyFloatingBallWindow()
     unbindGlobalShortcut()
     destroyTray()
   })

@@ -1,8 +1,9 @@
-import { House, Search, Settings as SettingsIcon } from "lucide-react"
+import { CircleDot, House, Search, Settings as SettingsIcon } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import logoUrl from "@/assets/logo.svg"
 import { AppLauncherPage } from "@/components/pages/app-launcher-page"
+import { FloatingBallPage } from "@/components/pages/floating-ball-page"
 import { HomePage } from "@/components/pages/home-page"
 import { SettingsPage } from "@/components/pages/settings-page"
 import {
@@ -21,7 +22,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export type NavId = "home" | "settings" | "app-launcher"
+export type NavId = "home" | "settings" | "app-launcher" | "floating-ball"
 
 export function AppShell() {
   const { t } = useTranslation()
@@ -81,6 +82,16 @@ export function AppShell() {
                     <span>{t("nav.appLauncher")}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={nav === "floating-ball"}
+                    onClick={() => setNav("floating-ball")}
+                    tooltip={t("nav.floatingBall")}
+                  >
+                    <CircleDot />
+                    <span>{t("nav.floatingBall")}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -103,6 +114,7 @@ export function AppShell() {
             {nav === "home" && <HomePage onNavigate={setNav} />}
             {nav === "settings" && <SettingsPage />}
             {nav === "app-launcher" && <AppLauncherPage onNavigate={setNav} />}
+            {nav === "floating-ball" && <FloatingBallPage onNavigate={setNav} />}
           </div>
         </main>
       </SidebarInset>
@@ -118,5 +130,7 @@ function navKey(id: NavId): string {
       return "settings"
     case "app-launcher":
       return "appLauncher"
+    case "floating-ball":
+      return "floatingBall"
   }
 }
