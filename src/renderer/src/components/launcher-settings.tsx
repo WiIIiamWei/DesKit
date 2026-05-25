@@ -1,6 +1,6 @@
 import type { KeyboardEvent } from "react"
 import { Keyboard, RefreshCw, Sparkles } from "lucide-react"
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import {
@@ -131,6 +131,8 @@ export function LauncherSettings() {
   const [savedHotkey, setSavedHotkey] = useState("")
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [capturingHotkey, setCapturingHotkey] = useState(false)
+  const hotkeyInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!isElectron()) return
@@ -145,6 +147,14 @@ export function LauncherSettings() {
   const dirty = hotkey.trim() !== "" && hotkey !== savedHotkey
 
   function onHotkeyKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!capturingHotkey) return
+
+    if (event.key === "Escape") {
+      event.preventDefault()
+      setCapturingHotkey(false)
+      return
+    }
+
     if (modifierKeys.has(event.key)) {
       event.preventDefault()
       return
@@ -156,6 +166,13 @@ export function LauncherSettings() {
     event.preventDefault()
     setStatus(null)
     setHotkey(next)
+    setCapturingHotkey(false)
+  }
+
+  function onCaptureHotkey() {
+    setCapturingHotkey(true)
+    setStatus(null)
+    hotkeyInputRef.current?.focus()
   }
 
   async function onSave() {
@@ -208,6 +225,7 @@ export function LauncherSettings() {
           </FieldLabel>
           <div className="flex gap-2">
             <Input
+              ref={hotkeyInputRef}
               id="hotkey-input"
               value={hotkey}
               onChange={(e) => setHotkey(e.target.value)}
@@ -217,6 +235,15 @@ export function LauncherSettings() {
               autoComplete="off"
               className="font-mono text-sm"
             />
+            <Button
+              type="button"
+              variant={capturingHotkey ? "secondary" : "outline"}
+              onClick={onCaptureHotkey}
+              aria-pressed={capturingHotkey}
+            >
+              <Keyboard className="size-4" aria-hidden />
+              {capturingHotkey ? t("launcher.settings.capturing") : t("launcher.settings.capture")}
+            </Button>
             <Button onClick={onSave} disabled={!dirty}>
               {t("launcher.settings.save")}
             </Button>
