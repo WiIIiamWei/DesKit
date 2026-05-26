@@ -9,6 +9,8 @@ interface SettingsPatch {
   hotkey?: string
   themeMode?: "light" | "dark" | "system"
   accent?: "neutral" | "blue" | "green" | "rose" | "violet"
+  floatingBallEnabled?: boolean
+  floatingBallFeatures?: "appLauncher"[]
 }
 type Settings = Required<SettingsPatch>
 
@@ -18,6 +20,15 @@ const electronAPI = {
   launchApp: (id: string) => ipcRenderer.invoke("launcher:launch", id),
   refreshApps: () => ipcRenderer.invoke("launcher:refresh"),
   hideLauncher: () => ipcRenderer.invoke("launcher:hide"),
+  notifyLauncherReady: () => ipcRenderer.send("launcher:ready"),
+
+  // ---- Floating Ball ----
+  openFloatingBallFeature: (feature: "appLauncher") =>
+    ipcRenderer.invoke("floating-ball:open-feature", feature),
+  toggleFloatingBallMenu: () => ipcRenderer.invoke("floating-ball:toggle-menu"),
+  moveFloatingBallBy: (delta: { x: number; y: number }) =>
+    ipcRenderer.invoke("floating-ball:move-by", delta),
+  hideFloatingBall: () => ipcRenderer.invoke("floating-ball:hide"),
 
   // ---- Settings ----
   getSettings: () => ipcRenderer.invoke("settings:get"),
@@ -29,6 +40,19 @@ const electronAPI = {
     const listener = (): void => handler()
     ipcRenderer.on("launcher:focus", listener)
     return () => ipcRenderer.removeListener("launcher:focus", listener)
+  },
+
+  onFloatingBallMenuState: (handler: (expanded: boolean) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, expanded: boolean): void => handler(expanded)
+    ipcRenderer.on("floating-ball:menu-state", listener)
+    return () => ipcRenderer.removeListener("floating-ball:menu-state", listener)
+  },
+
+  onFloatingBallFeatures: (handler: (features: "appLauncher"[]) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, features: "appLauncher"[]): void =>
+      handler(features)
+    ipcRenderer.on("floating-ball:features", listener)
+    return () => ipcRenderer.removeListener("floating-ball:features", listener)
   },
 
   // Pushed by main after any settings:update so that windows other than

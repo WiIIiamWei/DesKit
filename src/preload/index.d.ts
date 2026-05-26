@@ -6,6 +6,7 @@ export {}
 
 declare global {
   type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
+  type DeskitFloatingBallFeature = "appLauncher"
 
   interface LauncherAppEntry {
     id: string
@@ -30,6 +31,8 @@ declare global {
     hotkey: string
     themeMode: DeskitThemeMode
     accent: DeskitThemeAccent
+    floatingBallEnabled: boolean
+    floatingBallFeatures: DeskitFloatingBallFeature[]
   }
 
   interface Window {
@@ -38,9 +41,18 @@ declare global {
       launchApp: (id: string) => Promise<boolean>
       refreshApps: () => Promise<LauncherAppEntry[]>
       hideLauncher: () => Promise<void>
+      notifyLauncherReady: () => void
+      openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
+      toggleFloatingBallMenu: () => Promise<void>
+      moveFloatingBallBy: (delta: { x: number; y: number }) => Promise<void>
+      hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
       updateSettings: (patch: Partial<DeskitUserSettings>) => Promise<DeskitUserSettings>
       onLauncherFocus: (handler: () => void) => () => void
+      onFloatingBallMenuState: (handler: (expanded: boolean) => void) => () => void
+      onFloatingBallFeatures: (
+        handler: (features: DeskitFloatingBallFeature[]) => void
+      ) => () => void
       onSettingsChanged: (handler: (settings: DeskitUserSettings) => void) => () => void
     }
   }

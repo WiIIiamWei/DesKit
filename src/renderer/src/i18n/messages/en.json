@@ -7,7 +7,8 @@
     "home": "Home",
     "settings": "Settings",
     "features": "Features",
-    "appLauncher": "App Launcher"
+    "appLauncher": "App Launcher",
+    "floatingBall": "Floating Ball"
   },
   "home": {
     "quickActions": "Quick actions",
@@ -40,6 +41,27 @@
       "aboutTitle": "About this feature",
       "aboutBody": "Press the global shortcut to open a search box. Installed apps are indexed automatically.",
       "openSettings": "Configure in Settings"
+    }
+  },
+  "floatingBall": {
+    "title": "DesKit Floating Ball",
+    "features": {
+      "appLauncher": "App Launcher"
+    },
+    "feature": {
+      "title": "Floating Ball",
+      "subtitle": "Keep a small launcher control on the desktop and open radial shortcuts around it.",
+      "aboutTitle": "About this feature",
+      "aboutBody": "Enable it in Settings to show the desktop ball. Click the ball to open its radial menu, or right-click it to close it.",
+      "openSettings": "Configure in Settings"
+    },
+    "settings": {
+      "title": "Floating Ball",
+      "subtitle": "Show a desktop shortcut ball and choose which tools appear in its radial menu.",
+      "enable": "Show desktop floating ball",
+      "enableHint": "Disabled by default at startup until you turn it on here.",
+      "menuFeatures": "Radial menu tools",
+      "menuFeaturesHint": "Choose up to 6 tools. The floating ball itself is not a menu tool."
     }
   },
   "launcher": {

@@ -17,6 +17,7 @@ function api(): NonNullable<Window["electronAPI"]> {
 export type AppEntry = LauncherAppEntry
 export type SearchResult = LauncherSearchResult
 export type UserSettings = DeskitUserSettings
+export type FloatingBallFeature = DeskitFloatingBallFeature
 
 /**
  * Type-safe wrappers for IPC commands defined in src/main/index.ts.
@@ -39,6 +40,26 @@ export async function hideLauncher(): Promise<void> {
   await api().hideLauncher()
 }
 
+export function notifyLauncherReady(): void {
+  api().notifyLauncherReady()
+}
+
+export async function openFloatingBallFeature(feature: FloatingBallFeature): Promise<void> {
+  await api().openFloatingBallFeature(feature)
+}
+
+export async function toggleFloatingBallMenu(): Promise<void> {
+  await api().toggleFloatingBallMenu()
+}
+
+export async function moveFloatingBallBy(delta: { x: number; y: number }): Promise<void> {
+  await api().moveFloatingBallBy(delta)
+}
+
+export async function hideFloatingBall(): Promise<void> {
+  await api().hideFloatingBall()
+}
+
 export async function getSettings(): Promise<UserSettings> {
   return api().getSettings()
 }
@@ -49,6 +70,16 @@ export async function updateSettings(patch: Partial<UserSettings>): Promise<User
 
 export function onLauncherFocus(handler: () => void): () => void {
   return api().onLauncherFocus(handler)
+}
+
+export function onFloatingBallMenuState(handler: (expanded: boolean) => void): () => void {
+  return api().onFloatingBallMenuState(handler)
+}
+
+export function onFloatingBallFeatures(
+  handler: (features: FloatingBallFeature[]) => void
+): () => void {
+  return api().onFloatingBallFeatures(handler)
 }
 
 export function onSettingsChanged(handler: (settings: UserSettings) => void): () => void {

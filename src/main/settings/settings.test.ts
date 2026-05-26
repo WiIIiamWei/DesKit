@@ -50,6 +50,23 @@ describe("normalizeSettings", () => {
     })
     expect(normalizeSettings({ accent: "puce" })).toEqual(defaultSettings)
   })
+
+  it("normalizes floating ball settings", () => {
+    expect(
+      normalizeSettings({
+        floatingBallEnabled: true,
+        floatingBallFeatures: ["appLauncher", "floatingBall", "appLauncher", 42],
+      })
+    ).toEqual({
+      ...defaultSettings,
+      floatingBallEnabled: true,
+      floatingBallFeatures: ["appLauncher"],
+    })
+  })
+
+  it("keeps a default floating ball feature when the configured list is empty", () => {
+    expect(normalizeSettings({ floatingBallFeatures: ["floatingBall"] })).toEqual(defaultSettings)
+  })
 })
 
 describe("loadSettings / saveSettings", () => {

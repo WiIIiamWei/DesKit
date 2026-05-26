@@ -7,7 +7,8 @@
     "home": "主页",
     "settings": "设置",
     "features": "功能",
-    "appLauncher": "应用启动器"
+    "appLauncher": "应用启动器",
+    "floatingBall": "桌面悬浮球"
   },
   "home": {
     "quickActions": "快捷操作",
@@ -40,6 +41,27 @@
       "aboutTitle": "关于该功能",
       "aboutBody": "按下全局快捷键即可打开搜索框，自动索引系统里的已安装应用。",
       "openSettings": "前往设置配置"
+    }
+  },
+  "floatingBall": {
+    "title": "DesKit 桌面悬浮球",
+    "features": {
+      "appLauncher": "应用启动器"
+    },
+    "feature": {
+      "title": "桌面悬浮球",
+      "subtitle": "在桌面保留一个小型入口，点击后以圆形菜单打开快捷功能。",
+      "aboutTitle": "关于该功能",
+      "aboutBody": "在设置中开启后显示悬浮球。点击悬浮球展开圆形菜单，右击可关闭。",
+      "openSettings": "前往设置配置"
+    },
+    "settings": {
+      "title": "桌面悬浮球",
+      "subtitle": "显示桌面快捷悬浮球，并选择圆形菜单中出现的工具。",
+      "enable": "显示桌面悬浮球",
+      "enableHint": "启动时默认关闭，需要在这里手动开启。",
+      "menuFeatures": "圆形菜单工具",
+      "menuFeaturesHint": "最多选择 6 个工具。桌面悬浮球本身不会作为菜单工具。"
     }
   },
   "launcher": {
