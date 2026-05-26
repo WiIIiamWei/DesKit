@@ -121,7 +121,7 @@ export function FloatingBallPanel() {
     >
       <div
         className={cn(
-          "absolute left-1/2 top-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/95 shadow-[0_18px_44px_rgba(15,23,42,0.14)] ring-1 ring-black/5 transition-[opacity,transform] duration-150 dark:bg-popover/95 dark:ring-white/10",
+          "absolute left-1/2 top-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/95 shadow-[0_6px_16px_-10px_rgba(15,23,42,0.14)] ring-1 ring-black/5 transition-[opacity,transform] duration-150 dark:bg-popover/95 dark:ring-white/10",
           expanded ? "opacity-100" : "pointer-events-none opacity-0"
         )}
         aria-hidden={!expanded}
