@@ -17,6 +17,7 @@ pnpm electron:build
 
 - formatting and linting
 - TypeScript type safety
+- workspace SDK build output generated during CI (the SDK `dist/` is not committed)
 - unit tests
 - desktop build smoke checks
 

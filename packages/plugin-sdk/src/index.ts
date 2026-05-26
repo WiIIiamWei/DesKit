@@ -1,0 +1,50 @@
+// @deskit/plugin-sdk
+//
+// Public surface for DesKit plugin authors. P0 ships pure type contracts;
+// no runtime symbols. The host (DesKit main process) injects an object that
+// satisfies `PluginContext` into each command invocation, so plugins can
+// `import type { PluginModule, PluginContext } from "@deskit/plugin-sdk"`
+// without paying any runtime cost.
+//
+// See ./README.md and DesKit/PLAN.md §3 for the design.
+
+export type {
+  Action,
+  CloseAction,
+  CopyAction,
+  CustomAction,
+  OpenPathAction,
+  OpenUrlAction,
+  PasteAction,
+  RunCommandAction,
+  SubmitAction,
+} from "./actions"
+
+export type {
+  ClipboardActionValue,
+  ClipboardContent,
+  ClipboardFileContent,
+  ClipboardImageContent,
+  ClipboardTextContent,
+} from "./clipboard"
+
+export type { CommandHandler, CommandInvocation, PluginModule } from "./commands"
+
+export type { ClipboardAPI, NotificationAPI, PluginContext, StorageAPI, SystemAPI } from "./context"
+
+export type { LocalizedString } from "./locales"
+
+export type {
+  CheckboxField,
+  DetailView,
+  FormField,
+  FormView,
+  ListItem,
+  ListView,
+  NumberField,
+  SelectField,
+  TextAreaField,
+  TextField,
+  ToastOnly,
+  View,
+} from "./views"

@@ -85,14 +85,15 @@ pnpm dev
 
 ```bash
 pnpm dev                # Start Electron dev mode
-pnpm build              # Build main/preload/renderer into out/
+pnpm build              # Build SDK, then main/preload/renderer into out/
+pnpm build:sdk          # Build workspace SDK declarations and JS output
 pnpm preview            # Preview the production build
 pnpm lint               # Run ESLint
 pnpm lint:fix           # Fix ESLint issues
 pnpm format             # Format files with Prettier
 pnpm format:check       # Check Prettier formatting
-pnpm typecheck          # Run TypeScript checks
-pnpm typecheck:native   # Run tsgo native-preview checks
+pnpm typecheck          # Run SDK, main/preload, and renderer TypeScript checks
+pnpm typecheck:native   # Run SDK tsc plus tsgo native-preview checks
 pnpm test               # Run Vitest
 pnpm test:watch         # Run Vitest in watch mode
 pnpm test:coverage      # Run Vitest with coverage
