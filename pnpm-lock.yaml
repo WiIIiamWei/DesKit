@@ -221,6 +221,8 @@ importers:
         specifier: ^5.9.3
         version: 5.9.3
 
+  packages/plugin-sdk: {}
+
 packages:
 
   7zip-bin@5.2.0:

@@ -16,6 +16,9 @@ junit.xml
 /out/
 /release/
 
+# workspace package build output
+/packages/*/dist/
+
 # misc
 .DS_Store
 *.pem
