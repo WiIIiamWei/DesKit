@@ -19,7 +19,14 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     searchApps: vi.fn().mockResolvedValue([]),
     launchApp: vi.fn().mockResolvedValue(true),
     hideLauncher: vi.fn().mockResolvedValue(undefined),
+    notifyLauncherReady: vi.fn(),
+    openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
+    toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
+    moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
+    hideFloatingBall: vi.fn().mockResolvedValue(undefined),
     onLauncherFocus: vi.fn(() => () => undefined),
+    onFloatingBallMenuState: vi.fn(() => () => undefined),
+    onFloatingBallFeatures: vi.fn(() => () => undefined),
     onSettingsChanged: vi.fn(() => () => undefined),
   } satisfies TestElectronApi
 
@@ -43,6 +50,8 @@ describe("launcher settings", () => {
       hotkey: "Control+Space",
       themeMode: "system",
       accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
     })
   })
 
