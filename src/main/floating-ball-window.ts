@@ -1,9 +1,10 @@
 import type { UserSettings } from "./settings/settings"
 import * as path from "node:path"
+import process from "node:process"
 import { BrowserWindow, Menu, screen } from "electron"
 import { attachWindowSecurity } from "./window-security"
 
-const MENU_SIZE = 240
+const MENU_SIZE = process.platform === "darwin" ? 320 : 240
 const EDGE_MARGIN = 24
 const FLOATING_BALL_HASH = "floating-ball"
 
@@ -29,6 +30,7 @@ export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserW
     height: MENU_SIZE,
     show: false,
     frame: false,
+    hasShadow: false,
     transparent: true,
     resizable: false,
     movable: true,
