@@ -34,7 +34,27 @@ export const protocol = {
   handle: vi.fn(),
 }
 export const net = { fetch: vi.fn() }
-export const shell = { openExternal: vi.fn(() => Promise.resolve()) }
+export const shell = {
+  openExternal: vi.fn(() => Promise.resolve()),
+  openPath: vi.fn(() => Promise.resolve("")),
+}
+export const clipboard = {
+  readText: vi.fn(() => ""),
+  writeText: vi.fn(),
+  readImage: vi.fn(() => ({
+    isEmpty: vi.fn(() => true),
+    getSize: vi.fn(() => ({ width: 0, height: 0 })),
+    toDataURL: vi.fn(() => ""),
+  })),
+  writeImage: vi.fn(),
+}
+export const nativeImage = {
+  createFromDataURL: vi.fn((value: string) => ({ dataUrl: value })),
+}
+export const desktopCapturer = {
+  getSources: vi.fn(() => Promise.resolve([])),
+}
+export const Notification = vi.fn(() => ({ show: vi.fn() }))
 
 export default {
   contextBridge,
@@ -46,4 +66,8 @@ export default {
   protocol,
   net,
   shell,
+  clipboard,
+  nativeImage,
+  desktopCapturer,
+  Notification,
 }
