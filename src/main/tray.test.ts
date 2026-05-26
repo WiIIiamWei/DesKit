@@ -3,6 +3,10 @@ import { Tray } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { createTray, destroyTray } from "./tray"
 
+interface MockTray {
+  emit: (event: string, ...args: unknown[]) => void
+}
+
 function createActions(): TrayActions {
   return {
     onOpenSearch: vi.fn(),
@@ -15,8 +19,8 @@ function createActions(): TrayActions {
 }
 
 function latestTray() {
-  const results = vi.mocked(Tray).mock.results
-  return results[results.length - 1]!.value
+  const instances = vi.mocked(Tray).mock.instances as unknown as MockTray[]
+  return instances[instances.length - 1]!
 }
 
 describe("tray click handling", () => {

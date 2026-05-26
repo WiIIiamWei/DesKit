@@ -1,6 +1,12 @@
 import { vi } from "vitest"
 
 type Listener = (...args: unknown[]) => void
+type EventTargetMock = ReturnType<typeof createEventTarget>
+type TrayMock = EventTargetMock & {
+  setToolTip: ReturnType<typeof vi.fn>
+  setContextMenu: ReturnType<typeof vi.fn>
+  destroy: ReturnType<typeof vi.fn>
+}
 
 function createEventTarget() {
   const listeners = new Map<string, Listener[]>()
@@ -48,13 +54,23 @@ export const nativeImage = {
   createEmpty: vi.fn(() => ({ isEmpty: vi.fn(() => true) })),
   createFromPath: vi.fn(() => ({ isEmpty: vi.fn(() => false) })),
 }
-export const Menu = { buildFromTemplate: vi.fn((template: unknown) => template) }
-export const Tray = vi.fn(() => ({
-  ...createEventTarget(),
-  setToolTip: vi.fn(),
-  setContextMenu: vi.fn(),
-  destroy: vi.fn(),
-}))
+export const Notification = Object.assign(
+  vi.fn(() => ({ show: vi.fn() })),
+  { isSupported: vi.fn(() => true) }
+)
+export const Menu = {
+  buildFromTemplate: vi.fn((template: unknown) => ({
+    popup: vi.fn(),
+    template,
+  })),
+}
+export const Tray = vi.fn(function (this: TrayMock) {
+  Object.assign(this, createEventTarget(), {
+    setToolTip: vi.fn(),
+    setContextMenu: vi.fn(),
+    destroy: vi.fn(),
+  })
+})
 export const protocol = {
   registerSchemesAsPrivileged: vi.fn(),
   handle: vi.fn(),
@@ -90,6 +106,7 @@ export default {
   BrowserWindow,
   session,
   nativeImage,
+  Notification,
   Menu,
   Tray,
   protocol,
