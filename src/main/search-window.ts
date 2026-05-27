@@ -8,6 +8,7 @@ const SEARCH_WIDTH = 720
 const SEARCH_HEIGHT = 480
 const SEARCH_HASH = "search"
 const SEARCH_REVEAL_DELAY_MS = 32
+const TRAY_OPEN_SUPPRESSION_MS = 150
 
 export interface SearchWindowDeps {
   /** Vite dev-server URL when running `pnpm dev`; undefined in production. */
@@ -22,6 +23,7 @@ let searchWindowReady = false
 let searchWindowShown = false
 let pendingSearchWindowShow = false
 let searchWindowRevealToken = 0
+let trayOpenSuppressedUntil = 0
 
 export function setSearchWindowQuitting(quitting: boolean): void {
   searchWindowQuitting = quitting
@@ -77,12 +79,14 @@ export function ensureSearchWindow(deps: SearchWindowDeps): BrowserWindow {
     searchWindowShown = false
     pendingSearchWindowShow = false
     searchWindowRevealToken += 1
+    trayOpenSuppressedUntil = 0
   })
 
   // Auto-hide when the user clicks elsewhere — same behaviour as
   // Spotlight / PowerToys Run.
   searchWindow.on("blur", () => {
     if (process.env.DESKIT_KEEP_SEARCH_OPEN) return
+    suppressImmediateTrayOpen()
     hideSearchWindow()
   })
 
@@ -112,6 +116,12 @@ export function showSearchWindow(deps: SearchWindowDeps): void {
   }
 
   revealSearchWindow(win)
+}
+
+export function consumeSearchWindowTrayOpenSuppression(): boolean {
+  const shouldSuppress = Date.now() < trayOpenSuppressedUntil
+  if (shouldSuppress) trayOpenSuppressedUntil = 0
+  return shouldSuppress
 }
 
 export function hideSearchWindow(): void {
@@ -169,6 +179,10 @@ function revealSearchWindow(win: BrowserWindow): void {
     win.setOpacity(1)
     win.focus()
   }, SEARCH_REVEAL_DELAY_MS)
+}
+
+function suppressImmediateTrayOpen(): void {
+  trayOpenSuppressedUntil = Date.now() + TRAY_OPEN_SUPPRESSION_MS
 }
 
 function centerOnActiveDisplay(win: BrowserWindow): void {
