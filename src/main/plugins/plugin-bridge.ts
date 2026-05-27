@@ -236,13 +236,18 @@ export class PluginBridge {
   ): () => void {
     let lastSerialized: string | undefined
     const timer = setInterval(() => {
-      void this.options.adapters.clipboard.read().then((content) => {
-        if (!content) return
-        const serialized = JSON.stringify(content)
-        if (serialized === lastSerialized) return
-        lastSerialized = serialized
-        listener(content)
-      })
+      void this.options.adapters.clipboard
+        .read()
+        .then((content) => {
+          if (!content) return
+          const serialized = JSON.stringify(content)
+          if (serialized === lastSerialized) return
+          lastSerialized = serialized
+          listener(content)
+        })
+        .catch((err) => {
+          console.warn(`[plugin:${pluginId}] Clipboard watch read failed`, err)
+        })
     }, this.clipboardPollMs)
 
     let timers = this.watchers.get(pluginId)

@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 // Fixture: validates DetailView + system.captureScreen + open-path action.
 // Mirror of stage 5's capture plugin (P0 = full-screen only).
 import type { DetailView, PluginModule } from "../index"
@@ -43,4 +44,4 @@ function view(path: string): DetailView {
   }
 }
 
-export default plugin
+export = plugin

@@ -72,6 +72,38 @@ describe("pluginBridge", () => {
     expect(read).toHaveBeenCalledTimes(1)
     expect(write).toHaveBeenCalledWith({ type: "file", paths: ["C:/tmp/a.txt"] })
   })
+
+  it("keeps clipboard watchers alive when adapter reads fail", async () => {
+    vi.useFakeTimers()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const read = vi
+      .fn<() => Promise<ClipboardContent | undefined>>()
+      .mockRejectedValueOnce(new Error("busy"))
+      .mockResolvedValueOnce({ type: "text", text: "hello" })
+    const listener = vi.fn()
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters({ clipboard: { read, write: async () => {} } }),
+      storageFlushMs: 0,
+      clipboardPollMs: 10,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["clipboard:read"] })
+    )
+
+    const unwatch = pluginCtx.clipboard.watch(listener)
+    try {
+      await vi.advanceTimersByTimeAsync(10)
+      await vi.advanceTimersByTimeAsync(10)
+    } finally {
+      unwatch()
+      vi.useRealTimers()
+      warn.mockRestore()
+    }
+
+    expect(listener).toHaveBeenCalledWith({ type: "text", text: "hello" })
+  })
 })
 
 function manifest(overrides: Partial<PluginManifest> = {}): PluginManifest {

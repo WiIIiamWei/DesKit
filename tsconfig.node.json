@@ -25,5 +25,6 @@
     "src/preload/**/*",
     "packages/plugin-sdk/src/**/*",
     "electron.vite.config.ts"
-  ]
+  ],
+  "exclude": ["packages/plugin-sdk/src/__examples__/**"]
 }

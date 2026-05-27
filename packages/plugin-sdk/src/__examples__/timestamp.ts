@@ -1,6 +1,7 @@
-// Fixture: type-only validation that the SDK shape supports the three
-// built-in plugins planned in DesKit/PLAN.md §6. These files are excluded
-// from the publishable build but participate in `tsc --noEmit`, so any
+/* eslint-disable no-restricted-syntax */
+// Fixture: type-only validation that the SDK shape supports the planned
+// built-in plugins. These files are excluded from the publishable build
+// but participate in `tsc --noEmit`, so any
 // drift in the public type surface surfaces here at typecheck time.
 //
 // Mirror of resources/builtin-plugins/timestamp planned for stage 5. Kept
@@ -52,4 +53,4 @@ function makeView(text: string, unit: string): ListView {
   return { type: "list", items }
 }
 
-export default plugin
+export = plugin

@@ -36,9 +36,13 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
 
   async load(discovered: DiscoveredPlugin[]): Promise<void> {
     const loadedPluginIds = new Set([...this.entries.values()].map((entry) => entry.pluginId))
-    await Promise.all(
-      [...loadedPluginIds].map((pluginId) => this.options.sandbox.unloadPlugin(pluginId))
-    )
+    for (const pluginId of loadedPluginIds) {
+      try {
+        await this.options.sandbox.unloadPlugin(pluginId)
+      } catch (err) {
+        console.warn(`[plugin-registry] Failed to unload ${pluginId} before reload`, err)
+      }
+    }
     this.entries.clear()
     this.commandIndex.clear()
 
@@ -173,7 +177,10 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
   private indexCommands(entry: PluginRegistryEntry): void {
     if (!entry.manifest || entry.status !== "active") return
     for (const command of entry.manifest.contributes.commands) {
-      this.commandIndex.set(command.id, { pluginId: entry.pluginId, command })
+      this.commandIndex.set(commandIndexKey(entry.pluginId, command.id), {
+        pluginId: entry.pluginId,
+        command,
+      })
     }
   }
 
@@ -228,4 +235,8 @@ function commandSearchText(command: ManifestCommand, locale: string): string {
 function localized(value: LocalizedString, locale: string): string {
   if (typeof value === "string") return value
   return value[locale] ?? value.en ?? Object.values(value)[0] ?? ""
+}
+
+function commandIndexKey(pluginId: string, commandId: string): string {
+  return `${pluginId}:${commandId}`
 }

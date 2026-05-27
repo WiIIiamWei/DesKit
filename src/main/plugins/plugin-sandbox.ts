@@ -32,6 +32,8 @@ interface CommonJSModule {
   exports: unknown
 }
 
+// P0 isolation is a lightweight compatibility boundary. node:vm lets the host
+// curate globals and enforce timeouts, but it is not a strong security sandbox.
 export class PluginSandbox {
   private readonly loaded = new Map<string, LoadedPlugin>()
   private readonly loadTimeoutMs: number
