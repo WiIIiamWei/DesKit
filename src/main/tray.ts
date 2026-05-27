@@ -7,6 +7,7 @@ export interface TrayActions {
   onShowMainWindow: () => void
   onRefreshApps: () => void
   onQuit: () => void
+  shouldIgnoreOpenSearch?: () => boolean
   getHotkey: () => string
   /** From app.getLocale(); selects the menu language. */
   getLocale: () => string
@@ -49,7 +50,10 @@ export function createTray(iconPath: string, actions: TrayActions): Tray {
   tray = new Tray(icon.isEmpty() ? nativeImage.createEmpty() : icon)
   tray.setToolTip("DesKit")
   refreshTrayMenu(actions)
-  tray.on("click", actions.onOpenSearch)
+  tray.on("click", () => {
+    if (actions.shouldIgnoreOpenSearch?.()) return
+    actions.onOpenSearch()
+  })
   return tray
 }
 

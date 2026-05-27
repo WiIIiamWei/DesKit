@@ -15,6 +15,7 @@ import { LauncherService } from "./ipc/launcher-service"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
 import {
+  consumeSearchWindowTrayOpenSuppression,
   ensureSearchWindow,
   hideSearchWindow,
   markSearchWindowReady,
@@ -317,6 +318,7 @@ function trayActions() {
       app.quit()
     },
     getHotkey: () => launcher.getSettings().hotkey,
+    shouldIgnoreOpenSearch: consumeSearchWindowTrayOpenSuppression,
     getLocale: () => app.getLocale(),
   }
 }

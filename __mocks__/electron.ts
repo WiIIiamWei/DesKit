@@ -8,6 +8,8 @@ type TrayMock = EventTargetMock & {
   destroy: ReturnType<typeof vi.fn>
 }
 
+const windowByWebContents = new WeakMap<object, object>()
+
 function createEventTarget() {
   const listeners = new Map<string, Listener[]>()
   return {
@@ -18,6 +20,39 @@ function createEventTarget() {
       for (const listener of listeners.get(event) ?? []) listener(...args)
     }),
   }
+}
+
+function createBrowserWindowMock() {
+  const events = createEventTarget()
+  const webContents = {
+    ...createEventTarget(),
+    send: vi.fn(),
+    openDevTools: vi.fn(),
+    setWindowOpenHandler: vi.fn(),
+  }
+  const win = {
+    ...events,
+    loadURL: vi.fn(),
+    loadFile: vi.fn(),
+    webContents,
+    once: vi.fn((event: string, listener: Listener) => events.on(event, listener)),
+    show: vi.fn(),
+    showInactive: vi.fn(),
+    hide: vi.fn(),
+    isVisible: vi.fn(() => false),
+    isDestroyed: vi.fn(() => false),
+    isMinimized: vi.fn(() => false),
+    restore: vi.fn(),
+    focus: vi.fn(),
+    setOpacity: vi.fn(),
+    setIgnoreMouseEvents: vi.fn(),
+    setFocusable: vi.fn(),
+    setBounds: vi.fn(),
+    getBounds: vi.fn(() => ({ x: 0, y: 0, width: 100, height: 100 })),
+    destroy: vi.fn(),
+  }
+  windowByWebContents.set(webContents, win)
+  return win
 }
 
 export const contextBridge = { exposeInMainWorld: vi.fn() }
@@ -32,24 +67,17 @@ export const app = {
   quit: vi.fn(),
   requestSingleInstanceLock: vi.fn(() => true),
 }
-export const BrowserWindow = Object.assign(
-  vi.fn(() => ({
-    loadURL: vi.fn(),
-    loadFile: vi.fn(),
-    webContents: {
-      openDevTools: vi.fn(),
-      setWindowOpenHandler: vi.fn(),
-      on: vi.fn(),
-    },
-    once: vi.fn(),
-    show: vi.fn(),
-    isMinimized: vi.fn(() => false),
-    restore: vi.fn(),
-    focus: vi.fn(),
-  })),
-  { getAllWindows: vi.fn(() => []) }
-)
+export const BrowserWindow = Object.assign(vi.fn(createBrowserWindowMock), {
+  getAllWindows: vi.fn(() => []),
+  fromWebContents: vi.fn((webContents: object) => windowByWebContents.get(webContents) ?? null),
+})
 export const session = { defaultSession: { webRequest: { onHeadersReceived: vi.fn() } } }
+export const screen = {
+  getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
+  getDisplayNearestPoint: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
+  getPrimaryDisplay: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
+  getDisplayMatching: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
+}
 export const nativeImage = {
   createEmpty: vi.fn(() => ({ isEmpty: vi.fn(() => true) })),
   createFromPath: vi.fn(() => ({ isEmpty: vi.fn(() => false) })),
@@ -85,6 +113,7 @@ export default {
   app,
   BrowserWindow,
   session,
+  screen,
   nativeImage,
   Notification,
   Menu,
