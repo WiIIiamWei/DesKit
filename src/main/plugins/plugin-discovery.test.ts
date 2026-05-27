@@ -46,6 +46,19 @@ describe("discoverPlugins", () => {
     expect(entries.find((entry) => entry.status === "invalid")?.error).toContain("valid JSON")
   })
 
+  it("ignores malformed dev plugin config without blocking other sources", async () => {
+    const builtinDir = path.join(dir, "builtin")
+    const devFilePath = path.join(dir, "dev-plugins.json")
+
+    await writePlugin(path.join(builtinDir, "good"), "com.deskit.good")
+    await fs.writeFile(devFilePath, "{bad-json", "utf-8")
+
+    const entries = await discoverPlugins({ builtinDir, devFilePath })
+    expect(entries.map((entry) => [entry.pluginId, entry.source.kind, entry.status])).toEqual([
+      ["com.deskit.good", "builtin", "valid"],
+    ])
+  })
+
   it("uses builtin over user over dev when plugin ids conflict", async () => {
     const builtinDir = path.join(dir, "builtin")
     const userDir = path.join(dir, "user")

@@ -23,6 +23,40 @@ describe("pluginRegistry", () => {
     expect(changed).toHaveBeenCalledOnce()
   })
 
+  it("indexes duplicate command ids per plugin", async () => {
+    const sandbox = fakeSandbox()
+    const registry = new PluginRegistry({ sandbox, now: () => 1 })
+
+    await registry.load([
+      discovered({ id: "com.deskit.one", commandId: "shared.run" }),
+      discovered({ id: "com.deskit.two", commandId: "shared.run" }),
+    ])
+
+    expect(registry.searchCommands("run").map((result) => result.pluginId)).toEqual([
+      "com.deskit.one",
+      "com.deskit.two",
+    ])
+  })
+
+  it("continues reload when unloading an old plugin fails", async () => {
+    const sandbox = fakeSandbox()
+    const registry = new PluginRegistry({ sandbox, now: () => 1 })
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    await registry.load([discovered({ id: "com.deskit.old" })])
+    sandbox.unloadPlugin = vi.fn(async () => {
+      throw new Error("stuck")
+    })
+
+    try {
+      await registry.load([discovered({ id: "com.deskit.new" })])
+    } finally {
+      warn.mockRestore()
+    }
+
+    expect(registry.get("com.deskit.old")).toBeUndefined()
+    expect(registry.get("com.deskit.new")?.status).toBe("active")
+  })
+
   it("disables and re-enables plugins", async () => {
     const sandbox = fakeSandbox()
     const registry = new PluginRegistry({ sandbox, now: () => 1 })
@@ -63,10 +97,14 @@ describe("pluginRegistry", () => {
   })
 })
 
-function fakeSandbox(pluginModule: PluginModule = moduleWithCommand()): PluginSandboxRuntime {
+function fakeSandbox(pluginModule?: PluginModule): PluginSandboxRuntime {
   return {
     loadPlugin: vi.fn(async (entry: DiscoveredPlugin): Promise<PluginSandboxModule> => {
-      return { pluginId: entry.pluginId, manifest: entry.manifest!, module: pluginModule }
+      return {
+        pluginId: entry.pluginId,
+        manifest: entry.manifest!,
+        module: pluginModule ?? moduleFromManifest(entry.manifest!),
+      }
     }),
     unloadPlugin: vi.fn(async () => {}),
     invokeCommand: vi.fn(async (_request: PluginInvokeRequest): Promise<View> => {
@@ -76,20 +114,25 @@ function fakeSandbox(pluginModule: PluginModule = moduleWithCommand()): PluginSa
   }
 }
 
-function moduleWithCommand(): PluginModule {
+function moduleFromManifest(pluginManifest: PluginManifest): PluginModule {
   return {
-    commands: {
-      "test.run": {
-        run() {
-          return { type: "toast", level: "success", message: "ok" }
+    commands: Object.fromEntries(
+      pluginManifest.contributes.commands.map((command) => [
+        command.id,
+        {
+          run() {
+            return { type: "toast", level: "success", message: "ok" }
+          },
         },
-      },
-    },
+      ])
+    ),
   }
 }
 
-function discovered(): DiscoveredPlugin {
-  const pluginManifest = manifest()
+function discovered(
+  overrides: { id?: string; commandId?: string; title?: string } = {}
+): DiscoveredPlugin {
+  const pluginManifest = manifest(overrides)
   return {
     pluginId: pluginManifest.id,
     rootDir: "plugin",
@@ -99,9 +142,14 @@ function discovered(): DiscoveredPlugin {
   }
 }
 
-function manifest(): PluginManifest {
+function manifest(
+  overrides: { id?: string; commandId?: string; title?: string } = {}
+): PluginManifest {
+  const id = overrides.id ?? "com.deskit.test"
+  const commandId = overrides.commandId ?? "test.run"
+  const title = overrides.title ?? "Run Test"
   return {
-    id: "com.deskit.test",
+    id,
     name: "Test",
     displayName: "Test",
     description: "test",
@@ -112,8 +160,8 @@ function manifest(): PluginManifest {
     contributes: {
       commands: [
         {
-          id: "test.run",
-          title: { en: "Run Test", "zh-CN": "运行测试" },
+          id: commandId,
+          title: { en: title, "zh-CN": "运行测试" },
           mode: "view",
           keywords: ["run"],
         },

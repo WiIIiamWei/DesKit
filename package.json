@@ -17,7 +17,7 @@
     "build:sdk": "pnpm -F @deskit/plugin-sdk build",
     "preview": "electron-vite preview",
     "start": "electron-vite preview",
-    "typecheck": "tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
+    "typecheck": "pnpm -F @deskit/plugin-sdk typecheck && tsc -p tsconfig.node.json --noEmit && tsc -p tsconfig.web.json --noEmit",
     "typecheck:native": "tsgo -p tsconfig.node.json --noEmit && tsgo -p tsconfig.web.json --noEmit",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",

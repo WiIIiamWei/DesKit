@@ -6,7 +6,7 @@
 // `import type { PluginModule, PluginContext } from "@deskit/plugin-sdk"`
 // without paying any runtime cost.
 //
-// See ./README.md and DesKit/PLAN.md §3 for the design.
+// See ./README.md for author-facing usage notes.
 
 export type {
   Action,

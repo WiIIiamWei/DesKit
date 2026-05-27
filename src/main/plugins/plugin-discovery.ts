@@ -69,7 +69,13 @@ async function discoverDevSource(devFilePath: string | undefined): Promise<Plugi
     throw err
   }
 
-  const parsed = JSON.parse(raw) as unknown
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(raw) as unknown
+  } catch (err) {
+    if (err instanceof SyntaxError) return []
+    throw err
+  }
   if (!Array.isArray(parsed)) return []
 
   const baseDir = path.dirname(devFilePath)

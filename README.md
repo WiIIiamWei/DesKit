@@ -93,7 +93,7 @@ pnpm lint:fix           # Fix ESLint issues
 pnpm format             # Format files with Prettier
 pnpm format:check       # Check Prettier formatting
 pnpm typecheck          # Run SDK, main/preload, and renderer TypeScript checks
-pnpm typecheck:native   # Run SDK tsc plus tsgo native-preview checks
+pnpm typecheck:native   # Run tsgo native-preview checks
 pnpm test               # Run Vitest
 pnpm test:watch         # Run Vitest in watch mode
 pnpm test:coverage      # Run Vitest with coverage

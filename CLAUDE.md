@@ -19,8 +19,8 @@ pnpm lint              # Run ESLint (flat config)
 pnpm lint:fix          # Auto-fix ESLint issues
 pnpm format            # Format with Prettier
 pnpm format:check      # Check formatting without writing
-pnpm typecheck         # Typecheck node (main/preload) AND web (renderer) — uses tsc (stable)
-pnpm typecheck:native  # Same two configs, run through tsgo (@typescript/native-preview, Go-based, ~10× faster). Sanity check — divergence vs tsc is a signal.
+pnpm typecheck         # Typecheck SDK, node (main/preload), and web (renderer) — uses tsc (stable)
+pnpm typecheck:native  # Run node/web configs through tsgo (@typescript/native-preview, Go-based, ~10× faster). Sanity check — divergence vs tsc is a signal.
 
 # Testing
 pnpm test              # Run Vitest once
@@ -84,7 +84,6 @@ src/
 
 resources/                # App icons (icon.ico / icon.icns / icon.png) — buildResources
 docs/                     # Fumadocs site (separate workspace)
-DesKit/                   # Project research/design docs (PRD, architecture, ADRs)
 __mocks__/electron.ts     # Vitest mock of Electron module
 electron.vite.config.ts   # Main/preload/renderer config in one file
 vitest.config.ts          # Vitest config (mirrors path aliases)

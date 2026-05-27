@@ -1,3 +1,4 @@
+/* eslint-disable no-restricted-syntax */
 // Fixture: validates that storage + clipboard.watch + custom Action supports
 // text, image and file clipboard history entries. Mirror of stage 5's
 // clipboard plugin.
@@ -96,4 +97,4 @@ function getTitle(content: ClipboardContent): string {
   return content.paths.length === 1 ? (content.paths[0] ?? "File") : `${content.paths.length} files`
 }
 
-export default plugin
+export = plugin

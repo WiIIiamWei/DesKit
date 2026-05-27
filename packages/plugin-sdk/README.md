@@ -34,10 +34,10 @@ export = plugin
 
 ## Status
 
-P0 scope is type-only. See [`DesKit/PLAN.md`](../../DesKit/PLAN.md) §3 for the
-SDK design and [`DesKit/TASKS.md`](../../DesKit/TASKS.md) §1 for the rollout
-plan. Runtime APIs (storage, clipboard, notifications, system, runtime) are
-provided by the host through a bridge that conforms to the same interfaces.
+P0 scope is type-first: the package defines the plugin contract, command
+handlers, declarative views, actions, and host-provided runtime APIs. Runtime
+APIs (storage, clipboard, notifications, system, runtime) are provided by the
+host through a bridge that conforms to the same interfaces.
 
 Clipboard APIs support text, image, and file-list payloads through
 `ClipboardContent`. The text-only helpers (`readText` / `writeText`) remain for
