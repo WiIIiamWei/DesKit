@@ -4,13 +4,12 @@ import type {
   PluginInvokeRequest,
   PluginManifest,
   PluginRegistryEntry,
-  PluginSourceKind,
 } from "./types"
-import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { createElectronPluginAdapters } from "./electron-adapters"
 import { PluginBridge } from "./plugin-bridge"
 import { discoverPlugins } from "./plugin-discovery"
+import { pluginPreferenceFilePath, PluginPreferenceStore } from "./plugin-preferences"
 import { PluginRegistry } from "./plugin-registry"
 import { PluginSandbox } from "./plugin-sandbox"
 
@@ -21,21 +20,50 @@ export interface PluginHostOptions {
   runtime?: () => PluginRuntimeSnapshot
 }
 
+/**
+ * Thrown when a feature exists as an IPC channel but its host-side
+ * implementation has not landed yet. The IPC layer maps it to the
+ * `PLUGIN_NOT_IMPLEMENTED` result code without dragging in the IPC
+ * module's error class — keeps host pure.
+ */
+export class PluginHostNotImplementedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "PluginHostNotImplementedError"
+  }
+}
+
+/**
+ * Thrown when a setPreference value's runtime type does not match the
+ * manifest declaration (e.g. a string assigned to a `type: "number"`
+ * preference). IPC layer maps it to `IPC_INVALID_PAYLOAD`.
+ */
+export class PluginPreferenceTypeError extends TypeError {
+  readonly pluginId: string
+  readonly key: string
+
+  constructor(pluginId: string, key: string, message: string) {
+    super(message)
+    this.name = "PluginPreferenceTypeError"
+    this.pluginId = pluginId
+    this.key = key
+  }
+}
+
 export class PluginHost {
   readonly bridge: PluginBridge
   readonly sandbox: PluginSandbox
   readonly registry: PluginRegistry
+  readonly preferences: PluginPreferenceStore
   private readonly builtinDir: string
   private readonly userDir: string
   private readonly devFilePath: string
-  private readonly preferencesPath: string
-  private preferences = new Map<string, Record<string, unknown>>()
 
   constructor(private readonly options: PluginHostOptions) {
     this.builtinDir = path.join(options.resourcesDir, "builtin-plugins")
     this.userDir = path.join(options.userDataDir, "plugins")
     this.devFilePath = path.join(options.userDataDir, "dev-plugins.json")
-    this.preferencesPath = path.join(options.userDataDir, "plugin-preferences.json")
+    this.preferences = new PluginPreferenceStore(pluginPreferenceFilePath(options.userDataDir))
     this.bridge = new PluginBridge({
       userDataDir: options.userDataDir,
       adapters: options.adapters ?? createElectronPluginAdapters(options.userDataDir),
@@ -47,7 +75,7 @@ export class PluginHost {
   }
 
   async init(): Promise<void> {
-    this.preferences = await this.readPreferences()
+    await this.preferences.load()
     const discovered = await discoverPlugins({
       builtinDir: this.builtinDir,
       userDir: this.userDir,
@@ -83,53 +111,28 @@ export class PluginHost {
   async setPreference(pluginId: string, key: string, value: unknown): Promise<void> {
     const entry = this.registry.get(pluginId)
     if (!entry?.manifest) throw new Error(`Plugin not found: ${pluginId}`)
-    const allowed = new Set((entry.manifest.contributes.preferences ?? []).map((item) => item.id))
-    if (!allowed.has(key)) throw new Error(`Unknown plugin preference: ${pluginId}.${key}`)
 
-    const next = { ...(this.preferences.get(pluginId) ?? {}) }
-    if (value === undefined) {
-      delete next[key]
-    } else {
-      next[key] = value
+    const declared = entry.manifest.contributes.preferences?.find((item) => item.id === key)
+    if (!declared) throw new Error(`Unknown plugin preference: ${pluginId}.${key}`)
+
+    if (value !== undefined) {
+      validatePreferenceValue(pluginId, key, value, declared)
     }
-    this.preferences.set(pluginId, next)
-    await this.writePreferences()
+
+    await this.preferences.set(pluginId, key, value)
   }
 
-  async installFolder(folderPath: string): Promise<PluginRegistryEntry> {
-    const devPlugins = await this.readDevPlugins()
-    const normalized = path.resolve(folderPath)
-    if (!devPlugins.some((entry) => path.resolve(entry.path) === normalized)) {
-      devPlugins.push({ path: normalized, addedAt: new Date().toISOString() })
-      await this.writeDevPlugins(devPlugins)
-    }
-
-    await this.init()
-    const entry = this.findEntryByRootDir(normalized, "dev")
-    if (!entry) throw new Error(`Plugin folder was not discovered: ${normalized}`)
-    return entry
+  // Implemented in a later stage (folder install + chokidar hot reload).
+  // Kept on the host so the IPC channel surface stays stable in the
+  // meantime — see CLAUDE.md "Adding an IPC channel" note.
+  async installFolder(_folderPath: string): Promise<PluginRegistryEntry> {
+    throw new PluginHostNotImplementedError(
+      "Folder plugin installation is planned for a later stage"
+    )
   }
 
-  async uninstall(pluginId: string): Promise<void> {
-    const entry = this.registry.get(pluginId)
-    if (!entry) throw new Error(`Plugin not found: ${pluginId}`)
-    if (entry.source.kind === "builtin") {
-      throw new Error("Built-in plugins cannot be uninstalled")
-    }
-
-    await this.registry.setEnabled(pluginId, false).catch(() => undefined)
-    if (entry.source.kind === "dev") {
-      const target = path.resolve(entry.rootDir)
-      const next = (await this.readDevPlugins()).filter(
-        (item) => path.resolve(item.path) !== target
-      )
-      await this.writeDevPlugins(next)
-    } else {
-      await fs.rm(entry.rootDir, { recursive: true, force: true })
-    }
-    this.preferences.delete(pluginId)
-    await this.writePreferences()
-    await this.init()
+  async uninstall(_pluginId: string): Promise<void> {
+    throw new PluginHostNotImplementedError("Plugin uninstall is planned for a later stage")
   }
 
   async reload(pluginId?: string): Promise<PluginRegistryEntry | undefined> {
@@ -141,88 +144,47 @@ export class PluginHost {
     await this.bridge.flushAll()
   }
 
-  private findEntryByRootDir(
-    rootDir: string,
-    sourceKind: PluginSourceKind
-  ): PluginRegistryEntry | undefined {
-    const normalized = path.resolve(rootDir)
-    return this.registry
-      .list()
-      .find(
-        (entry) => entry.source.kind === sourceKind && path.resolve(entry.rootDir) === normalized
-      )
-  }
-
-  private async readDevPlugins(): Promise<DevPluginEntry[]> {
-    try {
-      const raw = await fs.readFile(this.devFilePath, "utf-8")
-      const parsed = JSON.parse(raw) as unknown
-      if (!Array.isArray(parsed)) return []
-      return parsed.flatMap((item) => {
-        if (typeof item === "string") return [{ path: item }]
-        if (
-          item &&
-          typeof item === "object" &&
-          typeof (item as { path?: unknown }).path === "string"
-        ) {
-          const addedAt =
-            typeof (item as { addedAt?: unknown }).addedAt === "string"
-              ? (item as { addedAt: string }).addedAt
-              : undefined
-          return [{ path: (item as { path: string }).path, addedAt }]
-        }
-        return []
-      })
-    } catch (err) {
-      if (isFileNotFound(err) || err instanceof SyntaxError) return []
-      throw err
-    }
-  }
-
-  private async writeDevPlugins(entries: DevPluginEntry[]): Promise<void> {
-    await fs.mkdir(path.dirname(this.devFilePath), { recursive: true })
-    await fs.writeFile(this.devFilePath, `${JSON.stringify(entries, null, 2)}\n`, "utf-8")
-  }
-
   private preferencesFor(pluginId: string, manifest: PluginManifest): Record<string, unknown> {
     const defaults: Record<string, unknown> = {}
     for (const preference of manifest.contributes.preferences ?? []) {
       if ("default" in preference) defaults[preference.id] = preference.default
     }
-    return { ...defaults, ...(this.preferences.get(pluginId) ?? {}) }
-  }
-
-  private async readPreferences(): Promise<Map<string, Record<string, unknown>>> {
-    try {
-      const raw = await fs.readFile(this.preferencesPath, "utf-8")
-      const parsed = JSON.parse(raw) as unknown
-      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return new Map()
-      const entries = Object.entries(parsed).flatMap(([pluginId, value]) => {
-        if (!value || typeof value !== "object" || Array.isArray(value)) return []
-        return [[pluginId, { ...(value as Record<string, unknown>) }] as const]
-      })
-      return new Map(entries)
-    } catch (err) {
-      if (isFileNotFound(err) || err instanceof SyntaxError) return new Map()
-      throw err
-    }
-  }
-
-  private async writePreferences(): Promise<void> {
-    await fs.mkdir(path.dirname(this.preferencesPath), { recursive: true })
-    await fs.writeFile(
-      this.preferencesPath,
-      `${JSON.stringify(Object.fromEntries(this.preferences), null, 2)}\n`,
-      "utf-8"
-    )
+    return { ...defaults, ...this.preferences.get(pluginId) }
   }
 }
 
-interface DevPluginEntry {
-  path: string
-  addedAt?: string
-}
-
-function isFileNotFound(err: unknown): boolean {
-  return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT")
+function validatePreferenceValue(
+  pluginId: string,
+  key: string,
+  value: unknown,
+  declared: NonNullable<PluginManifest["contributes"]["preferences"]>[number]
+): void {
+  switch (declared.type) {
+    case "text":
+      if (typeof value !== "string") {
+        throw new PluginPreferenceTypeError(pluginId, key, `${key} must be a string`)
+      }
+      return
+    case "number":
+      if (typeof value !== "number" || !Number.isFinite(value)) {
+        throw new PluginPreferenceTypeError(pluginId, key, `${key} must be a finite number`)
+      }
+      return
+    case "checkbox":
+      if (typeof value !== "boolean") {
+        throw new PluginPreferenceTypeError(pluginId, key, `${key} must be a boolean`)
+      }
+      return
+    case "select":
+      if (
+        typeof value !== "string" ||
+        !declared.options?.some((option) => option.value === value)
+      ) {
+        throw new PluginPreferenceTypeError(
+          pluginId,
+          key,
+          `${key} must be one of the declared select options`
+        )
+      }
+  }
 }
