@@ -11,6 +11,10 @@ vi.mock("react-i18next", () => ({
 
 type TestElectronApi = NonNullable<Window["electronAPI"]>
 
+function ok<T>(data: T): DeskitPluginIpcResult<T> {
+  return { ok: true, data }
+}
+
 function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
   const api = {
     getSettings: vi.fn().mockResolvedValue(settings),
@@ -24,19 +28,19 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
-    listPlugins: vi.fn().mockResolvedValue([]),
-    getPlugin: vi.fn().mockResolvedValue(null),
-    setPluginEnabled: vi.fn().mockResolvedValue(null),
-    setPluginPreference: vi.fn().mockResolvedValue(undefined),
-    installPluginFolder: vi.fn().mockResolvedValue(null),
-    installPluginPackage: vi.fn().mockResolvedValue(null),
-    uninstallPlugin: vi.fn().mockResolvedValue(undefined),
-    reloadPlugin: vi.fn().mockResolvedValue(undefined),
-    searchPluginCommands: vi.fn().mockResolvedValue([]),
-    invokePluginCommand: vi.fn().mockResolvedValue(undefined),
-    disposePluginCommand: vi.fn().mockResolvedValue(undefined),
-    listMarketplacePlugins: vi.fn().mockResolvedValue([]),
-    installMarketplacePlugin: vi.fn().mockResolvedValue(null),
+    listPlugins: vi.fn().mockResolvedValue(ok([])),
+    getPlugin: vi.fn().mockResolvedValue(ok(null)),
+    setPluginEnabled: vi.fn().mockResolvedValue(ok(null)),
+    setPluginPreference: vi.fn().mockResolvedValue(ok(undefined)),
+    installPluginFolder: vi.fn().mockResolvedValue(ok(null)),
+    installPluginPackage: vi.fn().mockResolvedValue(ok(null)),
+    uninstallPlugin: vi.fn().mockResolvedValue(ok(undefined)),
+    reloadPlugin: vi.fn().mockResolvedValue(ok(undefined)),
+    searchPluginCommands: vi.fn().mockResolvedValue(ok([])),
+    invokePluginCommand: vi.fn().mockResolvedValue(ok(undefined)),
+    disposePluginCommand: vi.fn().mockResolvedValue(ok(undefined)),
+    listMarketplacePlugins: vi.fn().mockResolvedValue(ok([])),
+    installMarketplacePlugin: vi.fn().mockResolvedValue(ok(null)),
     onLauncherFocus: vi.fn(() => () => undefined),
     onFloatingBallMenuState: vi.fn(() => () => undefined),
     onFloatingBallFeatures: vi.fn(() => () => undefined),

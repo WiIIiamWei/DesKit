@@ -1,3 +1,4 @@
+import type { IpcMainInvokeEvent } from "electron"
 import type { SearchWindowDeps } from "./search-window"
 import * as path from "node:path"
 import process from "node:process"
@@ -181,7 +182,24 @@ function registerIpc(): void {
     return next
   })
 
-  registerPluginIpc(ipcMain, plugins, broadcastPluginRegistryChanged)
+  registerPluginIpc(ipcMain, plugins, {
+    isTrustedSender: isTrustedIpcSender,
+    onRegistryChanged: broadcastPluginRegistryChanged,
+  })
+}
+
+function isTrustedIpcSender(event: IpcMainInvokeEvent): boolean {
+  const url = event.senderFrame?.url || event.sender.getURL()
+  let target: URL
+  try {
+    target = new URL(url)
+  } catch {
+    return false
+  }
+
+  if (target.origin === APP_ORIGIN) return true
+  if (rendererDevUrl && target.origin === new URL(rendererDevUrl).origin) return true
+  return false
 }
 
 function broadcastPluginRegistryChanged(entries: unknown): void {

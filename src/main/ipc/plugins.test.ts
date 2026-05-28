@@ -1,6 +1,7 @@
+import type { IpcMainInvokeEvent } from "electron"
 import type { PluginHost } from "../plugins/plugin-host"
 import { describe, expect, it, vi } from "vitest"
-import { createPluginIpcHandlers } from "./plugins"
+import { createPluginIpcHandlers, invokePluginIpcHandler } from "./plugins"
 
 function fakeHost(): PluginHost {
   return {
@@ -89,4 +90,84 @@ describe("plugin ipc handlers", () => {
 
     expect(handlers.marketplaceList()).toEqual([])
   })
+
+  it("wraps successful ipc calls in IpcResult", async () => {
+    const result = await invokePluginIpcHandler(
+      "plugin:list",
+      fakeEvent("app://app/index.html"),
+      () => [{ pluginId: "com.deskit.test" }],
+      () => true
+    )
+
+    expect(result).toEqual({ ok: true, data: [{ pluginId: "com.deskit.test" }] })
+  })
+
+  it("maps malformed payloads to IPC_INVALID_PAYLOAD", async () => {
+    const handlers = createPluginIpcHandlers(fakeHost())
+    const result = await invokePluginIpcHandler(
+      "plugin:set-enabled",
+      fakeEvent("app://app/index.html"),
+      () => handlers.setEnabled({ pluginId: "com.deskit.test" }),
+      () => true
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "IPC_INVALID_PAYLOAD",
+        message: "enabled must be a boolean",
+      },
+    })
+  })
+
+  it("maps not-implemented stubs to PLUGIN_NOT_IMPLEMENTED", async () => {
+    const handlers = createPluginIpcHandlers(fakeHost())
+    const result = await invokePluginIpcHandler(
+      "marketplace:install",
+      fakeEvent("app://app/index.html"),
+      () => handlers.marketplaceInstall({ id: "com.deskit.test" }),
+      () => true
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "PLUGIN_NOT_IMPLEMENTED",
+        message: "This plugin feature is not implemented yet.",
+      },
+    })
+  })
+
+  it("rejects untrusted senders without calling the handler", async () => {
+    const handler = vi.fn()
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const result = await invokePluginIpcHandler(
+      "plugin:list",
+      fakeEvent("https://example.com"),
+      handler,
+      () => false
+    )
+
+    expect(handler).not.toHaveBeenCalled()
+    expect(warn).toHaveBeenCalledWith("[plugin-ipc] rejected untrusted sender", {
+      channel: "plugin:list",
+      senderUrl: "https://example.com",
+    })
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "IPC_FORBIDDEN",
+        message: "Untrusted IPC sender.",
+        details: { channel: "plugin:list" },
+      },
+    })
+    warn.mockRestore()
+  })
 })
+
+function fakeEvent(url: string): IpcMainInvokeEvent {
+  return {
+    senderFrame: { url },
+    sender: { getURL: () => url },
+  } as unknown as IpcMainInvokeEvent
+}
