@@ -437,14 +437,28 @@ if (!gotLock) {
   app.on("will-quit", () => {
     setSearchWindowQuitting(true)
     destroyFloatingBallWindow()
-    void plugins?.flush()
     unbindGlobalShortcut()
     destroyTray()
   })
 
-  app.on("before-quit", () => {
+  // Plugin storage uses a 250ms throttled tmp+rename flush. Without this
+  // hook the user clicks Quit at t=240ms after a `storage.set` and Electron
+  // exits before the flush timer fires — the write is dropped. We block
+  // before-quit once, run flushAll, then quit again. The `pluginsFlushed`
+  // flag ensures the second quit goes through normally instead of looping.
+  let pluginsFlushed = false
+  app.on("before-quit", (event) => {
     quitRequested = true
     setSearchWindowQuitting(true)
+    if (pluginsFlushed || !plugins) return
+    event.preventDefault()
+    void plugins
+      .flush()
+      .catch((err) => console.error("[deskit] plugin flush failed during shutdown", err))
+      .finally(() => {
+        pluginsFlushed = true
+        app.quit()
+      })
   })
 
   // Tray-resident launcher: do NOT quit when all windows are closed.
