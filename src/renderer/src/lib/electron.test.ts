@@ -1,3 +1,4 @@
+import type { ElectronIpcError } from "./electron"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   disposePluginCommand,
@@ -32,6 +33,10 @@ import {
   updateSettings,
 } from "./electron"
 
+function ok<T>(data: T): DeskitPluginIpcResult<T> {
+  return { ok: true, data }
+}
+
 function mockApi() {
   const api = {
     searchApps: vi.fn().mockResolvedValue([]),
@@ -43,19 +48,19 @@ function mockApi() {
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
-    listPlugins: vi.fn().mockResolvedValue([]),
-    getPlugin: vi.fn().mockResolvedValue(null),
-    setPluginEnabled: vi.fn().mockResolvedValue({ pluginId: "plugin" }),
-    setPluginPreference: vi.fn().mockResolvedValue(undefined),
-    installPluginFolder: vi.fn().mockResolvedValue({ pluginId: "plugin" }),
-    installPluginPackage: vi.fn().mockResolvedValue({ pluginId: "plugin" }),
-    uninstallPlugin: vi.fn().mockResolvedValue(undefined),
-    reloadPlugin: vi.fn().mockResolvedValue({ pluginId: "plugin" }),
-    searchPluginCommands: vi.fn().mockResolvedValue([]),
-    invokePluginCommand: vi.fn().mockResolvedValue({ type: "toast" }),
-    disposePluginCommand: vi.fn().mockResolvedValue(undefined),
-    listMarketplacePlugins: vi.fn().mockResolvedValue([]),
-    installMarketplacePlugin: vi.fn().mockResolvedValue({ id: "plugin" }),
+    listPlugins: vi.fn().mockResolvedValue(ok([])),
+    getPlugin: vi.fn().mockResolvedValue(ok(null)),
+    setPluginEnabled: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
+    setPluginPreference: vi.fn().mockResolvedValue(ok(undefined)),
+    installPluginFolder: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
+    installPluginPackage: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
+    uninstallPlugin: vi.fn().mockResolvedValue(ok(undefined)),
+    reloadPlugin: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
+    searchPluginCommands: vi.fn().mockResolvedValue(ok([])),
+    invokePluginCommand: vi.fn().mockResolvedValue(ok({ type: "toast" })),
+    disposePluginCommand: vi.fn().mockResolvedValue(ok(undefined)),
+    listMarketplacePlugins: vi.fn().mockResolvedValue(ok([])),
+    installMarketplacePlugin: vi.fn().mockResolvedValue(ok({ id: "plugin" })),
     getSettings: vi.fn().mockResolvedValue({
       hotkey: "CommandOrControl+Space",
       themeMode: "system",
@@ -173,6 +178,25 @@ describe("lib/electron", () => {
       const api = mockApi()
       await listPlugins()
       expect(api.listPlugins).toHaveBeenCalled()
+    })
+
+    it("plugin wrappers throw ElectronIpcError for failed IpcResult", async () => {
+      const api = mockApi()
+      api.listPlugins.mockResolvedValueOnce({
+        ok: false,
+        error: {
+          code: "PLUGIN_NOT_ACTIVE",
+          message: "Plugin is not active.",
+          details: { pluginId: "com.deskit.test" },
+        },
+      })
+
+      await expect(listPlugins()).rejects.toMatchObject({
+        name: "ElectronIpcError",
+        code: "PLUGIN_NOT_ACTIVE",
+        message: "Plugin is not active.",
+        details: { pluginId: "com.deskit.test" },
+      } satisfies Partial<ElectronIpcError>)
     })
 
     it("getPlugin forwards plugin id", async () => {

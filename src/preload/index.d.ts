@@ -40,6 +40,24 @@ declare global {
   type DeskitPluginRuntimeStatus = "active" | "disabled" | "invalid" | "crashed" | "shadowed"
   type DeskitPluginCommandMode = "view" | "no-view"
   type DeskitPluginInvokePhase = "run" | "onSearchChange" | "onAction"
+  type DeskitPluginIpcErrorCode =
+    | "IPC_FORBIDDEN"
+    | "IPC_INVALID_PAYLOAD"
+    | "PLUGIN_NOT_FOUND"
+    | "PLUGIN_NOT_ACTIVE"
+    | "PLUGIN_PERMISSION_DENIED"
+    | "PLUGIN_CRASHED"
+    | "PLUGIN_NOT_IMPLEMENTED"
+    | "PLUGIN_IO_ERROR"
+    | "UNKNOWN_ERROR"
+
+  interface DeskitPluginIpcError {
+    code: DeskitPluginIpcErrorCode
+    message: string
+    details?: Record<string, unknown>
+  }
+
+  type DeskitPluginIpcResult<T> = { ok: true; data: T } | { ok: false; error: DeskitPluginIpcError }
 
   interface DeskitPluginSource {
     kind: DeskitPluginSourceKind
@@ -120,28 +138,49 @@ declare global {
       hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
       updateSettings: (patch: Partial<DeskitUserSettings>) => Promise<DeskitUserSettings>
-      listPlugins: () => Promise<DeskitPluginRegistryEntry[]>
-      getPlugin: (pluginId: string) => Promise<DeskitPluginRegistryEntry | null>
-      setPluginEnabled: (pluginId: string, enabled: boolean) => Promise<DeskitPluginRegistryEntry>
-      setPluginPreference: (pluginId: string, key: string, value: unknown) => Promise<void>
-      installPluginFolder: (folderPath: string) => Promise<DeskitPluginRegistryEntry>
-      installPluginPackage: (zipPath: string) => Promise<DeskitPluginRegistryEntry>
-      uninstallPlugin: (pluginId: string) => Promise<void>
-      reloadPlugin: (pluginId?: string) => Promise<DeskitPluginRegistryEntry | undefined>
+      listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
+      getPlugin: (
+        pluginId: string
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry | null>>
+      setPluginEnabled: (
+        pluginId: string,
+        enabled: boolean
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry>>
+      setPluginPreference: (
+        pluginId: string,
+        key: string,
+        value: unknown
+      ) => Promise<DeskitPluginIpcResult<void>>
+      installPluginFolder: (
+        folderPath: string
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry>>
+      installPluginPackage: (
+        zipPath: string
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry>>
+      uninstallPlugin: (pluginId: string) => Promise<DeskitPluginIpcResult<void>>
+      reloadPlugin: (
+        pluginId?: string
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry | undefined>>
       searchPluginCommands: (
         query: string,
         locale?: string,
         limit?: number
-      ) => Promise<DeskitPluginCommandResult[]>
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginCommandResult[]>>
       invokePluginCommand: (
         pluginId: string,
         commandId: string,
         phase: DeskitPluginInvokePhase,
         payload?: unknown
-      ) => Promise<DeskitPluginView | void>
-      disposePluginCommand: (pluginId: string, commandId: string) => Promise<void>
-      listMarketplacePlugins: () => Promise<unknown[]>
-      installMarketplacePlugin: (id: string, version?: string) => Promise<unknown>
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginView | void>>
+      disposePluginCommand: (
+        pluginId: string,
+        commandId: string
+      ) => Promise<DeskitPluginIpcResult<void>>
+      listMarketplacePlugins: () => Promise<DeskitPluginIpcResult<unknown[]>>
+      installMarketplacePlugin: (
+        id: string,
+        version?: string
+      ) => Promise<DeskitPluginIpcResult<unknown>>
       onLauncherFocus: (handler: () => void) => () => void
       onFloatingBallMenuState: (handler: (expanded: boolean) => void) => () => void
       onFloatingBallFeatures: (

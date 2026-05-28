@@ -1,6 +1,26 @@
-import type { IpcMain } from "electron"
+import type { IpcMain, IpcMainInvokeEvent } from "electron"
 import type { PluginHost } from "../plugins/plugin-host"
 import type { PluginInvokePhase, PluginInvokeRequest } from "../plugins/types"
+import { PermissionDenied } from "../plugins/permissions"
+
+export type PluginIpcErrorCode =
+  | "IPC_FORBIDDEN"
+  | "IPC_INVALID_PAYLOAD"
+  | "PLUGIN_NOT_FOUND"
+  | "PLUGIN_NOT_ACTIVE"
+  | "PLUGIN_PERMISSION_DENIED"
+  | "PLUGIN_CRASHED"
+  | "PLUGIN_NOT_IMPLEMENTED"
+  | "PLUGIN_IO_ERROR"
+  | "UNKNOWN_ERROR"
+
+export interface PluginIpcError {
+  code: PluginIpcErrorCode
+  message: string
+  details?: Record<string, unknown>
+}
+
+export type PluginIpcResult<T> = { ok: true; data: T } | { ok: false; error: PluginIpcError }
 
 export interface PluginIpcHandlers {
   list: () => unknown
@@ -16,6 +36,18 @@ export interface PluginIpcHandlers {
   disposeCommand: (payload: unknown) => Promise<void>
   marketplaceList: () => unknown[]
   marketplaceInstall: (payload: unknown) => Promise<unknown>
+}
+
+export interface RegisterPluginIpcOptions {
+  isTrustedSender: (event: IpcMainInvokeEvent) => boolean
+  onRegistryChanged: (entries: unknown) => void
+}
+
+export class PluginIpcNotImplementedError extends Error {
+  constructor(message: string) {
+    super(message)
+    this.name = "PluginIpcNotImplementedError"
+  }
 }
 
 export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
@@ -44,7 +76,7 @@ export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
     installFolder: (folderPath) => host.installFolder(requireString(folderPath, "folderPath")),
 
     async installPackage(_zipPath) {
-      throw new Error("Plugin package installation is not implemented yet")
+      throw new PluginIpcNotImplementedError("Plugin package installation is not implemented yet")
     },
 
     uninstall: (pluginId) => host.uninstall(requireString(pluginId, "pluginId")),
@@ -75,7 +107,7 @@ export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
     marketplaceList: () => [],
 
     async marketplaceInstall(_payload) {
-      throw new Error("Marketplace installation is not implemented yet")
+      throw new PluginIpcNotImplementedError("Marketplace installation is not implemented yet")
     },
   }
 }
@@ -83,37 +115,139 @@ export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
 export function registerPluginIpc(
   ipcMain: IpcMain,
   host: PluginHost,
-  onRegistryChanged: (entries: unknown) => void
+  options: RegisterPluginIpcOptions
 ): void {
   const handlers = createPluginIpcHandlers(host)
 
-  ipcMain.handle("plugin:list", () => handlers.list())
-  ipcMain.handle("plugin:get", (_event, pluginId: unknown) => handlers.get(pluginId))
-  ipcMain.handle("plugin:set-enabled", (_event, payload: unknown) => handlers.setEnabled(payload))
-  ipcMain.handle("plugin:set-preference", (_event, payload: unknown) =>
-    handlers.setPreference(payload)
+  ipcMain.handle("plugin:list", (event) =>
+    invokePluginIpcHandler("plugin:list", event, () => handlers.list(), options.isTrustedSender)
   )
-  ipcMain.handle("plugin:install-folder", (_event, folderPath: unknown) =>
-    handlers.installFolder(folderPath)
+  ipcMain.handle("plugin:get", (event, pluginId: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:get",
+      event,
+      () => handlers.get(pluginId),
+      options.isTrustedSender
+    )
   )
-  ipcMain.handle("plugin:install-package", (_event, zipPath: unknown) =>
-    handlers.installPackage(zipPath)
+  ipcMain.handle("plugin:set-enabled", (event, payload: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:set-enabled",
+      event,
+      () => handlers.setEnabled(payload),
+      options.isTrustedSender
+    )
   )
-  ipcMain.handle("plugin:uninstall", (_event, pluginId: unknown) => handlers.uninstall(pluginId))
-  ipcMain.handle("plugin:reload", (_event, pluginId: unknown) => handlers.reload(pluginId))
-  ipcMain.handle("plugin:search-commands", (_event, query: unknown) =>
-    handlers.searchCommands(query)
+  ipcMain.handle("plugin:set-preference", (event, payload: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:set-preference",
+      event,
+      () => handlers.setPreference(payload),
+      options.isTrustedSender
+    )
   )
-  ipcMain.handle("plugin:invoke", (_event, payload: unknown) => handlers.invoke(payload))
-  ipcMain.handle("plugin:dispose-command", (_event, payload: unknown) =>
-    handlers.disposeCommand(payload)
+  ipcMain.handle("plugin:install-folder", (event, folderPath: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:install-folder",
+      event,
+      () => handlers.installFolder(folderPath),
+      options.isTrustedSender
+    )
   )
-  ipcMain.handle("marketplace:list", () => handlers.marketplaceList())
-  ipcMain.handle("marketplace:install", (_event, payload: unknown) =>
-    handlers.marketplaceInstall(payload)
+  ipcMain.handle("plugin:install-package", (event, zipPath: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:install-package",
+      event,
+      () => handlers.installPackage(zipPath),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("plugin:uninstall", (event, pluginId: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:uninstall",
+      event,
+      () => handlers.uninstall(pluginId),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("plugin:reload", (event, pluginId: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:reload",
+      event,
+      () => handlers.reload(pluginId),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("plugin:search-commands", (event, query: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:search-commands",
+      event,
+      () => handlers.searchCommands(query),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("plugin:invoke", (event, payload: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:invoke",
+      event,
+      () => handlers.invoke(payload),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("plugin:dispose-command", (event, payload: unknown) =>
+    invokePluginIpcHandler(
+      "plugin:dispose-command",
+      event,
+      () => handlers.disposeCommand(payload),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("marketplace:list", (event) =>
+    invokePluginIpcHandler(
+      "marketplace:list",
+      event,
+      () => handlers.marketplaceList(),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("marketplace:install", (event, payload: unknown) =>
+    invokePluginIpcHandler(
+      "marketplace:install",
+      event,
+      () => handlers.marketplaceInstall(payload),
+      options.isTrustedSender
+    )
   )
 
-  host.registry.on("changed", (entries) => onRegistryChanged(entries))
+  host.registry.on("changed", (entries) => options.onRegistryChanged(entries))
+}
+
+export async function invokePluginIpcHandler<T>(
+  channel: string,
+  event: IpcMainInvokeEvent,
+  handler: () => T | Promise<T>,
+  isTrustedSender: (event: IpcMainInvokeEvent) => boolean
+): Promise<PluginIpcResult<Awaited<T>>> {
+  if (!isTrustedSender(event)) {
+    console.warn("[plugin-ipc] rejected untrusted sender", {
+      channel,
+      senderUrl: senderUrl(event),
+    })
+    return {
+      ok: false,
+      error: {
+        code: "IPC_FORBIDDEN",
+        message: "Untrusted IPC sender.",
+        details: { channel },
+      },
+    }
+  }
+
+  try {
+    return { ok: true, data: (await handler()) as Awaited<T> }
+  } catch (err) {
+    return { ok: false, error: toPluginIpcError(err) }
+  }
 }
 
 function parseInvokePayload(payload: unknown): PluginInvokeRequest {
@@ -148,4 +282,75 @@ function requireBoolean(value: unknown, label: string): boolean {
 function requirePhase(value: unknown): PluginInvokePhase {
   if (value === "run" || value === "onSearchChange" || value === "onAction") return value
   throw new TypeError("phase must be run, onSearchChange, or onAction")
+}
+
+function toPluginIpcError(err: unknown): PluginIpcError {
+  if (err instanceof PluginIpcNotImplementedError) {
+    return {
+      code: "PLUGIN_NOT_IMPLEMENTED",
+      message: "This plugin feature is not implemented yet.",
+    }
+  }
+
+  if (err instanceof TypeError) {
+    return {
+      code: "IPC_INVALID_PAYLOAD",
+      message: err.message,
+    }
+  }
+
+  if (err instanceof PermissionDenied) {
+    return {
+      code: "PLUGIN_PERMISSION_DENIED",
+      message: "Plugin permission denied.",
+    }
+  }
+
+  if (isErrorWithCode(err) && isIoErrorCode(err.code)) {
+    return {
+      code: "PLUGIN_IO_ERROR",
+      message: "Plugin file operation failed.",
+    }
+  }
+
+  const message = err instanceof Error ? err.message : String(err)
+  if (message.startsWith("Plugin not found:")) {
+    return {
+      code: "PLUGIN_NOT_FOUND",
+      message: "Plugin was not found.",
+      details: { pluginId: message.slice("Plugin not found:".length).trim() },
+    }
+  }
+  if (message.startsWith("Plugin is not active:")) {
+    return {
+      code: "PLUGIN_NOT_ACTIVE",
+      message: "Plugin is not active.",
+      details: { pluginId: message.slice("Plugin is not active:".length).trim() },
+    }
+  }
+  if (message.toLowerCase().includes("crashed")) {
+    return {
+      code: "PLUGIN_CRASHED",
+      message: "Plugin crashed.",
+    }
+  }
+
+  return {
+    code: "UNKNOWN_ERROR",
+    message: "Plugin IPC request failed.",
+  }
+}
+
+function senderUrl(event: IpcMainInvokeEvent): string | undefined {
+  return event.senderFrame?.url || event.sender.getURL()
+}
+
+function isErrorWithCode(err: unknown): err is { code: string } {
+  return Boolean(
+    err && typeof err === "object" && typeof (err as { code?: unknown }).code === "string"
+  )
+}
+
+function isIoErrorCode(code: string): boolean {
+  return ["EACCES", "EEXIST", "EISDIR", "ENOENT", "ENOTDIR", "EPERM"].includes(code)
 }
