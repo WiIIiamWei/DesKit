@@ -81,6 +81,7 @@ export const screen = {
 export const nativeImage = {
   createEmpty: vi.fn(() => ({ isEmpty: vi.fn(() => true) })),
   createFromPath: vi.fn(() => ({ isEmpty: vi.fn(() => false) })),
+  createFromDataURL: vi.fn((value: string) => ({ dataUrl: value })),
 }
 export const Notification = Object.assign(
   vi.fn(() => ({ show: vi.fn() })),
@@ -118,13 +119,9 @@ export const clipboard = {
   })),
   writeImage: vi.fn(),
 }
-export const nativeImage = {
-  createFromDataURL: vi.fn((value: string) => ({ dataUrl: value })),
-}
 export const desktopCapturer = {
   getSources: vi.fn(() => Promise.resolve([])),
 }
-export const Notification = vi.fn(() => ({ show: vi.fn() }))
 
 export default {
   contextBridge,
@@ -142,7 +139,5 @@ export default {
   net,
   shell,
   clipboard,
-  nativeImage,
   desktopCapturer,
-  Notification,
 }
