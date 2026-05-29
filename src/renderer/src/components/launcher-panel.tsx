@@ -152,6 +152,7 @@ export function LauncherPanel() {
 
   const closePluginView = useCallback(async () => {
     const command = activeCommand
+    ++pluginSearchSeqRef.current
     setMode("search")
     setActiveCommand(null)
     setPluginView(null)
@@ -207,12 +208,13 @@ export function LauncherPanel() {
   const runPluginCommand = useCallback(
     async (command: DeskitPluginCommandResult) => {
       try {
+        ++pluginSearchSeqRef.current
         const view = await invokePluginCommand(command.pluginId, command.commandId, "run", {
           initialQuery: query,
         })
         if (isPluginToastView(view)) {
           showPluginToast(view, i18n.language)
-          if (command.mode === "no-view") return
+          return
         }
         if (command.mode === "no-view") {
           void hideLauncher()
@@ -265,8 +267,7 @@ export function LauncherPanel() {
         return
       }
       if (action.type === "open-path") {
-        await navigator.clipboard.writeText(action.path)
-        toast.success("Path copied")
+        toast.info("Open path is not yet supported from the launcher")
         return
       }
       if (action.type === "close") {
@@ -400,11 +401,10 @@ export function LauncherPanel() {
 function launcherGroups(
   items: LauncherItem[]
 ): Array<{ kind: LauncherItem["kind"]; items: LauncherItem[] }> {
-  const kinds = [...new Set(items.map((item) => item.kind))]
-  return kinds.map((kind) => ({
-    kind,
-    items: items.filter((item) => item.kind === kind),
-  }))
+  const order: LauncherItem["kind"][] = ["plugin", "app"]
+  return order
+    .map((kind) => ({ kind, items: items.filter((item) => item.kind === kind) }))
+    .filter((group) => group.items.length > 0)
 }
 
 function isPluginToastView(value: unknown): value is PluginToastView {

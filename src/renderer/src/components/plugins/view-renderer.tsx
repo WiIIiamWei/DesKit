@@ -83,7 +83,12 @@ export function ViewRenderer({
       ) : view.type === "detail" ? (
         <DetailPluginView view={view} locale={locale} onAction={onAction} />
       ) : (
-        <FormPluginView view={view} locale={locale} onAction={onAction} />
+        <FormPluginView
+          key={view.fields.map((f) => f.id).join(",")}
+          view={view}
+          locale={locale}
+          onAction={onAction}
+        />
       )}
     </div>
   )

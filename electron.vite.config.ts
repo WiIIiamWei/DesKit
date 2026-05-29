@@ -35,6 +35,7 @@ export default defineConfig({
     resolve: {
       alias: {
         "@": resolve(__dirname, "src/renderer/src"),
+        "@deskit/plugin-sdk": resolve(__dirname, "packages/plugin-sdk/src/index.ts"),
       },
     },
     plugins: [react(), tailwindcss()],

@@ -8,7 +8,8 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "paths": {
-      "@/*": ["./src/renderer/src/*"]
+      "@/*": ["./src/renderer/src/*"],
+      "@deskit/plugin-sdk": ["./packages/plugin-sdk/src/index.ts"]
     },
     "resolveJsonModule": true,
     "types": ["vite/client", "@testing-library/jest-dom"],
@@ -19,5 +20,6 @@
     "isolatedModules": true,
     "skipLibCheck": true
   },
-  "include": ["src/renderer/src/**/*", "src/preload/index.d.ts"]
+  "include": ["src/renderer/src/**/*", "src/preload/index.d.ts", "packages/plugin-sdk/src/**/*"],
+  "exclude": ["packages/plugin-sdk/src/__examples__/**"]
 }
