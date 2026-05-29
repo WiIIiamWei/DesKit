@@ -25,6 +25,8 @@ interface MarketplacePlugin {
   downloads?: number
   icon?: string
   packagePath?: string
+  sourcePath?: string
+  permissions?: string[]
 }
 
 const ALL_CATEGORY = "all"
@@ -32,7 +34,9 @@ const ALL_CATEGORY = "all"
 export function MarketplacePage() {
   const { t, i18n } = useTranslation()
   const [plugins, setPlugins] = useState<MarketplacePlugin[]>([])
-  const [installedIds, setInstalledIds] = useState<Set<string>>(() => new Set())
+  const [installedPlugins, setInstalledPlugins] = useState<Map<string, DeskitPluginRegistryEntry>>(
+    () => new Map()
+  )
   const [query, setQuery] = useState("")
   const [category, setCategory] = useState(ALL_CATEGORY)
   const [installingId, setInstallingId] = useState<string | null>(null)
@@ -43,14 +47,14 @@ export function MarketplacePage() {
     if (!electron) return
     void refreshMarketplace()
     return onPluginRegistryChanged((entries) => {
-      setInstalledIds(installedPluginIds(entries))
+      setInstalledPlugins(installedPluginMap(entries))
     })
   }, [electron])
 
   async function refreshMarketplace() {
     const [marketplace, installed] = await Promise.all([listMarketplacePlugins(), listPlugins()])
     setPlugins(normalizeMarketplacePlugins(marketplace))
-    setInstalledIds(installedPluginIds(installed))
+    setInstalledPlugins(installedPluginMap(installed))
   }
 
   async function install(plugin: MarketplacePlugin) {
@@ -68,7 +72,11 @@ export function MarketplacePage() {
   }
 
   const categories = useMemo(() => {
-    const values = [...new Set(plugins.map((plugin) => plugin.category).filter(Boolean))]
+    const values = [
+      ...new Set(
+        plugins.map((plugin) => plugin.category).filter((value): value is string => Boolean(value))
+      ),
+    ].sort((a, b) => a.localeCompare(b))
     return [ALL_CATEGORY, ...values] as string[]
   }, [plugins])
 
@@ -163,7 +171,8 @@ export function MarketplacePage() {
       ) : (
         <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {visiblePlugins.map((plugin) => {
-            const installed = installedIds.has(plugin.id)
+            const installed = installedPlugins.get(plugin.id)
+            const installState = getInstallState(plugin, installed)
             const installing = installingId === plugin.id
             return (
               <Card key={plugin.id} className="overflow-hidden">
@@ -173,7 +182,7 @@ export function MarketplacePage() {
                       <Store className="size-4 text-muted-foreground" aria-hidden />
                     </span>
                     <Badge variant={installed ? "default" : "outline"}>
-                      {installed ? t("marketplace.installed") : plugin.version}
+                      {installed ? t(`marketplace.installState.${installState}`) : plugin.version}
                     </Badge>
                   </div>
                   <div className="min-w-0">
@@ -203,24 +212,54 @@ export function MarketplacePage() {
                     )}
                   </div>
 
+                  <PermissionSummary permissions={plugin.permissions ?? []} />
+
                   <Button
                     type="button"
                     className="w-full"
-                    disabled={installed || installing}
+                    disabled={!canInstall(plugin, installed) || installing}
                     onClick={() => void install(plugin)}
                   >
                     <Download className={cn("size-4", installing && "animate-pulse")} />
-                    {installed
-                      ? t("marketplace.installed")
-                      : installing
-                        ? t("marketplace.installing")
-                        : t("marketplace.install")}
+                    {installing
+                      ? t("marketplace.installing")
+                      : t(`marketplace.actions.${installState}`)}
                   </Button>
+                  {installed && installed.source.kind !== "user" && (
+                    <p className="text-xs text-muted-foreground">
+                      {t("marketplace.protectedSource", {
+                        source: t(`plugins.source.${installed.source.kind}`),
+                      })}
+                    </p>
+                  )}
                 </CardContent>
               </Card>
             )
           })}
         </div>
+      )}
+    </div>
+  )
+}
+
+function PermissionSummary({ permissions }: { permissions: string[] }) {
+  const { t } = useTranslation()
+  const visible = permissions.slice(0, 3)
+  return (
+    <div className="flex min-h-6 flex-wrap items-center gap-1.5">
+      {visible.length === 0 ? (
+        <Badge variant="secondary">{t("marketplace.permissions.none")}</Badge>
+      ) : (
+        visible.map((permission) => (
+          <Badge key={permission} variant="secondary">
+            {t(`permissions.${permission}`, { defaultValue: permission })}
+          </Badge>
+        ))
+      )}
+      {permissions.length > visible.length && (
+        <Badge variant="outline">
+          {t("marketplace.permissions.more", { count: permissions.length - visible.length })}
+        </Badge>
       )}
     </div>
   )
@@ -253,13 +292,39 @@ function normalizeMarketplacePlugins(value: unknown[]): MarketplacePlugin[] {
         downloads: typeof item.downloads === "number" ? item.downloads : undefined,
         icon: typeof item.icon === "string" ? item.icon : undefined,
         packagePath: typeof item.packagePath === "string" ? item.packagePath : undefined,
+        sourcePath: typeof item.sourcePath === "string" ? item.sourcePath : undefined,
+        permissions: Array.isArray(item.permissions)
+          ? item.permissions.filter(
+              (permission): permission is string => typeof permission === "string"
+            )
+          : undefined,
       },
     ]
   })
 }
 
-function installedPluginIds(entries: DeskitPluginRegistryEntry[]): Set<string> {
-  return new Set(entries.map((entry) => entry.manifest?.id ?? entry.pluginId))
+function installedPluginMap(
+  entries: DeskitPluginRegistryEntry[]
+): Map<string, DeskitPluginRegistryEntry> {
+  return new Map(entries.map((entry) => [entry.manifest?.id ?? entry.pluginId, entry]))
+}
+
+function getInstallState(
+  plugin: MarketplacePlugin,
+  installed: DeskitPluginRegistryEntry | undefined
+): "install" | "reinstall" | "installed" | "unavailable" {
+  if (!plugin.sourcePath) return "unavailable"
+  if (!installed) return "install"
+  return installed.source.kind === "user" ? "reinstall" : "installed"
+}
+
+function canInstall(
+  plugin: MarketplacePlugin,
+  installed: DeskitPluginRegistryEntry | undefined
+): boolean {
+  if (!plugin.sourcePath) return false
+  if (!installed) return true
+  return installed.source.kind === "user"
 }
 
 function localized(value: DeskitLocalizedString | undefined, locale: string): string {

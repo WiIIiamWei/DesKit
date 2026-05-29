@@ -15,24 +15,26 @@
       "version": "0.1.0",
       "category": "utilities",
       "downloads": 1280,
-      "packagePath": "com.deskit.timestamp-0.1.0.deskit"
+      "sourcePath": "plugins/com.deskit.timestamp",
+      "permissions": []
     },
     {
-      "id": "com.deskit.clipboard",
-      "name": "Clipboard",
+      "id": "com.deskit.notes",
+      "name": "Notes",
       "displayName": {
-        "en": "Clipboard History",
-        "zh-CN": "剪贴板历史"
+        "en": "Quick Notes",
+        "zh-CN": "快速笔记"
       },
       "description": {
-        "en": "Keep a lightweight searchable clipboard history with quick copy and paste actions.",
-        "zh-CN": "保留轻量可搜索的剪贴板历史，并提供快速复制和粘贴动作。"
+        "en": "Save lightweight launcher notes with per-plugin storage.",
+        "zh-CN": "用插件存储保存轻量启动器笔记。"
       },
       "author": "DesKit",
       "version": "0.1.0",
       "category": "productivity",
       "downloads": 936,
-      "packagePath": "com.deskit.clipboard-0.1.0.deskit"
+      "sourcePath": "plugins/com.deskit.notes",
+      "permissions": ["storage:plugin"]
     },
     {
       "id": "com.deskit.capture",
@@ -49,7 +51,7 @@
       "version": "0.1.0",
       "category": "media",
       "downloads": 742,
-      "packagePath": "com.deskit.capture-0.1.0.deskit"
+      "permissions": ["system:capture-screen"]
     }
   ]
 }

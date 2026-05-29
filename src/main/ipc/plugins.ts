@@ -2,7 +2,11 @@ import type { IpcMain, IpcMainInvokeEvent } from "electron"
 import type { PluginHost } from "../plugins/plugin-host"
 import type { PluginInvokePhase, PluginInvokeRequest } from "../plugins/types"
 import { PermissionDenied } from "../plugins/permissions"
-import { PluginHostNotImplementedError, PluginPreferenceTypeError } from "../plugins/plugin-host"
+import {
+  PluginHostNotImplementedError,
+  PluginInstallError,
+  PluginPreferenceTypeError,
+} from "../plugins/plugin-host"
 import { PluginCrashedError } from "../plugins/plugin-registry"
 
 export type PluginIpcErrorCode =
@@ -13,6 +17,7 @@ export type PluginIpcErrorCode =
   | "PLUGIN_PERMISSION_DENIED"
   | "PLUGIN_CRASHED"
   | "PLUGIN_NOT_IMPLEMENTED"
+  | "PLUGIN_INSTALL_ERROR"
   | "PLUGIN_IO_ERROR"
   | "UNKNOWN_ERROR"
 
@@ -115,8 +120,12 @@ export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
 
     marketplaceList: () => host.listMarketplacePlugins(),
 
-    async marketplaceInstall(_payload) {
-      throw new PluginHostNotImplementedError("Marketplace installation is not implemented yet")
+    marketplaceInstall(payload) {
+      const value = requireRecord(payload, "marketplace:install payload")
+      return host.installMarketplacePlugin(
+        requireString(value.id, "id"),
+        typeof value.version === "string" ? value.version : undefined
+      )
     },
   }
 }
@@ -300,6 +309,14 @@ function toPluginIpcError(err: unknown): PluginIpcError {
     return {
       code: "PLUGIN_NOT_IMPLEMENTED",
       message: "This plugin feature is not implemented yet.",
+    }
+  }
+
+  if (err instanceof PluginInstallError) {
+    return {
+      code: "PLUGIN_INSTALL_ERROR",
+      message: err.message,
+      details: err.details,
     }
   }
 

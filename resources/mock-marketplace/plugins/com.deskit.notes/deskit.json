@@ -1,0 +1,36 @@
+{
+  "id": "com.deskit.notes",
+  "name": "notes",
+  "displayName": {
+    "en": "Quick Notes",
+    "zh-CN": "快速笔记"
+  },
+  "description": {
+    "en": "Save lightweight launcher notes with per-plugin storage.",
+    "zh-CN": "用插件存储保存轻量启动器笔记。"
+  },
+  "version": "0.1.0",
+  "author": "DesKit",
+  "engines": {
+    "deskit": "^0.1.0"
+  },
+  "main": "dist/index.js",
+  "contributes": {
+    "commands": [
+      {
+        "id": "notes.quick",
+        "title": {
+          "en": "Quick Notes",
+          "zh-CN": "快速笔记"
+        },
+        "subtitle": {
+          "en": "Store and review short notes",
+          "zh-CN": "保存并查看短笔记"
+        },
+        "keywords": ["note", "memo", "storage"],
+        "mode": "view"
+      }
+    ]
+  },
+  "permissions": ["storage:plugin"]
+}

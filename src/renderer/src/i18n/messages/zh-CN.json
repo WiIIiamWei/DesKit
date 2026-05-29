@@ -118,15 +118,29 @@
       "addFolder": "添加本地插件文件夹…",
       "installPackage": "从压缩包安装…",
       "refresh": "刷新",
+      "install": "安装",
+      "cancel": "取消",
       "enable": "启用插件",
       "reload": "重新加载",
       "uninstall": "卸载"
     },
     "messages": {
+      "installed": "插件已安装。",
       "updated": "插件状态已更新。",
       "reloaded": "插件已重新加载。",
       "uninstalled": "插件已卸载。",
       "preferenceSaved": "偏好设置已保存。"
+    },
+    "confirm": {
+      "title": "删除 {{name}}？",
+      "uninstall": "插件文件将从本机移除，偏好设置和插件数据会保留。",
+      "uninstallInvalid": "这会清理无效的插件记录和残留文件。"
+    },
+    "installFolder": {
+      "title": "添加本地插件文件夹",
+      "description": "粘贴本地插件文件夹路径，DesKit 会复制到已安装插件目录。",
+      "pathLabel": "文件夹路径",
+      "pathPlaceholder": "/path/to/plugin"
     },
     "detail": {
       "empty": "选择一个插件查看详情。",
@@ -153,8 +167,25 @@
     "installed": "已安装",
     "install": "安装",
     "installing": "安装中…",
+    "protectedSource": "该插件由{{source}}版本提供，无法从应用市场覆盖。",
     "unknownAuthor": "未知作者",
     "downloads": "{{count}} 次下载",
+    "actions": {
+      "install": "安装",
+      "reinstall": "重新安装",
+      "installed": "已安装",
+      "unavailable": "暂不可用"
+    },
+    "installState": {
+      "install": "可安装",
+      "reinstall": "已安装",
+      "installed": "已安装",
+      "unavailable": "预览"
+    },
+    "permissions": {
+      "none": "无额外权限",
+      "more": "+{{count}}"
+    },
     "messages": {
       "installed": "插件已安装。"
     },
@@ -169,6 +200,7 @@
     "clipboard:read": "读取剪贴板",
     "clipboard:write": "写入剪贴板",
     "storage:plugin": "插件存储",
+    "system:capture-screen": "屏幕捕获",
     "notification": "通知"
   }
 }

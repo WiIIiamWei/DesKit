@@ -2,15 +2,34 @@ import type { ReactNode } from "react"
 import { AlertCircle, FolderPlus, PackagePlus, Plug, RefreshCw, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
 import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import {
+  installPluginFolder,
   isElectron,
   listPlugins,
   onPluginRegistryChanged,
@@ -41,6 +60,9 @@ export function PluginsPage() {
   const [busyPluginId, setBusyPluginId] = useState<string | null>(null)
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [preferenceValues, setPreferenceValues] = useState<Record<string, unknown>>({})
+  const [pendingUninstall, setPendingUninstall] = useState<DeskitPluginRegistryEntry | null>(null)
+  const [folderDialogOpen, setFolderDialogOpen] = useState(false)
+  const [folderPath, setFolderPath] = useState("")
   const electron = isElectron()
 
   const refresh = useCallback(async () => {
@@ -117,11 +139,28 @@ export function PluginsPage() {
     try {
       await uninstallPlugin(plugin.pluginId)
       await refresh()
+      setPendingUninstall(null)
       setStatus({ kind: "ok", text: t("plugins.messages.uninstalled") })
     } catch (err) {
       setStatus({ kind: "error", text: errorMessage(err) })
     } finally {
       setBusyPluginId(null)
+    }
+  }
+
+  async function installFolder() {
+    if (!folderPath.trim()) return
+
+    setStatus(null)
+    try {
+      const installed = await installPluginFolder(folderPath.trim())
+      await refresh()
+      setSelectedPluginId(installed.pluginId)
+      setFolderPath("")
+      setFolderDialogOpen(false)
+      setStatus({ kind: "ok", text: t("plugins.messages.installed") })
+    } catch (err) {
+      setStatus({ kind: "error", text: errorMessage(err) })
     }
   }
 
@@ -171,7 +210,12 @@ export function PluginsPage() {
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
-          <Button type="button" variant="outline" size="sm" disabled>
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setFolderDialogOpen(true)}
+          >
             <FolderPlus className="size-3.5" aria-hidden />
             {t("plugins.actions.addFolder")}
           </Button>
@@ -210,7 +254,7 @@ export function PluginsPage() {
                     onSelect={setSelectedPluginId}
                     onToggle={togglePlugin}
                     onReload={reload}
-                    onUninstall={uninstall}
+                    onUninstall={setPendingUninstall}
                   />
                 ))}
               </div>
@@ -226,6 +270,23 @@ export function PluginsPage() {
           onPreferenceChange={updatePreference}
         />
       </div>
+
+      <InstallFolderDialog
+        open={folderDialogOpen}
+        folderPath={folderPath}
+        onOpenChange={setFolderDialogOpen}
+        onFolderPathChange={setFolderPath}
+        onInstall={() => void installFolder()}
+      />
+      <UninstallConfirmDialog
+        plugin={pendingUninstall}
+        locale={i18n.language}
+        busy={pendingUninstall ? busyPluginId === pendingUninstall.pluginId : false}
+        onOpenChange={(open) => {
+          if (!open) setPendingUninstall(null)
+        }}
+        onConfirm={(plugin) => void uninstall(plugin)}
+      />
     </div>
   )
 }
@@ -237,6 +298,93 @@ function PluginsHeader() {
       <h1 className="text-2xl font-semibold tracking-tight">{t("plugins.title")}</h1>
       <p className="text-sm text-muted-foreground">{t("plugins.subtitle")}</p>
     </header>
+  )
+}
+
+function InstallFolderDialog({
+  open,
+  folderPath,
+  onOpenChange,
+  onFolderPathChange,
+  onInstall,
+}: {
+  open: boolean
+  folderPath: string
+  onOpenChange: (open: boolean) => void
+  onFolderPathChange: (value: string) => void
+  onInstall: () => void
+}) {
+  const { t } = useTranslation()
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{t("plugins.installFolder.title")}</DialogTitle>
+          <DialogDescription>{t("plugins.installFolder.description")}</DialogDescription>
+        </DialogHeader>
+        <label className="grid gap-2 text-sm">
+          <span className="font-medium">{t("plugins.installFolder.pathLabel")}</span>
+          <Input
+            value={folderPath}
+            onChange={(event) => onFolderPathChange(event.target.value)}
+            placeholder={t("plugins.installFolder.pathPlaceholder")}
+            autoFocus
+          />
+        </label>
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            {t("plugins.actions.cancel")}
+          </Button>
+          <Button type="button" disabled={!folderPath.trim()} onClick={onInstall}>
+            {t("plugins.actions.install")}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function UninstallConfirmDialog({
+  plugin,
+  locale,
+  busy,
+  onOpenChange,
+  onConfirm,
+}: {
+  plugin: DeskitPluginRegistryEntry | null
+  locale: string
+  busy: boolean
+  onOpenChange: (open: boolean) => void
+  onConfirm: (plugin: DeskitPluginRegistryEntry) => void
+}) {
+  const { t } = useTranslation()
+  const label = plugin?.manifest
+    ? localized(plugin.manifest.displayName, locale)
+    : (plugin?.pluginId ?? "")
+  const invalid = plugin?.status === "invalid"
+  return (
+    <AlertDialog open={Boolean(plugin)} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("plugins.confirm.title", { name: label })}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {invalid ? t("plugins.confirm.uninstallInvalid") : t("plugins.confirm.uninstall")}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={busy}>{t("plugins.actions.cancel")}</AlertDialogCancel>
+          <AlertDialogAction
+            variant="destructive"
+            disabled={!plugin || busy}
+            onClick={() => {
+              if (plugin) onConfirm(plugin)
+            }}
+          >
+            {t("plugins.actions.uninstall")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 

@@ -1,0 +1,36 @@
+{
+  "id": "com.deskit.timestamp",
+  "name": "timestamp",
+  "displayName": {
+    "en": "Timestamp Converter",
+    "zh-CN": "时间戳转换"
+  },
+  "description": {
+    "en": "Convert between Unix timestamps and readable dates from the launcher.",
+    "zh-CN": "在启动器里转换 Unix 时间戳和可读日期。"
+  },
+  "version": "0.1.0",
+  "author": "DesKit",
+  "engines": {
+    "deskit": "^0.1.0"
+  },
+  "main": "dist/index.js",
+  "contributes": {
+    "commands": [
+      {
+        "id": "timestamp.convert",
+        "title": {
+          "en": "Convert Timestamp",
+          "zh-CN": "转换时间戳"
+        },
+        "subtitle": {
+          "en": "Convert now or parse a Unix timestamp",
+          "zh-CN": "转换当前时间或解析 Unix 时间戳"
+        },
+        "keywords": ["time", "date", "unix", "timestamp"],
+        "mode": "view"
+      }
+    ]
+  },
+  "permissions": []
+}

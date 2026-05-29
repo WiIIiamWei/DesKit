@@ -9,6 +9,7 @@ import type {
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { createElectronPluginAdapters } from "./electron-adapters"
+import { loadPluginManifest } from "./manifest-loader"
 import { PluginBridge } from "./plugin-bridge"
 import { discoverPlugins } from "./plugin-discovery"
 import { pluginPreferenceFilePath, PluginPreferenceStore } from "./plugin-preferences"
@@ -33,6 +34,8 @@ export interface MarketplacePlugin {
   downloads?: number
   icon?: string
   packagePath?: string
+  sourcePath?: string
+  permissions?: string[]
 }
 
 /**
@@ -62,6 +65,16 @@ export class PluginPreferenceTypeError extends TypeError {
     this.name = "PluginPreferenceTypeError"
     this.pluginId = pluginId
     this.key = key
+  }
+}
+
+export class PluginInstallError extends Error {
+  readonly details?: Record<string, unknown>
+
+  constructor(message: string, details?: Record<string, unknown>) {
+    super(message)
+    this.name = "PluginInstallError"
+    this.details = details
   }
 }
 
@@ -154,13 +167,26 @@ export class PluginHost {
     await this.preferences.set(pluginId, key, value)
   }
 
-  // Implemented in a later stage (folder install + chokidar hot reload).
-  // Kept on the host so the IPC channel surface stays stable in the
-  // meantime — see CLAUDE.md "Adding an IPC channel" note.
-  async installFolder(_folderPath: string): Promise<PluginRegistryEntry> {
-    throw new PluginHostNotImplementedError(
-      "Folder plugin installation is planned for a later stage"
+  async installFolder(folderPath: string): Promise<PluginRegistryEntry> {
+    return this.installDirectory(folderPath)
+  }
+
+  async installMarketplacePlugin(id: string, version?: string): Promise<PluginRegistryEntry> {
+    const plugin = (await this.listMarketplacePlugins()).find(
+      (entry) => entry.id === id && (!version || entry.version === version)
     )
+    if (!plugin) {
+      throw new PluginInstallError("Marketplace plugin was not found.", { pluginId: id, version })
+    }
+    if (!plugin.sourcePath) {
+      throw new PluginInstallError("Marketplace entry is missing an install source.", {
+        pluginId: id,
+      })
+    }
+
+    const marketplaceDir = path.dirname(this.marketplaceRegistryPath)
+    const sourceDir = resolveRelativePathInside(plugin.sourcePath, marketplaceDir)
+    return this.installDirectory(sourceDir, { expectedPluginId: id })
   }
 
   async uninstall(pluginId: string): Promise<void> {
@@ -178,7 +204,6 @@ export class PluginHost {
       await removeDevPluginReference(this.devFilePath, entry.rootDir)
     }
 
-    await this.preferences.delete(pluginId)
     await this.reload()
   }
 
@@ -198,6 +223,107 @@ export class PluginHost {
     }
     return { ...defaults, ...this.preferences.get(pluginId) }
   }
+
+  private async installDirectory(
+    sourceDir: string,
+    options: { expectedPluginId?: string } = {}
+  ): Promise<PluginRegistryEntry> {
+    const manifest = await validateInstallSource(sourceDir)
+    if (options.expectedPluginId && manifest.id !== options.expectedPluginId) {
+      throw new PluginInstallError("Plugin ID does not match marketplace entry.", {
+        expectedPluginId: options.expectedPluginId,
+        actualPluginId: manifest.id,
+      })
+    }
+
+    const existing = this.registry.get(manifest.id)
+    if (existing && existing.source.kind !== "user") {
+      throw new PluginInstallError("This plugin is provided by a protected source.", {
+        pluginId: manifest.id,
+        source: existing.source.kind,
+      })
+    }
+
+    const targetDir = path.join(this.userDir, safePluginFileName(manifest.id))
+    const backupDir = path.join(
+      this.options.userDataDir,
+      "plugin-install-backups",
+      `.install-backup-${safePluginFileName(manifest.id)}-${Date.now()}`
+    )
+    const hadExisting = await pathExists(targetDir)
+    let backupCreated = false
+
+    await fs.mkdir(this.userDir, { recursive: true })
+    if (existing?.status === "active") {
+      await this.registry.setEnabled(manifest.id, false)
+    }
+
+    try {
+      if (hadExisting) {
+        await fs.mkdir(path.dirname(backupDir), { recursive: true })
+        await fs.rm(backupDir, { recursive: true, force: true })
+        await fs.rename(targetDir, backupDir)
+        backupCreated = true
+      }
+      await copyPluginDirectory(sourceDir, targetDir)
+      await this.reload()
+      const installed = this.registry.get(manifest.id)
+      if (
+        !installed ||
+        installed.source.kind !== "user" ||
+        !installed.manifest ||
+        installed.status !== "active"
+      ) {
+        throw new PluginInstallError("Installed plugin could not be loaded.", {
+          pluginId: manifest.id,
+          status: installed?.status,
+        })
+      }
+      if (backupCreated) await fs.rm(backupDir, { recursive: true, force: true })
+      return installed
+    } catch (err) {
+      await fs.rm(targetDir, { recursive: true, force: true })
+      if (backupCreated) {
+        await fs.rename(backupDir, targetDir)
+      }
+      await this.reload()
+      if (err instanceof PluginInstallError) throw err
+      throw new PluginInstallError(
+        "Plugin installation failed and previous version was restored.",
+        {
+          pluginId: manifest.id,
+        }
+      )
+    }
+  }
+}
+
+async function validateInstallSource(sourceDir: string): Promise<PluginManifest> {
+  const stat = await fs.stat(sourceDir)
+  if (!stat.isDirectory()) {
+    throw new PluginInstallError("Plugin install source must be a directory.", { sourceDir })
+  }
+  const manifest = await loadPluginManifest(sourceDir)
+  const mainPath = path.resolve(sourceDir, manifest.main)
+  if (!isInsideOrSameDirectory(mainPath, path.resolve(sourceDir))) {
+    throw new PluginInstallError("Plugin main file must stay inside the plugin directory.", {
+      pluginId: manifest.id,
+    })
+  }
+  const mainStat = await fs.stat(mainPath)
+  if (!mainStat.isFile()) {
+    throw new PluginInstallError("Plugin main file is missing.", { pluginId: manifest.id })
+  }
+  return manifest
+}
+
+async function copyPluginDirectory(sourceDir: string, targetDir: string): Promise<void> {
+  await fs.cp(sourceDir, targetDir, {
+    recursive: true,
+    force: false,
+    errorOnExist: true,
+    filter: (source) => !path.basename(source).startsWith(".install-backup-"),
+  })
 }
 
 async function removeDirectoryInside(targetDir: string, parentDir: string): Promise<void> {
@@ -248,6 +374,40 @@ function isInsideDirectory(target: string, parent: string): boolean {
   return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative)
 }
 
+function isInsideOrSameDirectory(target: string, parent: string): boolean {
+  const relative = path.relative(parent, target)
+  return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+function resolveRelativePathInside(value: string, parentDir: string): string {
+  if (path.isAbsolute(value)) {
+    throw new PluginInstallError("Marketplace install source must be a relative path.", {
+      sourcePath: value,
+    })
+  }
+  const target = path.resolve(parentDir, value)
+  if (!isInsideDirectory(target, parentDir)) {
+    throw new PluginInstallError("Marketplace install source escapes the registry directory.", {
+      sourcePath: value,
+    })
+  }
+  return target
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await fs.stat(target)
+    return true
+  } catch (err) {
+    if (isFileNotFound(err)) return false
+    throw err
+  }
+}
+
+function safePluginFileName(pluginId: string): string {
+  return pluginId.replace(/[^\w.-]/g, "_")
+}
+
 function isFileNotFound(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT")
 }
@@ -276,6 +436,12 @@ function normalizeMarketplaceRegistry(value: unknown): MarketplacePlugin[] {
         downloads: typeof item.downloads === "number" ? item.downloads : undefined,
         icon: typeof item.icon === "string" ? item.icon : undefined,
         packagePath: typeof item.packagePath === "string" ? item.packagePath : undefined,
+        sourcePath: typeof item.sourcePath === "string" ? item.sourcePath : undefined,
+        permissions: Array.isArray(item.permissions)
+          ? item.permissions.filter(
+              (permission): permission is string => typeof permission === "string"
+            )
+          : undefined,
       },
     ]
   })
