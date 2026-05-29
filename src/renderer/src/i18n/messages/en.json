@@ -6,6 +6,7 @@
   "nav": {
     "home": "Home",
     "settings": "Settings",
+    "plugins": "Plugins",
     "features": "Features",
     "appLauncher": "App Launcher",
     "floatingBall": "Floating Ball"
@@ -91,5 +92,60 @@
       "saved": "Hotkey updated.",
       "invalid": "Could not register that combination. The previous shortcut is still active."
     }
+  },
+  "plugins": {
+    "title": "Plugins",
+    "subtitle": "Review loaded plugins, status, declared permissions, and preferences.",
+    "electronRequired": "Plugin management is only available in the Electron desktop app.",
+    "count": "{{count}} plugins",
+    "empty": "No plugins discovered yet.",
+    "listTitle": "Loaded plugins",
+    "listSubtitle": "Grouped by builtin, installed, and development sources.",
+    "source": {
+      "builtin": "Builtin",
+      "user": "Installed",
+      "dev": "Development"
+    },
+    "status": {
+      "active": "active",
+      "disabled": "disabled",
+      "invalid": "invalid",
+      "crashed": "crashed",
+      "shadowed": "shadowed"
+    },
+    "actions": {
+      "addFolder": "Add local plugin folder…",
+      "installPackage": "Install from package…",
+      "refresh": "Refresh",
+      "enable": "Enable plugin",
+      "reload": "Reload",
+      "uninstall": "Uninstall"
+    },
+    "messages": {
+      "updated": "Plugin status updated.",
+      "reloaded": "Plugin reloaded.",
+      "uninstalled": "Plugin uninstalled.",
+      "preferenceSaved": "Preference saved."
+    },
+    "detail": {
+      "empty": "Select a plugin to inspect details.",
+      "version": "Version",
+      "author": "Author",
+      "source": "Source",
+      "path": "Path",
+      "error": "Error",
+      "commands": "Commands",
+      "permissions": "Permissions",
+      "preferences": "Preferences",
+      "noCommands": "This plugin declares no commands.",
+      "noPermissions": "This plugin declares no permissions.",
+      "noPreferences": "This plugin has no preferences."
+    }
+  },
+  "permissions": {
+    "clipboard:read": "Read clipboard",
+    "clipboard:write": "Write clipboard",
+    "storage:plugin": "Plugin storage",
+    "notification": "Notifications"
   }
 }

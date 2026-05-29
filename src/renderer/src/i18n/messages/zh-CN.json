@@ -6,6 +6,7 @@
   "nav": {
     "home": "主页",
     "settings": "设置",
+    "plugins": "插件",
     "features": "功能",
     "appLauncher": "应用启动器",
     "floatingBall": "桌面悬浮球"
@@ -91,5 +92,60 @@
       "saved": "快捷键已更新。",
       "invalid": "无法注册该组合，仍使用上一次的快捷键。"
     }
+  },
+  "plugins": {
+    "title": "插件",
+    "subtitle": "查看已加载插件，管理启停状态、权限声明和偏好配置。",
+    "electronRequired": "插件管理仅在 Electron 桌面端可用。",
+    "count": "{{count}} 个插件",
+    "empty": "还没有发现插件。",
+    "listTitle": "已加载插件",
+    "listSubtitle": "按来源分组展示 builtin、installed 和 dev 插件。",
+    "source": {
+      "builtin": "内置",
+      "user": "已安装",
+      "dev": "开发"
+    },
+    "status": {
+      "active": "active",
+      "disabled": "disabled",
+      "invalid": "invalid",
+      "crashed": "crashed",
+      "shadowed": "shadowed"
+    },
+    "actions": {
+      "addFolder": "添加本地插件文件夹…",
+      "installPackage": "从压缩包安装…",
+      "refresh": "刷新",
+      "enable": "启用插件",
+      "reload": "重新加载",
+      "uninstall": "卸载"
+    },
+    "messages": {
+      "updated": "插件状态已更新。",
+      "reloaded": "插件已重新加载。",
+      "uninstalled": "插件已卸载。",
+      "preferenceSaved": "偏好设置已保存。"
+    },
+    "detail": {
+      "empty": "选择一个插件查看详情。",
+      "version": "版本",
+      "author": "作者",
+      "source": "来源",
+      "path": "路径",
+      "error": "错误",
+      "commands": "命令",
+      "permissions": "权限",
+      "preferences": "偏好设置",
+      "noCommands": "该插件没有声明命令。",
+      "noPermissions": "该插件没有声明权限。",
+      "noPreferences": "该插件没有偏好配置。"
+    }
+  },
+  "permissions": {
+    "clipboard:read": "读取剪贴板",
+    "clipboard:write": "写入剪贴板",
+    "storage:plugin": "插件存储",
+    "notification": "通知"
   }
 }
