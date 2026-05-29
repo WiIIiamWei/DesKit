@@ -1,10 +1,11 @@
-import { CircleDot, House, Plug, Search, Settings as SettingsIcon } from "lucide-react"
+import { CircleDot, House, Plug, Search, Settings as SettingsIcon, Store } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import logoUrl from "@/assets/logo.svg"
 import { AppLauncherPage } from "@/components/pages/app-launcher-page"
 import { FloatingBallPage } from "@/components/pages/floating-ball-page"
 import { HomePage } from "@/components/pages/home-page"
+import { MarketplacePage } from "@/components/pages/marketplace-page"
 import { PluginsPage } from "@/components/pages/plugins-page"
 import { SettingsPage } from "@/components/pages/settings-page"
 import {
@@ -23,7 +24,13 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar"
 
-export type NavId = "home" | "settings" | "plugins" | "app-launcher" | "floating-ball"
+export type NavId =
+  | "home"
+  | "settings"
+  | "plugins"
+  | "marketplace"
+  | "app-launcher"
+  | "floating-ball"
 
 export function AppShell() {
   const { t } = useTranslation()
@@ -75,6 +82,16 @@ export function AppShell() {
                     <span>{t("nav.plugins")}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={nav === "marketplace"}
+                    onClick={() => setNav("marketplace")}
+                    tooltip={t("nav.marketplace")}
+                  >
+                    <Store />
+                    <span>{t("nav.marketplace")}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -122,11 +139,16 @@ export function AppShell() {
         </header>
         <main className="flex-1 overflow-y-auto px-6 py-8">
           <div
-            className={nav === "plugins" ? "mx-auto w-full max-w-5xl" : "mx-auto w-full max-w-3xl"}
+            className={
+              nav === "plugins" || nav === "marketplace"
+                ? "mx-auto w-full max-w-5xl"
+                : "mx-auto w-full max-w-3xl"
+            }
           >
             {nav === "home" && <HomePage onNavigate={setNav} />}
             {nav === "settings" && <SettingsPage />}
             {nav === "plugins" && <PluginsPage />}
+            {nav === "marketplace" && <MarketplacePage />}
             {nav === "app-launcher" && <AppLauncherPage onNavigate={setNav} />}
             {nav === "floating-ball" && <FloatingBallPage onNavigate={setNav} />}
           </div>
@@ -144,6 +166,8 @@ function navKey(id: NavId): string {
       return "settings"
     case "plugins":
       return "plugins"
+    case "marketplace":
+      return "marketplace"
     case "app-launcher":
       return "appLauncher"
     case "floating-ball":

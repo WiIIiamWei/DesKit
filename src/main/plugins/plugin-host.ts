@@ -1,3 +1,4 @@
+import type { LocalizedString } from "@deskit/plugin-sdk"
 import type { PluginBridgeAdapters, PluginRuntimeSnapshot } from "./plugin-bridge"
 import type {
   PluginCommandResult,
@@ -19,6 +20,19 @@ export interface PluginHostOptions {
   resourcesDir: string
   adapters?: PluginBridgeAdapters
   runtime?: () => PluginRuntimeSnapshot
+}
+
+export interface MarketplacePlugin {
+  id: string
+  name: string
+  displayName?: LocalizedString
+  description?: LocalizedString
+  author?: string
+  version?: string
+  category?: string
+  downloads?: number
+  icon?: string
+  packagePath?: string
 }
 
 /**
@@ -59,11 +73,17 @@ export class PluginHost {
   private readonly builtinDir: string
   private readonly userDir: string
   private readonly devFilePath: string
+  private readonly marketplaceRegistryPath: string
 
   constructor(private readonly options: PluginHostOptions) {
     this.builtinDir = path.join(options.resourcesDir, "builtin-plugins")
     this.userDir = path.join(options.userDataDir, "plugins")
     this.devFilePath = path.join(options.userDataDir, "dev-plugins.json")
+    this.marketplaceRegistryPath = path.join(
+      options.resourcesDir,
+      "mock-marketplace",
+      "registry.json"
+    )
     this.preferences = new PluginPreferenceStore(pluginPreferenceFilePath(options.userDataDir))
     this.bridge = new PluginBridge({
       userDataDir: options.userDataDir,
@@ -107,6 +127,17 @@ export class PluginHost {
 
   disposeCommand(pluginId: string, commandId: string): Promise<void> {
     return this.registry.disposeCommand(pluginId, commandId)
+  }
+
+  async listMarketplacePlugins(): Promise<MarketplacePlugin[]> {
+    try {
+      const raw = await fs.readFile(this.marketplaceRegistryPath, "utf-8")
+      const parsed = JSON.parse(raw) as unknown
+      return normalizeMarketplaceRegistry(parsed)
+    } catch (err) {
+      if (isFileNotFound(err) || err instanceof SyntaxError) return []
+      throw err
+    }
   }
 
   async setPreference(pluginId: string, key: string, value: unknown): Promise<void> {
@@ -219,6 +250,45 @@ function isInsideDirectory(target: string, parent: string): boolean {
 
 function isFileNotFound(err: unknown): boolean {
   return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT")
+}
+
+function normalizeMarketplaceRegistry(value: unknown): MarketplacePlugin[] {
+  const entries =
+    value && typeof value === "object" && Array.isArray((value as { plugins?: unknown }).plugins)
+      ? (value as { plugins: unknown[] }).plugins
+      : Array.isArray(value)
+        ? value
+        : []
+
+  return entries.flatMap((entry) => {
+    if (!entry || typeof entry !== "object") return []
+    const item = entry as Record<string, unknown>
+    if (typeof item.id !== "string" || typeof item.name !== "string") return []
+    return [
+      {
+        id: item.id,
+        name: item.name,
+        displayName: localizedField(item.displayName),
+        description: localizedField(item.description),
+        author: typeof item.author === "string" ? item.author : undefined,
+        version: typeof item.version === "string" ? item.version : undefined,
+        category: typeof item.category === "string" ? item.category : undefined,
+        downloads: typeof item.downloads === "number" ? item.downloads : undefined,
+        icon: typeof item.icon === "string" ? item.icon : undefined,
+        packagePath: typeof item.packagePath === "string" ? item.packagePath : undefined,
+      },
+    ]
+  })
+}
+
+function localizedField(value: unknown): LocalizedString | undefined {
+  if (typeof value === "string") return value
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined
+  const result: Record<string, string> = {}
+  for (const [locale, text] of Object.entries(value)) {
+    if (typeof text === "string") result[locale] = text
+  }
+  return Object.keys(result).length > 0 ? result : undefined
 }
 
 function validatePreferenceValue(

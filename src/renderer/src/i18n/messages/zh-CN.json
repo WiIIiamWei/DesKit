@@ -7,6 +7,7 @@
     "home": "主页",
     "settings": "设置",
     "plugins": "插件",
+    "marketplace": "应用市场",
     "features": "功能",
     "appLauncher": "应用启动器",
     "floatingBall": "桌面悬浮球"
@@ -140,6 +141,28 @@
       "noCommands": "该插件没有声明命令。",
       "noPermissions": "该插件没有声明权限。",
       "noPreferences": "该插件没有偏好配置。"
+    }
+  },
+  "marketplace": {
+    "title": "应用市场",
+    "subtitle": "浏览 mock registry 插件，并预览未来的一键安装流程。",
+    "electronRequired": "应用市场仅在 Electron 桌面端可用。",
+    "mockBadge": "模拟数据 · 远程市场需 P1",
+    "searchPlaceholder": "搜索市场插件…",
+    "empty": "没有匹配的市场插件。",
+    "installed": "已安装",
+    "install": "安装",
+    "installing": "安装中…",
+    "unknownAuthor": "未知作者",
+    "downloads": "{{count}} 次下载",
+    "messages": {
+      "installed": "插件已安装。"
+    },
+    "category": {
+      "all": "全部",
+      "utilities": "工具",
+      "productivity": "效率",
+      "media": "媒体"
     }
   },
   "permissions": {

@@ -1,0 +1,55 @@
+{
+  "plugins": [
+    {
+      "id": "com.deskit.timestamp",
+      "name": "Timestamp",
+      "displayName": {
+        "en": "Timestamp Converter",
+        "zh-CN": "时间戳转换"
+      },
+      "description": {
+        "en": "Convert between Unix timestamps and readable dates from the launcher.",
+        "zh-CN": "在启动器里转换 Unix 时间戳和可读日期。"
+      },
+      "author": "DesKit",
+      "version": "0.1.0",
+      "category": "utilities",
+      "downloads": 1280,
+      "packagePath": "com.deskit.timestamp-0.1.0.deskit"
+    },
+    {
+      "id": "com.deskit.clipboard",
+      "name": "Clipboard",
+      "displayName": {
+        "en": "Clipboard History",
+        "zh-CN": "剪贴板历史"
+      },
+      "description": {
+        "en": "Keep a lightweight searchable clipboard history with quick copy and paste actions.",
+        "zh-CN": "保留轻量可搜索的剪贴板历史，并提供快速复制和粘贴动作。"
+      },
+      "author": "DesKit",
+      "version": "0.1.0",
+      "category": "productivity",
+      "downloads": 936,
+      "packagePath": "com.deskit.clipboard-0.1.0.deskit"
+    },
+    {
+      "id": "com.deskit.capture",
+      "name": "Capture",
+      "displayName": {
+        "en": "Screenshot Capture",
+        "zh-CN": "截图"
+      },
+      "description": {
+        "en": "Capture the screen, save a PNG, and reuse the latest screenshot from DesKit.",
+        "zh-CN": "截取屏幕、保存 PNG，并从 DesKit 复用最近截图。"
+      },
+      "author": "DesKit",
+      "version": "0.1.0",
+      "category": "media",
+      "downloads": 742,
+      "packagePath": "com.deskit.capture-0.1.0.deskit"
+    }
+  ]
+}

@@ -223,6 +223,55 @@ describe("pluginHost.uninstall", () => {
   })
 })
 
+describe("pluginHost.listMarketplacePlugins", () => {
+  it("returns an empty list when the mock registry is missing", async () => {
+    const host = makeHost()
+
+    await expect(host.listMarketplacePlugins()).resolves.toEqual([])
+  })
+
+  it("reads and normalizes the mock marketplace registry", async () => {
+    const host = makeHost()
+    const registryPath = path.join(dir, "resources", "mock-marketplace", "registry.json")
+    await fs.mkdir(path.dirname(registryPath), { recursive: true })
+    await fs.writeFile(
+      registryPath,
+      JSON.stringify({
+        plugins: [
+          {
+            id: "com.deskit.market",
+            name: "Market",
+            displayName: { en: "Market", "zh-CN": "市场" },
+            description: { en: "Demo" },
+            author: "DesKit",
+            version: "0.1.0",
+            category: "tools",
+            downloads: 1200,
+            packagePath: "com.deskit.market-0.1.0.deskit",
+          },
+          { id: 1, name: "bad" },
+        ],
+      }),
+      "utf-8"
+    )
+
+    await expect(host.listMarketplacePlugins()).resolves.toEqual([
+      {
+        id: "com.deskit.market",
+        name: "Market",
+        displayName: { en: "Market", "zh-CN": "市场" },
+        description: { en: "Demo" },
+        author: "DesKit",
+        version: "0.1.0",
+        category: "tools",
+        downloads: 1200,
+        icon: undefined,
+        packagePath: "com.deskit.market-0.1.0.deskit",
+      },
+    ])
+  })
+})
+
 describe("pluginHost facade forwards to registry", () => {
   it("searchCommands forwards locale + limit to the registry", () => {
     const host = makeHost()

@@ -22,6 +22,7 @@ function fakeHost(): PluginHost {
     searchCommands: vi.fn((query: string) => [{ commandId: "test.run", query }]),
     invoke: vi.fn(async (payload: unknown) => ({ type: "toast", payload })),
     disposeCommand: vi.fn(async () => {}),
+    listMarketplacePlugins: vi.fn(async () => [{ id: "com.deskit.market", name: "Market" }]),
     registry: { on: vi.fn() },
   } as unknown as PluginHost
 }
@@ -89,10 +90,12 @@ describe("plugin ipc handlers", () => {
     ).toThrow("phase must be run, onSearchChange, or onAction")
   })
 
-  it("keeps marketplace list as an empty P0 stub", () => {
+  it("forwards marketplace list to the host", async () => {
     const handlers = createPluginIpcHandlers(fakeHost())
 
-    expect(handlers.marketplaceList()).toEqual([])
+    await expect(handlers.marketplaceList()).resolves.toEqual([
+      { id: "com.deskit.market", name: "Market" },
+    ])
   })
 
   it("wraps successful ipc calls in IpcResult", async () => {

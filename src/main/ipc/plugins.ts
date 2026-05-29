@@ -50,7 +50,7 @@ export interface PluginIpcHandlers {
   searchCommands: (query: unknown) => unknown
   invoke: (payload: unknown) => Promise<unknown>
   disposeCommand: (payload: unknown) => Promise<void>
-  marketplaceList: () => unknown[]
+  marketplaceList: () => unknown[] | Promise<unknown[]>
   marketplaceInstall: (payload: unknown) => Promise<unknown>
 }
 
@@ -113,7 +113,7 @@ export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
       )
     },
 
-    marketplaceList: () => [],
+    marketplaceList: () => host.listMarketplacePlugins(),
 
     async marketplaceInstall(_payload) {
       throw new PluginHostNotImplementedError("Marketplace installation is not implemented yet")

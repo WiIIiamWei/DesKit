@@ -7,6 +7,7 @@
     "home": "Home",
     "settings": "Settings",
     "plugins": "Plugins",
+    "marketplace": "Marketplace",
     "features": "Features",
     "appLauncher": "App Launcher",
     "floatingBall": "Floating Ball"
@@ -140,6 +141,28 @@
       "noCommands": "This plugin declares no commands.",
       "noPermissions": "This plugin declares no permissions.",
       "noPreferences": "This plugin has no preferences."
+    }
+  },
+  "marketplace": {
+    "title": "Marketplace",
+    "subtitle": "Browse mock registry plugins and preview the future install flow.",
+    "electronRequired": "The marketplace is only available in the Electron desktop app.",
+    "mockBadge": "Mock data · remote marketplace is P1",
+    "searchPlaceholder": "Search marketplace plugins…",
+    "empty": "No marketplace plugins match this filter.",
+    "installed": "Installed",
+    "install": "Install",
+    "installing": "Installing…",
+    "unknownAuthor": "Unknown author",
+    "downloads": "{{count}} downloads",
+    "messages": {
+      "installed": "Plugin installed."
+    },
+    "category": {
+      "all": "All",
+      "utilities": "Utilities",
+      "productivity": "Productivity",
+      "media": "Media"
     }
   },
   "permissions": {
