@@ -278,7 +278,7 @@ function PluginSection({
           const busy = busyPluginId === plugin.pluginId
           const toggleable =
             Boolean(manifest) && plugin.status !== "invalid" && plugin.status !== "shadowed"
-          const uninstallable = plugin.source.kind !== "builtin"
+          const uninstallable = plugin.source.kind !== "builtin" || plugin.status === "invalid"
           return (
             <div
               key={`${plugin.pluginId}:${plugin.source.kind}:${plugin.rootDir}`}

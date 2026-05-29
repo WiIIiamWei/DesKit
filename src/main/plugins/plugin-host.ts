@@ -5,6 +5,7 @@ import type {
   PluginManifest,
   PluginRegistryEntry,
 } from "./types"
+import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { createElectronPluginAdapters } from "./electron-adapters"
 import { PluginBridge } from "./plugin-bridge"
@@ -131,8 +132,23 @@ export class PluginHost {
     )
   }
 
-  async uninstall(_pluginId: string): Promise<void> {
-    throw new PluginHostNotImplementedError("Plugin uninstall is planned for a later stage")
+  async uninstall(pluginId: string): Promise<void> {
+    const entry = this.registry.get(pluginId)
+    if (!entry) return
+
+    if (entry.source.kind === "builtin") {
+      if (entry.status !== "invalid") {
+        throw new PluginHostNotImplementedError("Builtin plugins cannot be uninstalled")
+      }
+      await removeDirectoryInside(entry.rootDir, this.builtinDir)
+    } else if (entry.source.kind === "user") {
+      await removeDirectoryInside(entry.rootDir, this.userDir)
+    } else {
+      await removeDevPluginReference(this.devFilePath, entry.rootDir)
+    }
+
+    await this.preferences.delete(pluginId)
+    await this.reload()
   }
 
   async reload(pluginId?: string): Promise<PluginRegistryEntry | undefined> {
@@ -151,6 +167,58 @@ export class PluginHost {
     }
     return { ...defaults, ...this.preferences.get(pluginId) }
   }
+}
+
+async function removeDirectoryInside(targetDir: string, parentDir: string): Promise<void> {
+  const target = path.resolve(targetDir)
+  const parent = path.resolve(parentDir)
+  if (!isInsideDirectory(target, parent)) {
+    throw new Error(`Refusing to remove plugin outside managed directory: ${targetDir}`)
+  }
+  await fs.rm(target, { recursive: true, force: true })
+}
+
+async function removeDevPluginReference(devFilePath: string, rootDir: string): Promise<void> {
+  let parsed: unknown
+  try {
+    parsed = JSON.parse(await fs.readFile(devFilePath, "utf-8")) as unknown
+  } catch (err) {
+    if (isFileNotFound(err) || err instanceof SyntaxError) return
+    throw err
+  }
+  if (!Array.isArray(parsed)) return
+
+  const baseDir = path.dirname(devFilePath)
+  const root = path.resolve(rootDir)
+  const next = parsed.filter((entry) => {
+    const value = devEntryPath(entry)
+    if (!value) return true
+    const resolved = path.isAbsolute(value) ? value : path.resolve(baseDir, value)
+    return path.resolve(resolved) !== root
+  })
+  await fs.mkdir(path.dirname(devFilePath), { recursive: true })
+  await fs.writeFile(devFilePath, `${JSON.stringify(next, null, 2)}\n`, "utf-8")
+}
+
+function devEntryPath(entry: unknown): string | null {
+  if (typeof entry === "string") return entry
+  if (
+    entry &&
+    typeof entry === "object" &&
+    typeof (entry as { path?: unknown }).path === "string"
+  ) {
+    return (entry as { path: string }).path
+  }
+  return null
+}
+
+function isInsideDirectory(target: string, parent: string): boolean {
+  const relative = path.relative(parent, target)
+  return Boolean(relative) && !relative.startsWith("..") && !path.isAbsolute(relative)
+}
+
+function isFileNotFound(err: unknown): boolean {
+  return Boolean(err && typeof err === "object" && (err as { code?: string }).code === "ENOENT")
 }
 
 function validatePreferenceValue(

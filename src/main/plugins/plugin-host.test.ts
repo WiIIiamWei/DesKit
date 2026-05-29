@@ -152,12 +152,74 @@ describe("pluginHost stage-3 stubs", () => {
       PluginHostNotImplementedError
     )
   })
+})
 
-  it("uninstall throws PluginHostNotImplementedError", async () => {
+describe("pluginHost.uninstall", () => {
+  it("rejects active builtin plugins", async () => {
     const host = makeHost()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
     await expect(host.uninstall("com.deskit.test")).rejects.toBeInstanceOf(
       PluginHostNotImplementedError
     )
+  })
+
+  it("removes invalid builtin plugin directories for cleanup", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    const rootDir = path.join(dir, "resources", "builtin-plugins", "broken")
+    await fs.mkdir(rootDir, { recursive: true })
+    vi.spyOn(host.registry, "get").mockReturnValue({
+      pluginId: "invalid:builtin:broken",
+      rootDir,
+      source: { kind: "builtin", priority: 3 },
+      status: "invalid",
+      error: "missing manifest",
+    })
+    vi.spyOn(host, "reload").mockResolvedValue(undefined)
+
+    await host.uninstall("invalid:builtin:broken")
+
+    await expect(fs.stat(rootDir)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  it("removes installed user plugin directories", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    const rootDir = path.join(dir, "plugins", "com.deskit.user")
+    await fs.mkdir(rootDir, { recursive: true })
+    vi.spyOn(host.registry, "get").mockReturnValue({
+      ...baseEntry,
+      pluginId: "com.deskit.user",
+      rootDir,
+      source: { kind: "user", priority: 2 },
+    })
+    vi.spyOn(host, "reload").mockResolvedValue(undefined)
+
+    await host.uninstall("com.deskit.user")
+
+    await expect(fs.stat(rootDir)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  it("removes dev plugin references without deleting the source folder", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    const rootDir = path.join(dir, "dev-plugin")
+    const devFilePath = path.join(dir, "dev-plugins.json")
+    await fs.mkdir(rootDir, { recursive: true })
+    await fs.writeFile(devFilePath, `${JSON.stringify([{ path: rootDir }], null, 2)}\n`, "utf-8")
+    vi.spyOn(host.registry, "get").mockReturnValue({
+      ...baseEntry,
+      pluginId: "com.deskit.dev",
+      rootDir,
+      source: { kind: "dev", priority: 1 },
+    })
+    vi.spyOn(host, "reload").mockResolvedValue(undefined)
+
+    await host.uninstall("com.deskit.dev")
+
+    await expect(fs.stat(rootDir)).resolves.toBeTruthy()
+    await expect(fs.readFile(devFilePath, "utf-8")).resolves.toBe("[]\n")
   })
 })
 
