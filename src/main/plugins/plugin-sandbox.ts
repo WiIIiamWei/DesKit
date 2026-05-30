@@ -56,6 +56,14 @@ const invokeHookScript = `
 })()
 `
 
+// Compiled once: the hook body has no per-call literals (it reads the
+// request/ctx from injected globals), so the same Script is reused across
+// every invoke. onSearchChange fires on every keystroke, so avoiding a
+// recompile per call is a real saving.
+const compiledInvokeHookScript = new vm.Script(invokeHookScript, {
+  filename: "deskit-plugin:invoke-hook",
+})
+
 // P0 isolation is a lightweight compatibility boundary. node:vm lets the host
 // curate globals and enforce timeouts, but it is not a strong security sandbox.
 export class PluginSandbox {
@@ -223,9 +231,9 @@ export class PluginSandbox {
     sandboxGlobals[invokeRequestKey] = request
     sandboxGlobals[invokeContextKey] = pluginCtx
     try {
-      return new vm.Script(invokeHookScript, {
-        filename: `deskit-plugin:${plugin.pluginId}:${request.commandId}:${request.phase}`,
-      }).runInContext(plugin.sandboxVm, { timeout: this.invokeTimeoutMs }) as Promise<T> | T
+      return compiledInvokeHookScript.runInContext(plugin.sandboxVm, {
+        timeout: this.invokeTimeoutMs,
+      }) as Promise<T> | T
     } catch (err) {
       if (isVmTimeout(err)) {
         throw new PluginSandboxError(`Plugin call exceeded ${this.invokeTimeoutMs}ms`)
@@ -324,6 +332,8 @@ function resolveInside(rootDir: string, relativePath: string): string {
 }
 
 function isVmTimeout(err: unknown): boolean {
+  // node:vm reports a synchronous timeout with this fixed message; there is
+  // no error code to match on, so the string check is the documented signal.
   return Boolean(
     err &&
     typeof err === "object" &&
