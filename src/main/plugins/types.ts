@@ -79,6 +79,7 @@ export interface PluginRegistryEntry {
   source: PluginSource
   status: PluginRuntimeStatus
   manifest?: PluginManifest
+  preferences?: Record<string, unknown>
   error?: string
   shadowedBy?: PluginSourceKind
   loadedAt?: number

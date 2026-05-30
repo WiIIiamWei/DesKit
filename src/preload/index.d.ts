@@ -102,6 +102,7 @@ declare global {
     source: DeskitPluginSource
     status: DeskitPluginRuntimeStatus
     manifest?: DeskitPluginManifest
+    preferences?: Record<string, unknown>
     error?: string
     shadowedBy?: DeskitPluginSourceKind
     loadedAt?: number

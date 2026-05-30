@@ -8,7 +8,9 @@
     "settings": "设置",
     "features": "功能",
     "appLauncher": "应用启动器",
-    "floatingBall": "桌面悬浮球"
+    "floatingBall": "桌面悬浮球",
+    "plugins": "插件",
+    "marketplace": "应用市场"
   },
   "home": {
     "quickActions": "快捷操作",
@@ -63,6 +65,79 @@
       "menuFeatures": "圆形菜单工具",
       "menuFeaturesHint": "最多选择 6 个工具。桌面悬浮球本身不会作为菜单工具。"
     }
+  },
+  "plugins": {
+    "title": "插件",
+    "subtitle": "管理内置、已安装与开发中的插件。",
+    "unavailableTitle": "Electron 桥不可用",
+    "unavailableBody": "插件管理仅在桌面应用内可用。",
+    "errorTitle": "插件操作失败",
+    "loading": "正在加载插件…",
+    "loadingHint": "正在读取当前插件注册表。",
+    "emptyTitle": "未发现插件",
+    "emptyBody": "当前还没有注册内置、已安装或开发插件。",
+    "sectionEmpty": "该来源暂无插件。",
+    "pluginErrorTitle": "插件错误",
+    "source": {
+      "builtin": "内置",
+      "user": "已安装",
+      "dev": "开发中"
+    },
+    "sections": {
+      "builtin": {
+        "title": "内置插件",
+        "body": "随 DesKit 一起提供的一方插件。"
+      },
+      "user": {
+        "title": "已安装插件",
+        "body": "安装到用户插件目录中的插件。"
+      },
+      "dev": {
+        "title": "开发插件",
+        "body": "用于开发与调试的本地插件文件夹。"
+      }
+    },
+    "status": {
+      "active": "已启用",
+      "disabled": "已停用",
+      "invalid": "无效",
+      "crashed": "已崩溃",
+      "shadowed": "被覆盖"
+    },
+    "meta": {
+      "version": "版本",
+      "author": "作者",
+      "commands": "命令",
+      "path": "路径"
+    },
+    "actions": {
+      "enable": "启用",
+      "disable": "停用",
+      "reload": "重载",
+      "uninstall": "卸载",
+      "refresh": "刷新"
+    },
+    "preferences": {
+      "title": "偏好设置",
+      "body": "修改会保存到插件偏好设置存储中。",
+      "invalidNumber": "请输入有效数字。"
+    },
+    "toasts": {
+      "enabled": "插件已启用。",
+      "disabled": "插件已停用。",
+      "reloaded": "插件已重载。",
+      "uninstalled": "插件已卸载。",
+      "preferenceSaved": "偏好设置已保存。"
+    }
+  },
+  "marketplace": {
+    "title": "应用市场",
+    "subtitle": "发现并安装 DesKit 插件。",
+    "submit": "提交插件",
+    "submitTooltip": "敬请期待",
+    "comingSoonTitle": "应用市场 UI 即将完善",
+    "comingSoonBody": "侧边栏入口已就绪；Git registry 浏览与安装流程会在 marketplace PR 中落地。",
+    "gitIntegrationHint": "P0 市场安装会使用 HTTPS registry 拉取与包哈希校验，不依赖本地 git。"
   },
   "launcher": {
     "placeholder": "搜索应用与命令…",
