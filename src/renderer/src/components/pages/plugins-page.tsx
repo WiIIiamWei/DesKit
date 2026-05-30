@@ -1,7 +1,7 @@
 import type { ReactNode } from "react"
 import type { PluginRegistryEntry } from "@/lib/electron"
-import { AlertCircle, Boxes, Code2, PackageCheck, RefreshCw, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import { AlertCircle, RefreshCw, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { localize } from "@/components/plugins/view-utils"
@@ -39,12 +39,9 @@ import {
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
 
-type PluginSourceKind = PluginRegistryEntry["source"]["kind"]
 type ManifestPreference = NonNullable<
   NonNullable<PluginRegistryEntry["manifest"]>["contributes"]["preferences"]
 >[number]
-
-const SOURCE_KINDS = ["builtin", "user", "dev"] satisfies PluginSourceKind[]
 
 export function PluginsPage() {
   const { i18n, t } = useTranslation()
@@ -72,15 +69,6 @@ export function PluginsPage() {
     void load()
     return onPluginRegistryChanged((nextPlugins) => setPlugins(nextPlugins))
   }, [electronReady, load])
-
-  const groups = useMemo(
-    () =>
-      SOURCE_KINDS.map((kind) => ({
-        kind,
-        plugins: plugins.filter((plugin) => plugin.source.kind === kind),
-      })),
-    [plugins]
-  )
 
   async function onToggle(plugin: PluginRegistryEntry, enabled: boolean) {
     await mutate(`toggle:${plugin.pluginId}`, async () => {
@@ -160,16 +148,21 @@ export function PluginsPage() {
   }
 
   return (
-    <PageFrame title={t("plugins.title")} subtitle={t("plugins.subtitle")}>
-      <div className="grid gap-3 sm:grid-cols-3">
-        {SOURCE_KINDS.map((kind) => (
-          <PluginCountCard
-            key={kind}
-            kind={kind}
-            count={plugins.filter((plugin) => plugin.source.kind === kind).length}
-          />
-        ))}
-      </div>
+    <PageFrame
+      title={t("plugins.title")}
+      subtitle={t("plugins.subtitle")}
+      action={
+        <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
+          <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden />
+          {t("plugins.actions.refresh")}
+        </Button>
+      }
+    >
+      {!loading && plugins.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {t("plugins.installedCount", { count: plugins.length })}
+        </p>
+      )}
 
       {error && (
         <Alert variant="destructive">
@@ -192,118 +185,13 @@ export function PluginsPage() {
             <CardTitle>{t("plugins.emptyTitle")}</CardTitle>
             <CardDescription>{t("plugins.emptyBody")}</CardDescription>
           </CardHeader>
-          <CardContent>
-            <Button variant="outline" onClick={() => void load()}>
-              <RefreshCw className="size-4" aria-hidden />
-              {t("plugins.actions.refresh")}
-            </Button>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="flex flex-col gap-6">
-          {groups.map((group) => (
-            <PluginSection
-              key={group.kind}
-              kind={group.kind}
-              plugins={group.plugins}
-              locale={i18n.language}
-              pending={pending}
-              onReload={onReload}
-              onToggle={onToggle}
-              onUninstall={onUninstall}
-              onPreferenceChange={onPreferenceChange}
-            />
-          ))}
-        </div>
-      )}
-    </PageFrame>
-  )
-}
-
-function PageFrame({
-  children,
-  subtitle,
-  title,
-}: {
-  children: ReactNode
-  subtitle: string
-  title: string
-}) {
-  return (
-    <div className="flex flex-col gap-6">
-      <header className="flex flex-col gap-1">
-        <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
-        <p className="text-sm text-muted-foreground">{subtitle}</p>
-      </header>
-      {children}
-    </div>
-  )
-}
-
-function PluginCountCard({ count, kind }: { count: number; kind: PluginSourceKind }) {
-  const { t } = useTranslation()
-  const Icon = kind === "builtin" ? PackageCheck : kind === "dev" ? Code2 : Boxes
-  return (
-    <Card className="gap-3 py-4">
-      <CardHeader className="px-4">
-        <CardTitle className="flex items-center justify-between text-sm">
-          <span className="flex items-center gap-2">
-            <Icon className="size-4 text-primary" aria-hidden />
-            {t(`plugins.source.${kind}`)}
-          </span>
-          <span className="text-lg tabular-nums">{count}</span>
-        </CardTitle>
-      </CardHeader>
-    </Card>
-  )
-}
-
-function PluginSection({
-  kind,
-  locale,
-  onPreferenceChange,
-  onReload,
-  onToggle,
-  onUninstall,
-  pending,
-  plugins,
-}: {
-  kind: PluginSourceKind
-  locale: string
-  onPreferenceChange: (
-    plugin: PluginRegistryEntry,
-    preference: ManifestPreference,
-    value: unknown
-  ) => Promise<void>
-  onReload: (plugin: PluginRegistryEntry) => Promise<void>
-  onToggle: (plugin: PluginRegistryEntry, enabled: boolean) => Promise<void>
-  onUninstall: (plugin: PluginRegistryEntry) => Promise<void>
-  pending: string | null
-  plugins: PluginRegistryEntry[]
-}) {
-  const { t } = useTranslation()
-  return (
-    <section className="flex flex-col gap-3">
-      <div className="flex items-center justify-between">
-        <div>
-          <h2 className="text-lg font-semibold">{t(`plugins.sections.${kind}.title`)}</h2>
-          <p className="text-sm text-muted-foreground">{t(`plugins.sections.${kind}.body`)}</p>
-        </div>
-        <Badge variant="secondary">{plugins.length}</Badge>
-      </div>
-
-      {plugins.length === 0 ? (
-        <Card>
-          <CardHeader>
-            <CardDescription>{t("plugins.sectionEmpty")}</CardDescription>
-          </CardHeader>
         </Card>
       ) : (
         <div className="flex flex-col gap-3">
           {plugins.map((plugin) => (
             <PluginCard
               key={`${plugin.pluginId}:${plugin.source.kind}:${plugin.rootDir}`}
-              locale={locale}
+              locale={i18n.language}
               pending={pending}
               plugin={plugin}
               onPreferenceChange={onPreferenceChange}
@@ -314,7 +202,32 @@ function PluginSection({
           ))}
         </div>
       )}
-    </section>
+    </PageFrame>
+  )
+}
+
+function PageFrame({
+  action,
+  children,
+  subtitle,
+  title,
+}: {
+  action?: ReactNode
+  children: ReactNode
+  subtitle: string
+  title: string
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <header className="flex items-start justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        {action}
+      </header>
+      {children}
+    </div>
   )
 }
 
