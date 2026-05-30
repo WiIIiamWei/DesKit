@@ -26,6 +26,7 @@ import {
   launchApp,
   notifyLauncherReady,
   onLauncherFocus,
+  openExternalUrl,
   searchApps,
   searchPluginCommands,
 } from "@/lib/electron"
@@ -263,7 +264,8 @@ export function LauncherPanel() {
         return
       }
       if (action.type === "open-url") {
-        window.open(action.url, "_blank", "noopener,noreferrer")
+        const opened = await openExternalUrl(action.url)
+        if (!opened) toast.error("Only http(s) URLs can be opened")
         return
       }
       if (action.type === "open-path") {
