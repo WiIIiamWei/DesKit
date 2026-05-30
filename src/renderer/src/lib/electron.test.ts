@@ -21,6 +21,7 @@ import {
   onLauncherFocus,
   onPluginRegistryChanged,
   onSettingsChanged,
+  openExternalUrl,
   openFloatingBallFeature,
   refreshApps,
   reloadPlugin,
@@ -43,6 +44,7 @@ function mockApi() {
     launchApp: vi.fn().mockResolvedValue(true),
     refreshApps: vi.fn().mockResolvedValue([]),
     hideLauncher: vi.fn().mockResolvedValue(undefined),
+    openExternalUrl: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
@@ -130,6 +132,12 @@ describe("lib/electron", () => {
       const api = mockApi()
       await hideLauncher()
       expect(api.hideLauncher).toHaveBeenCalled()
+    })
+
+    it("openExternalUrl forwards url", async () => {
+      const api = mockApi()
+      await expect(openExternalUrl("https://example.com")).resolves.toBe(true)
+      expect(api.openExternalUrl).toHaveBeenCalledWith("https://example.com")
     })
 
     it("notifyLauncherReady calls notifyLauncherReady", () => {
