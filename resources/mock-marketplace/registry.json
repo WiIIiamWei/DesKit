@@ -1,0 +1,57 @@
+{
+  "plugins": [
+    {
+      "id": "com.deskit.timestamp",
+      "name": "Timestamp",
+      "displayName": {
+        "en": "Timestamp Converter",
+        "zh-CN": "时间戳转换"
+      },
+      "description": {
+        "en": "Convert between Unix timestamps and readable dates from the launcher.",
+        "zh-CN": "在启动器里转换 Unix 时间戳和可读日期。"
+      },
+      "author": "DesKit",
+      "version": "0.1.0",
+      "category": "utilities",
+      "downloads": 1280,
+      "sourcePath": "plugins/com.deskit.timestamp",
+      "permissions": []
+    },
+    {
+      "id": "com.deskit.notes",
+      "name": "Notes",
+      "displayName": {
+        "en": "Quick Notes",
+        "zh-CN": "快速笔记"
+      },
+      "description": {
+        "en": "Save lightweight launcher notes with per-plugin storage.",
+        "zh-CN": "用插件存储保存轻量启动器笔记。"
+      },
+      "author": "DesKit",
+      "version": "0.1.0",
+      "category": "productivity",
+      "downloads": 936,
+      "sourcePath": "plugins/com.deskit.notes",
+      "permissions": ["storage:plugin"]
+    },
+    {
+      "id": "com.deskit.capture",
+      "name": "Capture",
+      "displayName": {
+        "en": "Screenshot Capture",
+        "zh-CN": "截图"
+      },
+      "description": {
+        "en": "Capture the screen, save a PNG, and reuse the latest screenshot from DesKit.",
+        "zh-CN": "截取屏幕、保存 PNG，并从 DesKit 复用最近截图。"
+      },
+      "author": "DesKit",
+      "version": "0.1.0",
+      "category": "media",
+      "downloads": 742,
+      "permissions": ["system:capture-screen"]
+    }
+  ]
+}

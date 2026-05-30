@@ -22,6 +22,8 @@ function fakeHost(): PluginHost {
     searchCommands: vi.fn((query: string) => [{ commandId: "test.run", query }]),
     invoke: vi.fn(async (payload: unknown) => ({ type: "toast", payload })),
     disposeCommand: vi.fn(async () => {}),
+    listMarketplacePlugins: vi.fn(async () => [{ id: "com.deskit.market", name: "Market" }]),
+    installMarketplacePlugin: vi.fn(async (id: string, version?: string) => ({ id, version })),
     registry: { on: vi.fn() },
   } as unknown as PluginHost
 }
@@ -89,10 +91,22 @@ describe("plugin ipc handlers", () => {
     ).toThrow("phase must be run, onSearchChange, or onAction")
   })
 
-  it("keeps marketplace list as an empty P0 stub", () => {
+  it("forwards marketplace list to the host", async () => {
     const handlers = createPluginIpcHandlers(fakeHost())
 
-    expect(handlers.marketplaceList()).toEqual([])
+    await expect(handlers.marketplaceList()).resolves.toEqual([
+      { id: "com.deskit.market", name: "Market" },
+    ])
+  })
+
+  it("validates and forwards marketplace installs to the host", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host)
+
+    await expect(
+      handlers.marketplaceInstall({ id: "com.deskit.market", version: "0.1.0" })
+    ).resolves.toEqual({ id: "com.deskit.market", version: "0.1.0" })
+    expect(host.installMarketplacePlugin).toHaveBeenCalledWith("com.deskit.market", "0.1.0")
   })
 
   it("wraps successful ipc calls in IpcResult", async () => {
@@ -124,12 +138,12 @@ describe("plugin ipc handlers", () => {
     })
   })
 
-  it("maps not-implemented stubs to PLUGIN_NOT_IMPLEMENTED", async () => {
+  it("maps package install stubs to PLUGIN_NOT_IMPLEMENTED", async () => {
     const handlers = createPluginIpcHandlers(fakeHost())
     const result = await invokePluginIpcHandler(
-      "marketplace:install",
+      "plugin:install-package",
       fakeEvent("app://app/index.html"),
-      () => handlers.marketplaceInstall({ id: "com.deskit.test" }),
+      () => handlers.installPackage("/tmp/plugin.deskit"),
       () => true
     )
 
