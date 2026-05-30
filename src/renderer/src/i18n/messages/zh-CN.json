@@ -76,27 +76,8 @@
     "loadingHint": "正在读取当前插件注册表。",
     "emptyTitle": "未发现插件",
     "emptyBody": "当前还没有注册内置、已安装或开发插件。",
-    "sectionEmpty": "该来源暂无插件。",
+    "installedCount": "已安装 {{count}} 个插件",
     "pluginErrorTitle": "插件错误",
-    "source": {
-      "builtin": "内置",
-      "user": "已安装",
-      "dev": "开发中"
-    },
-    "sections": {
-      "builtin": {
-        "title": "内置插件",
-        "body": "随 DesKit 一起提供的一方插件。"
-      },
-      "user": {
-        "title": "已安装插件",
-        "body": "安装到用户插件目录中的插件。"
-      },
-      "dev": {
-        "title": "开发插件",
-        "body": "用于开发与调试的本地插件文件夹。"
-      }
-    },
     "status": {
       "active": "已启用",
       "disabled": "已停用",

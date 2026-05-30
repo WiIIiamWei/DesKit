@@ -76,27 +76,8 @@
     "loadingHint": "Reading the current plugin registry.",
     "emptyTitle": "No plugins found",
     "emptyBody": "No built-in, installed, or development plugins are registered yet.",
-    "sectionEmpty": "No plugins in this source.",
+    "installedCount": "{{count}} plugins installed",
     "pluginErrorTitle": "Plugin error",
-    "source": {
-      "builtin": "Built-in",
-      "user": "Installed",
-      "dev": "Development"
-    },
-    "sections": {
-      "builtin": {
-        "title": "Built-in plugins",
-        "body": "First-party plugins shipped with DesKit."
-      },
-      "user": {
-        "title": "Installed plugins",
-        "body": "Plugins installed into the user plugin directory."
-      },
-      "dev": {
-        "title": "Development plugins",
-        "body": "Local plugin folders linked for development and debugging."
-      }
-    },
     "status": {
       "active": "Active",
       "disabled": "Disabled",
