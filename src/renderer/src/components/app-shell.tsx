@@ -1,10 +1,12 @@
-import { CircleDot, House, Search, Settings as SettingsIcon } from "lucide-react"
+import { CircleDot, House, Puzzle, Search, Settings as SettingsIcon, Store } from "lucide-react"
 import { useState } from "react"
 import { useTranslation } from "react-i18next"
 import logoUrl from "@/assets/logo.svg"
 import { AppLauncherPage } from "@/components/pages/app-launcher-page"
 import { FloatingBallPage } from "@/components/pages/floating-ball-page"
 import { HomePage } from "@/components/pages/home-page"
+import { MarketplacePage } from "@/components/pages/marketplace-page"
+import { PluginsPage } from "@/components/pages/plugins-page"
 import { SettingsPage } from "@/components/pages/settings-page"
 import {
   Sidebar,
@@ -21,8 +23,15 @@ import {
   SidebarProvider,
   SidebarTrigger,
 } from "@/components/ui/sidebar"
+import { cn } from "@/lib/utils"
 
-export type NavId = "home" | "settings" | "app-launcher" | "floating-ball"
+export type NavId =
+  | "home"
+  | "settings"
+  | "app-launcher"
+  | "floating-ball"
+  | "plugins"
+  | "marketplace"
 
 export function AppShell() {
   const { t } = useTranslation()
@@ -92,6 +101,26 @@ export function AppShell() {
                     <span>{t("nav.floatingBall")}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={nav === "plugins"}
+                    onClick={() => setNav("plugins")}
+                    tooltip={t("nav.plugins")}
+                  >
+                    <Puzzle />
+                    <span>{t("nav.plugins")}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={nav === "marketplace"}
+                    onClick={() => setNav("marketplace")}
+                    tooltip={t("nav.marketplace")}
+                  >
+                    <Store />
+                    <span>{t("nav.marketplace")}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
               </SidebarMenu>
             </SidebarGroupContent>
           </SidebarGroup>
@@ -110,11 +139,18 @@ export function AppShell() {
           <span className="text-sm font-medium">{t(`nav.${navKey(nav)}`)}</span>
         </header>
         <main className="flex-1 overflow-y-auto px-6 py-8">
-          <div className="mx-auto w-full max-w-3xl">
+          <div
+            className={cn(
+              "mx-auto w-full",
+              nav === "plugins" || nav === "marketplace" ? "max-w-5xl" : "max-w-3xl"
+            )}
+          >
             {nav === "home" && <HomePage onNavigate={setNav} />}
             {nav === "settings" && <SettingsPage />}
             {nav === "app-launcher" && <AppLauncherPage onNavigate={setNav} />}
             {nav === "floating-ball" && <FloatingBallPage onNavigate={setNav} />}
+            {nav === "plugins" && <PluginsPage />}
+            {nav === "marketplace" && <MarketplacePage />}
           </div>
         </main>
       </SidebarInset>
@@ -132,5 +168,9 @@ function navKey(id: NavId): string {
       return "appLauncher"
     case "floating-ball":
       return "floatingBall"
+    case "plugins":
+      return "plugins"
+    case "marketplace":
+      return "marketplace"
   }
 }
