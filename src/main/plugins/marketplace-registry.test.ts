@@ -71,6 +71,37 @@ describe("marketplace registry", () => {
     ])
   })
 
+  it("falls back to the bundled registry when the default registry is empty", async () => {
+    await writeBundledRegistry(registryJson([registryEntry({ id: "com.deskit.demo" })]))
+    const fetch = vi.fn(async () => Response.json({ version: 1, plugins: [] }))
+
+    await expect(fetchMarketplaceRegistry({ fetch, resourcesDir: dir })).resolves.toMatchObject([
+      { id: "com.deskit.demo" },
+    ])
+  })
+
+  it("honors empty custom registries", async () => {
+    await writeBundledRegistry(registryJson([registryEntry({ id: "com.deskit.demo" })]))
+    const fetch = vi.fn(async () => Response.json({ version: 1, plugins: [] }))
+
+    await expect(
+      fetchMarketplaceRegistry({
+        fetch,
+        resourcesDir: dir,
+        registryUrl: "https://example.com/registry.json",
+      })
+    ).resolves.toEqual([])
+  })
+
+  it("does not fall back when the default registry has incompatible entries", async () => {
+    await writeBundledRegistry(registryJson([registryEntry({ id: "com.deskit.demo" })]))
+    const fetch = vi.fn(async () =>
+      Response.json({ version: 1, plugins: [registryEntry({ deskitEngine: "^999.0.0" })] })
+    )
+
+    await expect(fetchMarketplaceRegistry({ fetch, resourcesDir: dir })).resolves.toEqual([])
+  })
+
   it("does not hide malformed fetched registries behind bundled data", async () => {
     await writeBundledRegistry(registryJson([registryEntry({ id: "com.deskit.fallback" })]))
     const fetch = vi.fn(async () => new Response("{}"))

@@ -67,9 +67,10 @@ export class MarketplaceRegistryError extends Error {
 export async function fetchMarketplaceRegistry(
   options: MarketplaceRegistryOptions
 ): Promise<MarketplaceEntry[]> {
+  const registryUrl = options.registryUrl ?? DEFAULT_MARKETPLACE_REGISTRY_URL
   let response: Response
   try {
-    response = await options.fetch(options.registryUrl ?? DEFAULT_MARKETPLACE_REGISTRY_URL)
+    response = await options.fetch(registryUrl)
   } catch {
     return readBundledMarketplaceRegistry(options.resourcesDir)
   }
@@ -78,7 +79,11 @@ export async function fetchMarketplaceRegistry(
     return readBundledMarketplaceRegistry(options.resourcesDir)
   }
 
-  return parseMarketplaceRegistry(await response.text())
+  const registry = parseMarketplaceRegistryDocument(await response.text())
+  if (registry.totalEntries > 0 || registryUrl !== DEFAULT_MARKETPLACE_REGISTRY_URL) {
+    return registry.entries
+  }
+  return readBundledMarketplaceRegistry(options.resourcesDir)
 }
 
 export async function readBundledMarketplaceRegistry(
@@ -94,6 +99,13 @@ export async function readBundledMarketplaceRegistry(
 }
 
 export function parseMarketplaceRegistry(raw: string): MarketplaceEntry[] {
+  return parseMarketplaceRegistryDocument(raw).entries
+}
+
+function parseMarketplaceRegistryDocument(raw: string): {
+  entries: MarketplaceEntry[]
+  totalEntries: number
+} {
   let parsed: unknown
   try {
     parsed = JSON.parse(raw) as unknown
@@ -112,9 +124,12 @@ export function parseMarketplaceRegistry(raw: string): MarketplaceEntry[] {
     )
   }
 
-  return registry.data.plugins.filter((entry) =>
-    isMarketplaceEngineCompatible(entry.deskitEngine, PLUGIN_HOST_VERSION)
-  )
+  return {
+    entries: registry.data.plugins.filter((entry) =>
+      isMarketplaceEngineCompatible(entry.deskitEngine, PLUGIN_HOST_VERSION)
+    ),
+    totalEntries: registry.data.plugins.length,
+  }
 }
 
 export function findMarketplaceEntry(
