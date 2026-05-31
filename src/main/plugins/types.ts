@@ -1,6 +1,6 @@
 import type { CommandInvocation, LocalizedString, PluginModule, View } from "@deskit/plugin-sdk"
 
-export const PLUGIN_HOST_VERSION = "0.1.0"
+export const PLUGIN_HOST_VERSION = "0.2.0"
 
 export type PluginSourceKind = "builtin" | "user" | "dev"
 

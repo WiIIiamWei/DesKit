@@ -2,7 +2,7 @@ import type { IpcMainInvokeEvent } from "electron"
 import type { PluginHost } from "../plugins/plugin-host"
 import { describe, expect, it, vi } from "vitest"
 import { PermissionDenied } from "../plugins/permissions"
-import { PluginHostNotImplementedError } from "../plugins/plugin-host"
+import { PluginHostNotImplementedError, PluginInstallError } from "../plugins/plugin-host"
 import { PluginCrashedError } from "../plugins/plugin-registry"
 import { createPluginIpcHandlers, invokePluginIpcHandler } from "./plugins"
 
@@ -15,6 +15,7 @@ function fakeHost(): PluginHost {
     installFolder: vi.fn(async () => {
       throw new PluginHostNotImplementedError("Folder plugin installation is planned later")
     }),
+    installPackage: vi.fn(async (zipPath: string) => ({ pluginId: "com.deskit.package", zipPath })),
     uninstall: vi.fn(async () => {
       throw new PluginHostNotImplementedError("Plugin uninstall is planned later")
     }),
@@ -22,6 +23,8 @@ function fakeHost(): PluginHost {
     searchCommands: vi.fn((query: string) => [{ commandId: "test.run", query }]),
     invoke: vi.fn(async (payload: unknown) => ({ type: "toast", payload })),
     disposeCommand: vi.fn(async () => {}),
+    listMarketplacePlugins: vi.fn(async () => [{ id: "com.deskit.marketplace" }]),
+    installMarketplacePlugin: vi.fn(async (id: string, version?: string) => ({ id, version })),
     registry: { on: vi.fn() },
   } as unknown as PluginHost
 }
@@ -89,10 +92,33 @@ describe("plugin ipc handlers", () => {
     ).toThrow("phase must be run, onSearchChange, or onAction")
   })
 
-  it("keeps marketplace list as an empty P0 stub", () => {
-    const handlers = createPluginIpcHandlers(fakeHost())
+  it("lists marketplace entries through the host", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host)
 
-    expect(handlers.marketplaceList()).toEqual([])
+    await expect(handlers.marketplaceList()).resolves.toEqual([{ id: "com.deskit.marketplace" }])
+    expect(host.listMarketplacePlugins).toHaveBeenCalledOnce()
+  })
+
+  it("validates and forwards package install paths", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host)
+
+    await expect(handlers.installPackage("C:/tmp/plugin.deskit")).resolves.toEqual({
+      pluginId: "com.deskit.package",
+      zipPath: "C:/tmp/plugin.deskit",
+    })
+    expect(host.installPackage).toHaveBeenCalledWith("C:/tmp/plugin.deskit")
+  })
+
+  it("validates and forwards marketplace install payloads", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host)
+
+    await expect(
+      handlers.marketplaceInstall({ id: "com.deskit.marketplace", version: "1.0.0" })
+    ).resolves.toEqual({ id: "com.deskit.marketplace", version: "1.0.0" })
+    expect(host.installMarketplacePlugin).toHaveBeenCalledWith("com.deskit.marketplace", "1.0.0")
   })
 
   it("wraps successful ipc calls in IpcResult", async () => {
@@ -127,9 +153,9 @@ describe("plugin ipc handlers", () => {
   it("maps not-implemented stubs to PLUGIN_NOT_IMPLEMENTED", async () => {
     const handlers = createPluginIpcHandlers(fakeHost())
     const result = await invokePluginIpcHandler(
-      "marketplace:install",
+      "plugin:install-folder",
       fakeEvent("app://app/index.html"),
-      () => handlers.marketplaceInstall({ id: "com.deskit.test" }),
+      () => handlers.installFolder("/tmp/plugin"),
       () => true
     )
 
@@ -138,6 +164,34 @@ describe("plugin ipc handlers", () => {
       error: {
         code: "PLUGIN_NOT_IMPLEMENTED",
         message: "This plugin feature is not implemented yet.",
+      },
+    })
+  })
+
+  it("maps install errors to PLUGIN_INSTALL_ERROR", async () => {
+    const result = await invokePluginIpcHandler(
+      "marketplace:install",
+      fakeEvent("app://app/index.html"),
+      () => {
+        throw new PluginInstallError("Checksum mismatch.", {
+          pluginId: "com.deskit.test",
+          expectedSha256: "a",
+          actualSha256: "b",
+        })
+      },
+      () => true
+    )
+
+    expect(result).toEqual({
+      ok: false,
+      error: {
+        code: "PLUGIN_INSTALL_ERROR",
+        message: "Checksum mismatch.",
+        details: {
+          pluginId: "com.deskit.test",
+          expectedSha256: "a",
+          actualSha256: "b",
+        },
       },
     })
   })

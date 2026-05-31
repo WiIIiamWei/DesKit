@@ -143,6 +143,12 @@ export class PluginBridge {
     await this.flushStorage(pluginId)
   }
 
+  clearPluginData(pluginId: string): void {
+    const state = this.storage.get(pluginId)
+    if (state?.flushTimer) clearTimeout(state.flushTimer)
+    this.storage.delete(pluginId)
+  }
+
   async flushAll(): Promise<void> {
     await Promise.all([...this.storage.keys()].map((pluginId) => this.flushStorage(pluginId)))
   }

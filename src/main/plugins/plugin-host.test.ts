@@ -1,9 +1,15 @@
 import type { PluginCommandResult, PluginRegistryEntry } from "./types"
+import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { PluginHost, PluginHostNotImplementedError, PluginPreferenceTypeError } from "./plugin-host"
+import {
+  PluginHost,
+  PluginHostNotImplementedError,
+  PluginInstallError,
+  PluginPreferenceTypeError,
+} from "./plugin-host"
 
 let dir: string
 
@@ -30,6 +36,15 @@ function makeHost(): PluginHost {
     userDataDir: dir,
     resourcesDir: path.join(dir, "resources"),
     adapters: noopAdapters,
+  })
+}
+
+function makeHostWithFetch(fetch: (url: string) => Promise<Response>): PluginHost {
+  return new PluginHost({
+    userDataDir: dir,
+    resourcesDir: path.join(dir, "resources"),
+    adapters: noopAdapters,
+    fetch,
   })
 }
 
@@ -67,6 +82,29 @@ const baseEntry: PluginRegistryEntry = {
     },
     permissions: [],
   },
+}
+
+function marketplaceEntry(
+  overrides: Partial<{
+    downloadUrl: string
+    sha256: string
+  }> = {}
+) {
+  return {
+    id: "com.deskit.timestamp",
+    name: "timestamp",
+    displayName: "Timestamp Converter",
+    description: "Convert timestamps.",
+    author: "DesKit",
+    homepage: "https://github.com/WiIIiamWei/DesKit",
+    version: "0.2.0",
+    downloadUrl:
+      overrides.downloadUrl ??
+      "https://github.com/WiIIiamWei/DesKit/releases/download/v0.2.0/timestamp-0.2.0.deskit",
+    sha256: overrides.sha256 ?? "0".repeat(64),
+    deskitEngine: "^0.2.0",
+    categories: ["utilities"],
+  }
 }
 
 describe("pluginHost.setPreference value validation", () => {
@@ -145,7 +183,7 @@ describe("pluginHost.setPreference value validation", () => {
   })
 })
 
-describe("pluginHost stage-3 stubs", () => {
+describe("pluginHost unsupported operations", () => {
   it("installFolder throws PluginHostNotImplementedError", async () => {
     const host = makeHost()
     await expect(host.installFolder("/some/path")).rejects.toBeInstanceOf(
@@ -153,10 +191,82 @@ describe("pluginHost stage-3 stubs", () => {
     )
   })
 
-  it("uninstall throws PluginHostNotImplementedError", async () => {
+  it("rejects protected-source uninstall", async () => {
     const host = makeHost()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
     await expect(host.uninstall("com.deskit.test")).rejects.toBeInstanceOf(
       PluginHostNotImplementedError
+    )
+  })
+})
+
+describe("pluginHost package installation", () => {
+  it("installs a .deskit package into user plugins", async () => {
+    const host = makeHost()
+    await host.init()
+    const packagePath = path.resolve(
+      "resources",
+      "mock-marketplace",
+      "packages",
+      "timestamp-0.2.0.deskit"
+    )
+
+    const entry = await host.installPackage(packagePath)
+
+    expect(entry.pluginId).toBe("com.deskit.timestamp")
+    expect(entry.source.kind).toBe("user")
+    expect(entry.status).toBe("active")
+    await expect(
+      fs.stat(path.join(dir, "plugins", "com.deskit.timestamp", "deskit.json"))
+    ).resolves.toBeTruthy()
+  })
+
+  it("installs from marketplace after checksum verification", async () => {
+    const packagePath = path.resolve(
+      "resources",
+      "mock-marketplace",
+      "packages",
+      "timestamp-0.2.0.deskit"
+    )
+    const packageBuffer = await fs.readFile(packagePath)
+    const sha256 = createHash("sha256").update(packageBuffer).digest("hex")
+    const host = makeHostWithFetch(async (url) => {
+      if (url.endsWith("registry.json")) {
+        return Response.json({ version: 1, plugins: [marketplaceEntry({ sha256 })] })
+      }
+      return new Response(packageBuffer)
+    })
+    await host.init()
+
+    const entry = await host.installMarketplacePlugin("com.deskit.timestamp")
+
+    expect(entry.pluginId).toBe("com.deskit.timestamp")
+    expect(entry.source.kind).toBe("user")
+    expect(entry.status).toBe("active")
+  })
+
+  it("rejects marketplace packages with mismatched checksums", async () => {
+    const packagePath = path.resolve(
+      "resources",
+      "mock-marketplace",
+      "packages",
+      "timestamp-0.2.0.deskit"
+    )
+    const packageBuffer = await fs.readFile(packagePath)
+    const host = makeHostWithFetch(async (url) => {
+      if (url.endsWith("registry.json")) {
+        return Response.json({
+          version: 1,
+          plugins: [marketplaceEntry({ sha256: "0".repeat(64) })],
+        })
+      }
+      return new Response(packageBuffer)
+    })
+    await host.init()
+
+    await expect(host.installMarketplacePlugin("com.deskit.timestamp")).rejects.toBeInstanceOf(
+      PluginInstallError
     )
   })
 })
