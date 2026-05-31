@@ -1,0 +1,25 @@
+{
+  "version": 1,
+  "plugins": [
+    {
+      "id": "com.deskit.timestamp",
+      "name": "timestamp",
+      "displayName": {
+        "en": "Timestamp Converter",
+        "zh-CN": "时间戳转换"
+      },
+      "description": {
+        "en": "Convert between Unix timestamps and readable dates from the launcher.",
+        "zh-CN": "在启动器里转换 Unix 时间戳和可读日期。"
+      },
+      "author": "DesKit",
+      "homepage": "https://github.com/WiIIiamWei/DesKit",
+      "version": "0.2.0",
+      "downloadUrl": "https://raw.githubusercontent.com/WiIIiamWei/DesKit/main/resources/mock-marketplace/packages/timestamp-0.2.0.deskit",
+      "sha256": "73eeb8b6570d8ce85d9ae5b6ce885d79de2a1fa02235a0914b2d3c6e63cf81c8",
+      "deskitEngine": "^0.2.0",
+      "icon": "lucide:clock",
+      "categories": ["utilities"]
+    }
+  ]
+}

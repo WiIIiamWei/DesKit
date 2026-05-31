@@ -74,6 +74,9 @@ importers:
       vaul:
         specifier: ^1.1.2
         version: 1.1.2(@types/react-dom@19.2.3(@types/react@19.2.15))(@types/react@19.2.15)(react-dom@19.2.6(react@19.2.6))(react@19.2.6)
+      yauzl:
+        specifier: 2.10.0
+        version: 2.10.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -117,6 +120,9 @@ importers:
       '@types/react-dom':
         specifier: ^19.2.3
         version: 19.2.3(@types/react@19.2.15)
+      '@types/yauzl':
+        specifier: 2.10.3
+        version: 2.10.3
       '@typescript/native-preview':
         specifier: latest
         version: 7.0.0-dev.20260521.1

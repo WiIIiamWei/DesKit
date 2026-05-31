@@ -48,6 +48,7 @@ declare global {
     | "PLUGIN_PERMISSION_DENIED"
     | "PLUGIN_CRASHED"
     | "PLUGIN_NOT_IMPLEMENTED"
+    | "PLUGIN_INSTALL_ERROR"
     | "PLUGIN_IO_ERROR"
     | "UNKNOWN_ERROR"
 
@@ -106,6 +107,21 @@ declare global {
     error?: string
     shadowedBy?: DeskitPluginSourceKind
     loadedAt?: number
+  }
+
+  interface DeskitMarketplaceEntry {
+    id: string
+    name: string
+    displayName: DeskitLocalizedString
+    description: DeskitLocalizedString
+    author: string
+    homepage: string
+    version: string
+    downloadUrl: string
+    sha256: string
+    deskitEngine: string
+    icon?: string
+    categories?: string[]
   }
 
   interface DeskitPluginCommandResult {
@@ -178,11 +194,11 @@ declare global {
         pluginId: string,
         commandId: string
       ) => Promise<DeskitPluginIpcResult<void>>
-      listMarketplacePlugins: () => Promise<DeskitPluginIpcResult<unknown[]>>
+      listMarketplacePlugins: () => Promise<DeskitPluginIpcResult<DeskitMarketplaceEntry[]>>
       installMarketplacePlugin: (
         id: string,
         version?: string
-      ) => Promise<DeskitPluginIpcResult<unknown>>
+      ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry>>
       onLauncherFocus: (handler: () => void) => () => void
       onFloatingBallMenuState: (handler: (expanded: boolean) => void) => () => void
       onFloatingBallFeatures: (

@@ -7,9 +7,9 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
     name: "Test",
     displayName: { en: "Test", "zh-CN": "测试" },
     description: "A test plugin",
-    version: "0.1.0",
+    version: "0.2.0",
     author: "DesKit",
-    engines: { deskit: "^0.1.0" },
+    engines: { deskit: "^0.2.0" },
     main: "dist/index.js",
     contributes: {
       commands: [

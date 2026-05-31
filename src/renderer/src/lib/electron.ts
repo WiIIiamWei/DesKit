@@ -19,6 +19,7 @@ export type SearchResult = LauncherSearchResult
 export type UserSettings = DeskitUserSettings
 export type FloatingBallFeature = DeskitFloatingBallFeature
 export type PluginRegistryEntry = DeskitPluginRegistryEntry
+export type MarketplaceEntry = DeskitMarketplaceEntry
 export type PluginCommandResult = DeskitPluginCommandResult
 export type PluginInvokePhase = DeskitPluginInvokePhase
 export type PluginView = DeskitPluginView
@@ -156,11 +157,14 @@ export async function disposePluginCommand(pluginId: string, commandId: string):
   unwrapIpcResult(await api().disposePluginCommand(pluginId, commandId))
 }
 
-export async function listMarketplacePlugins(): Promise<unknown[]> {
+export async function listMarketplacePlugins(): Promise<MarketplaceEntry[]> {
   return unwrapIpcResult(await api().listMarketplacePlugins())
 }
 
-export async function installMarketplacePlugin(id: string, version?: string): Promise<unknown> {
+export async function installMarketplacePlugin(
+  id: string,
+  version?: string
+): Promise<PluginRegistryEntry> {
   return unwrapIpcResult(await api().installMarketplacePlugin(id, version))
 }
 

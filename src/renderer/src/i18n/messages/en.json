@@ -85,6 +85,11 @@
       "crashed": "Crashed",
       "shadowed": "Shadowed"
     },
+    "source": {
+      "builtin": "Built-in",
+      "user": "Installed",
+      "dev": "Development"
+    },
     "meta": {
       "version": "Version",
       "author": "Author",
@@ -114,8 +119,39 @@
   "marketplace": {
     "title": "Marketplace",
     "subtitle": "Discover and install DesKit plugins.",
+    "unavailableTitle": "Electron bridge unavailable",
+    "unavailableBody": "The marketplace is only available inside the desktop app.",
+    "errorTitle": "Marketplace operation failed",
+    "loading": "Loading marketplace…",
+    "loadingHint": "Fetching the registry and checking installed plugins.",
+    "empty": "No marketplace plugins match your filters.",
+    "searchPlaceholder": "Search plugins, authors, categories…",
+    "registryBadge": "Git registry",
     "submit": "Submit plugin",
     "submitTooltip": "Coming soon",
+    "protectedSource": "This plugin is provided by {{source}} and cannot be reinstalled from the marketplace.",
+    "actions": {
+      "refresh": "Refresh",
+      "install": "Install",
+      "installing": "Installing…",
+      "installed": "Installed",
+      "reinstall": "Reinstall"
+    },
+    "installState": {
+      "install": "Available",
+      "installed": "Installed",
+      "reinstall": "Installed"
+    },
+    "category": {
+      "all": "All",
+      "utilities": "Utilities",
+      "productivity": "Productivity",
+      "developer": "Developer",
+      "system": "System"
+    },
+    "toasts": {
+      "installed": "Plugin installed."
+    },
     "comingSoonTitle": "Marketplace UI is coming soon",
     "comingSoonBody": "The sidebar entry is ready; Git registry browsing and install flows will land in the marketplace PR.",
     "gitIntegrationHint": "P0 marketplace installation will use HTTPS registry fetches and package hash verification instead of a local git dependency."

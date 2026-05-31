@@ -273,6 +273,7 @@ function searchWindowDeps(): SearchWindowDeps {
 
 function createPluginHost(): PluginHost {
   return new PluginHost({
+    fetch: (url) => net.fetch(url),
     userDataDir: app.getPath("userData"),
     resourcesDir: pluginResourcesDir(),
     runtime: () => {
