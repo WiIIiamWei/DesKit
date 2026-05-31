@@ -290,7 +290,7 @@ function createPluginHost(): PluginHost {
 }
 
 function pluginResourcesDir(): string {
-  return app.isPackaged ? process.resourcesPath : path.join(app.getAppPath(), "resources")
+  return path.join(app.getAppPath(), "resources")
 }
 
 function floatingBallDeps() {
