@@ -9,6 +9,7 @@ import {
   moveFloatingBallBy,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
+  onSettingsChanged,
   openFloatingBallFeature,
   toggleFloatingBallMenu,
 } from "@/lib/electron"
@@ -57,7 +58,11 @@ export function FloatingBallPanel() {
 
   useEffect(() => {
     void getSettings().then((settings) => setFeatures(settings.floatingBallFeatures))
-    return mergeCleanups(onFloatingBallMenuState(setExpanded), onFloatingBallFeatures(setFeatures))
+    return mergeCleanups(
+      onFloatingBallMenuState(setExpanded),
+      onFloatingBallFeatures(setFeatures),
+      onSettingsChanged((settings) => setFeatures(settings.floatingBallFeatures))
+    )
   }, [])
 
   const menuItems = useMemo(() => features.slice(0, 6), [features])
