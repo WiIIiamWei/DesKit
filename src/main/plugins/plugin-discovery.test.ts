@@ -89,7 +89,7 @@ async function writePlugin(pluginDir: string, id: string): Promise<void> {
         name: id,
         displayName: id,
         description: "test",
-        version: "0.2.0",
+        version: "0.3.0",
         author: "DesKit",
         engines: { deskit: "^0.2.0" },
         main: "dist/index.js",

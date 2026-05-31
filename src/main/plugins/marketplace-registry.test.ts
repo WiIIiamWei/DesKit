@@ -137,10 +137,10 @@ function registryEntry(
     description: "Test plugin.",
     author: "DesKit",
     homepage: "https://github.com/WiIIiamWei/DesKit",
-    version: overrides.version ?? "0.2.0",
+    version: overrides.version ?? "0.3.0",
     downloadUrl:
       overrides.downloadUrl ??
-      "https://github.com/WiIIiamWei/DesKit/releases/download/v0.2.0/test-0.2.0.deskit",
+      "https://github.com/WiIIiamWei/DesKit/releases/download/v0.3.0/test-0.3.0.deskit",
     sha256: "a".repeat(64),
     deskitEngine: overrides.deskitEngine ?? "^0.2.0",
     categories: ["utilities"],

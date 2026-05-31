@@ -97,10 +97,10 @@ function marketplaceEntry(
     description: "Convert timestamps.",
     author: "DesKit",
     homepage: "https://github.com/WiIIiamWei/DesKit",
-    version: "0.2.0",
+    version: "0.3.0",
     downloadUrl:
       overrides.downloadUrl ??
-      "https://github.com/WiIIiamWei/DesKit/releases/download/v0.2.0/timestamp-0.2.0.deskit",
+      "https://github.com/WiIIiamWei/deskit-plugin-timestamp/releases/download/v0.3.0/com.deskit.timestamp-0.3.0.deskit",
     sha256: overrides.sha256 ?? "0".repeat(64),
     deskitEngine: "^0.2.0",
     categories: ["utilities"],
@@ -209,7 +209,7 @@ describe("pluginHost package installation", () => {
       "resources",
       "mock-marketplace",
       "packages",
-      "timestamp-0.2.0.deskit"
+      "com.deskit.timestamp-0.3.0.deskit"
     )
 
     const entry = await host.installPackage(packagePath)
@@ -227,7 +227,7 @@ describe("pluginHost package installation", () => {
       "resources",
       "mock-marketplace",
       "packages",
-      "timestamp-0.2.0.deskit"
+      "com.deskit.timestamp-0.3.0.deskit"
     )
     const packageBuffer = await fs.readFile(packagePath)
     const sha256 = createHash("sha256").update(packageBuffer).digest("hex")
@@ -251,7 +251,7 @@ describe("pluginHost package installation", () => {
       "resources",
       "mock-marketplace",
       "packages",
-      "timestamp-0.2.0.deskit"
+      "com.deskit.timestamp-0.3.0.deskit"
     )
     const packageBuffer = await fs.readFile(packagePath)
     const host = makeHostWithFetch(async (url) => {

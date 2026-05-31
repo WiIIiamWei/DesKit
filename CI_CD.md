@@ -28,7 +28,7 @@ Releases are triggered by Git tags, not by release branches.
 The release workflow runs when a tag matching `v*` is pushed:
 
 ```text
-v0.1.0
+v0.3.0
 v1.0.0
 v1.2.3-beta.1
 ```
@@ -46,8 +46,8 @@ Example:
 ```bash
 git switch main
 git pull
-git tag -a v0.1.0 -m "v0.1.0"
-git push origin v0.1.0
+git tag -a v0.3.0 -m "v0.3.0"
+git push origin v0.3.0
 ```
 
 After the tag is pushed, GitHub Actions will:
@@ -59,7 +59,7 @@ After the tag is pushed, GitHub Actions will:
 
 Review the draft release on GitHub, check the generated notes and artifacts, then publish it manually.
 
-Do not create `v0.1.0` as a branch. Version-like names are reserved for tags.
+Do not create `v0.3.0` as a branch. Version-like names are reserved for tags.
 
 ## Notes
 
