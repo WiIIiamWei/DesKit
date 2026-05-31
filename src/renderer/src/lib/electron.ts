@@ -69,6 +69,10 @@ export async function openExternalUrl(url: string): Promise<boolean> {
   return api().openExternalUrl(url)
 }
 
+export async function writeClipboardContent(content: DeskitClipboardContent): Promise<boolean> {
+  return api().writeClipboardContent(content)
+}
+
 export function notifyLauncherReady(): void {
   api().notifyLauncherReady()
 }

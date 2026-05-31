@@ -1,4 +1,10 @@
-import type { CommandInvocation, LocalizedString, PluginModule, View } from "@deskit/plugin-sdk"
+import type {
+  ClipboardContent,
+  CommandInvocation,
+  LocalizedString,
+  PluginModule,
+  View,
+} from "@deskit/plugin-sdk"
 
 export const PLUGIN_HOST_VERSION = "0.2.0"
 
@@ -53,11 +59,14 @@ export interface PluginManifest {
   engines: { deskit: string }
   main: string
   contributes: {
+    activationEvents?: PluginActivationEvent[]
     commands: ManifestCommand[]
     preferences?: ManifestPreference[]
   }
   permissions: string[]
 }
+
+export type PluginActivationEvent = "clipboard:change"
 
 export type DiscoveredPluginStatus = "valid" | "invalid" | "shadowed"
 
@@ -106,6 +115,12 @@ export interface PluginInvokeRequest {
   payload?: unknown
 }
 
+export interface PluginEventRequest {
+  pluginId: string
+  event: "clipboard:change"
+  payload: { content: ClipboardContent }
+}
+
 export interface PluginSandboxModule {
   pluginId: string
   manifest: PluginManifest
@@ -117,6 +132,7 @@ export interface PluginSandboxRuntime {
   unloadPlugin: (pluginId: string) => Promise<void>
   invokeCommand: (request: PluginInvokeRequest) => Promise<View | void>
   disposeCommand: (pluginId: string, commandId: string) => Promise<void>
+  dispatchEvent: (request: PluginEventRequest) => Promise<void>
 }
 
 export interface RunPayload {

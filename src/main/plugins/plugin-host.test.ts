@@ -1,3 +1,4 @@
+import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { PluginCommandResult, PluginRegistryEntry } from "./types"
 import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
@@ -29,6 +30,21 @@ const noopAdapters = {
     openPath: async () => {},
     captureScreen: async () => ({ path: "" }),
   },
+}
+
+function makeHostWithClipboard(
+  read: () => Promise<ClipboardContent | undefined>,
+  clipboardPollMs = 10
+): PluginHost {
+  return new PluginHost({
+    userDataDir: dir,
+    resourcesDir: path.join(dir, "resources"),
+    clipboardPollMs,
+    adapters: {
+      ...noopAdapters,
+      clipboard: { read, write: async () => {} },
+    },
+  })
 }
 
 function makeHost(): PluginHost {
@@ -294,5 +310,78 @@ describe("pluginHost facade forwards to registry", () => {
       .mockReturnValue([] as PluginCommandResult[])
     host.searchCommands("ts", "zh-CN", 5)
     expect(spy).toHaveBeenCalledWith("ts", "zh-CN", 5)
+  })
+})
+
+describe("pluginHost clipboard watcher", () => {
+  it("starts only when a plugin listens for clipboard changes", async () => {
+    vi.useFakeTimers()
+    const read = vi.fn(async () => ({ type: "text", text: "hello" }) as ClipboardContent)
+    const host = makeHostWithClipboard(read)
+    await host.init()
+
+    expect(read).not.toHaveBeenCalled()
+    vi.spyOn(host.registry, "list").mockReturnValue([
+      {
+        ...baseEntry,
+        manifest: {
+          ...baseEntry.manifest!,
+          contributes: {
+            ...baseEntry.manifest!.contributes,
+            activationEvents: ["clipboard:change"],
+          },
+        },
+      },
+    ])
+    vi.spyOn(host.registry, "setEnabled").mockResolvedValue({
+      ...baseEntry,
+      manifest: {
+        ...baseEntry.manifest!,
+        contributes: {
+          ...baseEntry.manifest!.contributes,
+          activationEvents: ["clipboard:change"],
+        },
+      },
+    })
+
+    await host.setEnabled("com.deskit.test", true)
+    await vi.runOnlyPendingTimersAsync()
+
+    expect(read).toHaveBeenCalled()
+    vi.useRealTimers()
+  })
+
+  it("stops after clipboard listener crashes", async () => {
+    vi.useFakeTimers()
+    const read = vi.fn(async () => ({ type: "text", text: "hello" }) as ClipboardContent)
+    const host = makeHostWithClipboard(read)
+    await host.init()
+
+    let crashed = false
+    const activeEntry: PluginRegistryEntry = {
+      ...baseEntry,
+      manifest: {
+        ...baseEntry.manifest!,
+        contributes: {
+          ...baseEntry.manifest!.contributes,
+          activationEvents: ["clipboard:change"],
+        },
+      },
+    }
+    vi.spyOn(host.registry, "list").mockImplementation(() =>
+      crashed ? [{ ...activeEntry, status: "crashed" }] : [activeEntry]
+    )
+    vi.spyOn(host.registry, "setEnabled").mockResolvedValue(activeEntry)
+    vi.spyOn(host.registry, "dispatchClipboardChange").mockImplementationOnce(async () => {
+      crashed = true
+      throw new Error("boom")
+    })
+
+    await host.setEnabled("com.deskit.test", true)
+    await vi.runOnlyPendingTimersAsync()
+    await vi.advanceTimersByTimeAsync(20)
+
+    expect(read).toHaveBeenCalledTimes(1)
+    vi.useRealTimers()
   })
 })
