@@ -417,6 +417,21 @@ describe("pluginHost.installMarketplacePlugin", () => {
 })
 
 describe("pluginHost facade forwards to registry", () => {
+  it("list exposes defaults merged with persisted preferences", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "list").mockReturnValue([baseEntry])
+
+    await host.preferences.set("com.deskit.test", "label", "custom")
+
+    expect(host.list()[0]?.preferences).toEqual({
+      label: "custom",
+      limit: 10,
+      enabled: true,
+      unit: "ms",
+    })
+  })
+
   it("searchCommands forwards locale + limit to the registry", () => {
     const host = makeHost()
     const spy = vi

@@ -237,7 +237,7 @@ export function registerPluginIpc(
     )
   )
 
-  host.registry.on("changed", (entries) => options.onRegistryChanged(entries))
+  host.registry.on("changed", () => options.onRegistryChanged(host.list()))
 }
 
 export async function invokePluginIpcHandler<T>(

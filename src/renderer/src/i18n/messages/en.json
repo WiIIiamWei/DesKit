@@ -6,11 +6,11 @@
   "nav": {
     "home": "Home",
     "settings": "Settings",
-    "plugins": "Plugins",
-    "marketplace": "Marketplace",
     "features": "Features",
     "appLauncher": "App Launcher",
-    "floatingBall": "Floating Ball"
+    "floatingBall": "Floating Ball",
+    "plugins": "Plugins",
+    "marketplace": "Marketplace"
   },
   "home": {
     "quickActions": "Quick actions",
@@ -66,6 +66,113 @@
       "menuFeaturesHint": "Choose up to 6 tools. The floating ball itself is not a menu tool."
     }
   },
+  "plugins": {
+    "title": "Plugins",
+    "subtitle": "Manage built-in, installed, and development plugins.",
+    "unavailableTitle": "Electron bridge unavailable",
+    "unavailableBody": "Plugin management is only available inside the desktop app.",
+    "errorTitle": "Plugin operation failed",
+    "loading": "Loading plugins…",
+    "loadingHint": "Reading the current plugin registry.",
+    "emptyTitle": "No plugins found",
+    "emptyBody": "No built-in, installed, or development plugins are registered yet.",
+    "installedCount": "{{count}} plugins installed",
+    "pluginErrorTitle": "Plugin error",
+    "source": {
+      "builtin": "Builtin",
+      "user": "Installed",
+      "dev": "Development"
+    },
+    "status": {
+      "active": "Active",
+      "disabled": "Disabled",
+      "invalid": "Invalid",
+      "crashed": "Crashed",
+      "shadowed": "Shadowed"
+    },
+    "meta": {
+      "version": "Version",
+      "author": "Author",
+      "commands": "Commands",
+      "path": "Path"
+    },
+    "actions": {
+      "addFolder": "Add local plugin folder…",
+      "installPackage": "Install from package…",
+      "install": "Install",
+      "cancel": "Cancel",
+      "enable": "Enable",
+      "disable": "Disable",
+      "reload": "Reload",
+      "uninstall": "Uninstall",
+      "refresh": "Refresh"
+    },
+    "preferences": {
+      "title": "Preferences",
+      "body": "Changes are saved to the plugin preference store.",
+      "invalidNumber": "Please enter a valid number."
+    },
+    "confirm": {
+      "title": "Delete {{name}}?",
+      "uninstall": "Plugin files will be removed from this device. Preferences and plugin data are kept.",
+      "uninstallInvalid": "This will clean up the invalid plugin entry and any leftover files."
+    },
+    "installFolder": {
+      "title": "Add local plugin folder",
+      "description": "Paste a local plugin folder path. DesKit will copy it into the installed plugins directory.",
+      "pathLabel": "Folder path",
+      "pathPlaceholder": "/path/to/plugin"
+    },
+    "toasts": {
+      "enabled": "Plugin enabled.",
+      "disabled": "Plugin disabled.",
+      "installed": "Plugin installed.",
+      "reloaded": "Plugin reloaded.",
+      "uninstalled": "Plugin uninstalled.",
+      "preferenceSaved": "Preference saved."
+    }
+  },
+  "marketplace": {
+    "title": "Marketplace",
+    "subtitle": "Browse mock registry plugins and preview the future install flow.",
+    "electronRequired": "The marketplace is only available in the Electron desktop app.",
+    "mockBadge": "Mock data · remote marketplace is P1",
+    "searchPlaceholder": "Search marketplace plugins…",
+    "empty": "No marketplace plugins match this filter.",
+    "installed": "Installed",
+    "install": "Install",
+    "installing": "Installing…",
+    "protectedSource": "Provided by {{source}} and cannot be overwritten from Marketplace.",
+    "unknownAuthor": "Unknown author",
+    "downloads": "{{count}} downloads",
+    "submit": "Submit plugin",
+    "submitTooltip": "Coming soon",
+    "actions": {
+      "install": "Install",
+      "reinstall": "Reinstall",
+      "installed": "Installed",
+      "unavailable": "Unavailable"
+    },
+    "installState": {
+      "install": "Available",
+      "reinstall": "Installed",
+      "installed": "Installed",
+      "unavailable": "Preview"
+    },
+    "permissions": {
+      "none": "No extra permissions",
+      "more": "+{{count}}"
+    },
+    "messages": {
+      "installed": "Plugin installed."
+    },
+    "category": {
+      "all": "All",
+      "utilities": "Utilities",
+      "productivity": "Productivity",
+      "media": "Media"
+    }
+  },
   "launcher": {
     "placeholder": "Search apps and commands…",
     "empty": "No matches",
@@ -92,108 +199,6 @@
       "rescanned": "App list refreshed.",
       "saved": "Hotkey updated.",
       "invalid": "Could not register that combination. The previous shortcut is still active."
-    }
-  },
-  "plugins": {
-    "title": "Plugins",
-    "subtitle": "Review loaded plugins, status, declared permissions, and preferences.",
-    "electronRequired": "Plugin management is only available in the Electron desktop app.",
-    "count": "{{count}} plugins",
-    "empty": "No plugins discovered yet.",
-    "listTitle": "Loaded plugins",
-    "listSubtitle": "Grouped by builtin, installed, and development sources.",
-    "source": {
-      "builtin": "Builtin",
-      "user": "Installed",
-      "dev": "Development"
-    },
-    "status": {
-      "active": "active",
-      "disabled": "disabled",
-      "invalid": "invalid",
-      "crashed": "crashed",
-      "shadowed": "shadowed"
-    },
-    "actions": {
-      "addFolder": "Add local plugin folder…",
-      "installPackage": "Install from package…",
-      "refresh": "Refresh",
-      "install": "Install",
-      "cancel": "Cancel",
-      "enable": "Enable plugin",
-      "reload": "Reload",
-      "uninstall": "Uninstall"
-    },
-    "messages": {
-      "installed": "Plugin installed.",
-      "updated": "Plugin status updated.",
-      "reloaded": "Plugin reloaded.",
-      "uninstalled": "Plugin uninstalled.",
-      "preferenceSaved": "Preference saved."
-    },
-    "confirm": {
-      "title": "Delete {{name}}?",
-      "uninstall": "Plugin files will be removed from this device. Preferences and plugin data are kept.",
-      "uninstallInvalid": "This will clean up the invalid plugin entry and any leftover files."
-    },
-    "installFolder": {
-      "title": "Add local plugin folder",
-      "description": "Paste a local plugin folder path. DesKit will copy it into the installed plugins directory.",
-      "pathLabel": "Folder path",
-      "pathPlaceholder": "/path/to/plugin"
-    },
-    "detail": {
-      "empty": "Select a plugin to inspect details.",
-      "version": "Version",
-      "author": "Author",
-      "source": "Source",
-      "path": "Path",
-      "error": "Error",
-      "commands": "Commands",
-      "permissions": "Permissions",
-      "preferences": "Preferences",
-      "noCommands": "This plugin declares no commands.",
-      "noPermissions": "This plugin declares no permissions.",
-      "noPreferences": "This plugin has no preferences."
-    }
-  },
-  "marketplace": {
-    "title": "Marketplace",
-    "subtitle": "Browse mock registry plugins and preview the future install flow.",
-    "electronRequired": "The marketplace is only available in the Electron desktop app.",
-    "mockBadge": "Mock data · remote marketplace is P1",
-    "searchPlaceholder": "Search marketplace plugins…",
-    "empty": "No marketplace plugins match this filter.",
-    "installed": "Installed",
-    "install": "Install",
-    "installing": "Installing…",
-    "protectedSource": "Provided by {{source}} and cannot be overwritten from Marketplace.",
-    "unknownAuthor": "Unknown author",
-    "downloads": "{{count}} downloads",
-    "actions": {
-      "install": "Install",
-      "reinstall": "Reinstall",
-      "installed": "Installed",
-      "unavailable": "Unavailable"
-    },
-    "installState": {
-      "install": "Available",
-      "reinstall": "Installed",
-      "installed": "Installed",
-      "unavailable": "Preview"
-    },
-    "permissions": {
-      "none": "No extra permissions",
-      "more": "+{{count}}"
-    },
-    "messages": {
-      "installed": "Plugin installed."
-    },
-    "category": {
-      "all": "All",
-      "utilities": "Utilities",
-      "productivity": "Productivity",
-      "media": "Media"
     }
   },
   "permissions": {

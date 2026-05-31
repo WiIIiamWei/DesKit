@@ -103,6 +103,26 @@ module.exports = {
     ).rejects.toBeInstanceOf(PluginSandboxError)
   })
 
+  it("times out synchronous command loops", async () => {
+    const entry = await writePlugin(`
+module.exports = {
+  commands: {
+    "test.run": {
+      run() {
+        while (true) {}
+      }
+    }
+  }
+}
+`)
+    const sandbox = sandboxForTest(5)
+    await sandbox.loadPlugin(entry)
+
+    await expect(
+      sandbox.invokeCommand({ pluginId: entry.pluginId, commandId: "test.run", phase: "run" })
+    ).rejects.toBeInstanceOf(PluginSandboxError)
+  })
+
   it("times out plugin top-level code during load", async () => {
     const entry = await writePlugin("while (true) {}")
     const sandbox = sandboxForTest(100, 5)

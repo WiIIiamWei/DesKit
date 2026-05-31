@@ -3,7 +3,7 @@ import type { SearchWindowDeps } from "./search-window"
 import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, session } from "electron"
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } from "electron"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -140,6 +140,19 @@ function registerIpc(): void {
 
   ipcMain.handle("launcher:hide", () => {
     hideSearchWindow()
+  })
+
+  ipcMain.handle("system:open-external", async (event, url: unknown) => {
+    if (!isTrustedIpcSender(event) || typeof url !== "string") return false
+    let target: URL
+    try {
+      target = new URL(url)
+    } catch {
+      return false
+    }
+    if (target.protocol !== "http:" && target.protocol !== "https:") return false
+    await shell.openExternal(target.toString())
+    return true
   })
 
   ipcMain.on("launcher:ready", (event) => {

@@ -6,11 +6,11 @@
   "nav": {
     "home": "主页",
     "settings": "设置",
-    "plugins": "插件",
-    "marketplace": "应用市场",
     "features": "功能",
     "appLauncher": "应用启动器",
-    "floatingBall": "桌面悬浮球"
+    "floatingBall": "桌面悬浮球",
+    "plugins": "插件",
+    "marketplace": "应用市场"
   },
   "home": {
     "quickActions": "快捷操作",
@@ -66,6 +66,113 @@
       "menuFeaturesHint": "最多选择 6 个工具。桌面悬浮球本身不会作为菜单工具。"
     }
   },
+  "plugins": {
+    "title": "插件",
+    "subtitle": "管理内置、已安装与开发中的插件。",
+    "unavailableTitle": "Electron 桥不可用",
+    "unavailableBody": "插件管理仅在桌面应用内可用。",
+    "errorTitle": "插件操作失败",
+    "loading": "正在加载插件…",
+    "loadingHint": "正在读取当前插件注册表。",
+    "emptyTitle": "未发现插件",
+    "emptyBody": "当前还没有注册内置、已安装或开发插件。",
+    "installedCount": "已安装 {{count}} 个插件",
+    "pluginErrorTitle": "插件错误",
+    "source": {
+      "builtin": "内置",
+      "user": "已安装",
+      "dev": "开发"
+    },
+    "status": {
+      "active": "已启用",
+      "disabled": "已停用",
+      "invalid": "无效",
+      "crashed": "已崩溃",
+      "shadowed": "被覆盖"
+    },
+    "meta": {
+      "version": "版本",
+      "author": "作者",
+      "commands": "命令",
+      "path": "路径"
+    },
+    "actions": {
+      "addFolder": "添加本地插件文件夹…",
+      "installPackage": "从压缩包安装…",
+      "install": "安装",
+      "cancel": "取消",
+      "enable": "启用",
+      "disable": "停用",
+      "reload": "重载",
+      "uninstall": "卸载",
+      "refresh": "刷新"
+    },
+    "preferences": {
+      "title": "偏好设置",
+      "body": "修改会保存到插件偏好设置存储中。",
+      "invalidNumber": "请输入有效数字。"
+    },
+    "confirm": {
+      "title": "删除 {{name}}？",
+      "uninstall": "插件文件将从本机移除，偏好设置和插件数据会保留。",
+      "uninstallInvalid": "这会清理无效的插件记录和残留文件。"
+    },
+    "installFolder": {
+      "title": "添加本地插件文件夹",
+      "description": "粘贴本地插件文件夹路径，DesKit 会复制到已安装插件目录。",
+      "pathLabel": "文件夹路径",
+      "pathPlaceholder": "/path/to/plugin"
+    },
+    "toasts": {
+      "enabled": "插件已启用。",
+      "disabled": "插件已停用。",
+      "installed": "插件已安装。",
+      "reloaded": "插件已重载。",
+      "uninstalled": "插件已卸载。",
+      "preferenceSaved": "偏好设置已保存。"
+    }
+  },
+  "marketplace": {
+    "title": "应用市场",
+    "subtitle": "浏览 mock registry 插件，并预览未来的一键安装流程。",
+    "electronRequired": "应用市场仅在 Electron 桌面端可用。",
+    "mockBadge": "模拟数据 · 远程市场需 P1",
+    "searchPlaceholder": "搜索市场插件…",
+    "empty": "没有匹配的市场插件。",
+    "installed": "已安装",
+    "install": "安装",
+    "installing": "安装中…",
+    "protectedSource": "该插件由{{source}}版本提供，无法从应用市场覆盖。",
+    "unknownAuthor": "未知作者",
+    "downloads": "{{count}} 次下载",
+    "submit": "提交插件",
+    "submitTooltip": "敬请期待",
+    "actions": {
+      "install": "安装",
+      "reinstall": "重新安装",
+      "installed": "已安装",
+      "unavailable": "暂不可用"
+    },
+    "installState": {
+      "install": "可安装",
+      "reinstall": "已安装",
+      "installed": "已安装",
+      "unavailable": "预览"
+    },
+    "permissions": {
+      "none": "无额外权限",
+      "more": "+{{count}}"
+    },
+    "messages": {
+      "installed": "插件已安装。"
+    },
+    "category": {
+      "all": "全部",
+      "utilities": "工具",
+      "productivity": "效率",
+      "media": "媒体"
+    }
+  },
   "launcher": {
     "placeholder": "搜索应用与命令…",
     "empty": "没有匹配项",
@@ -92,108 +199,6 @@
       "rescanned": "应用列表已刷新。",
       "saved": "快捷键已更新。",
       "invalid": "无法注册该组合，仍使用上一次的快捷键。"
-    }
-  },
-  "plugins": {
-    "title": "插件",
-    "subtitle": "查看已加载插件，管理启停状态、权限声明和偏好配置。",
-    "electronRequired": "插件管理仅在 Electron 桌面端可用。",
-    "count": "{{count}} 个插件",
-    "empty": "还没有发现插件。",
-    "listTitle": "已加载插件",
-    "listSubtitle": "按来源分组展示 builtin、installed 和 dev 插件。",
-    "source": {
-      "builtin": "内置",
-      "user": "已安装",
-      "dev": "开发"
-    },
-    "status": {
-      "active": "active",
-      "disabled": "disabled",
-      "invalid": "invalid",
-      "crashed": "crashed",
-      "shadowed": "shadowed"
-    },
-    "actions": {
-      "addFolder": "添加本地插件文件夹…",
-      "installPackage": "从压缩包安装…",
-      "refresh": "刷新",
-      "install": "安装",
-      "cancel": "取消",
-      "enable": "启用插件",
-      "reload": "重新加载",
-      "uninstall": "卸载"
-    },
-    "messages": {
-      "installed": "插件已安装。",
-      "updated": "插件状态已更新。",
-      "reloaded": "插件已重新加载。",
-      "uninstalled": "插件已卸载。",
-      "preferenceSaved": "偏好设置已保存。"
-    },
-    "confirm": {
-      "title": "删除 {{name}}？",
-      "uninstall": "插件文件将从本机移除，偏好设置和插件数据会保留。",
-      "uninstallInvalid": "这会清理无效的插件记录和残留文件。"
-    },
-    "installFolder": {
-      "title": "添加本地插件文件夹",
-      "description": "粘贴本地插件文件夹路径，DesKit 会复制到已安装插件目录。",
-      "pathLabel": "文件夹路径",
-      "pathPlaceholder": "/path/to/plugin"
-    },
-    "detail": {
-      "empty": "选择一个插件查看详情。",
-      "version": "版本",
-      "author": "作者",
-      "source": "来源",
-      "path": "路径",
-      "error": "错误",
-      "commands": "命令",
-      "permissions": "权限",
-      "preferences": "偏好设置",
-      "noCommands": "该插件没有声明命令。",
-      "noPermissions": "该插件没有声明权限。",
-      "noPreferences": "该插件没有偏好配置。"
-    }
-  },
-  "marketplace": {
-    "title": "应用市场",
-    "subtitle": "浏览 mock registry 插件，并预览未来的一键安装流程。",
-    "electronRequired": "应用市场仅在 Electron 桌面端可用。",
-    "mockBadge": "模拟数据 · 远程市场需 P1",
-    "searchPlaceholder": "搜索市场插件…",
-    "empty": "没有匹配的市场插件。",
-    "installed": "已安装",
-    "install": "安装",
-    "installing": "安装中…",
-    "protectedSource": "该插件由{{source}}版本提供，无法从应用市场覆盖。",
-    "unknownAuthor": "未知作者",
-    "downloads": "{{count}} 次下载",
-    "actions": {
-      "install": "安装",
-      "reinstall": "重新安装",
-      "installed": "已安装",
-      "unavailable": "暂不可用"
-    },
-    "installState": {
-      "install": "可安装",
-      "reinstall": "已安装",
-      "installed": "已安装",
-      "unavailable": "预览"
-    },
-    "permissions": {
-      "none": "无额外权限",
-      "more": "+{{count}}"
-    },
-    "messages": {
-      "installed": "插件已安装。"
-    },
-    "category": {
-      "all": "全部",
-      "utilities": "工具",
-      "productivity": "效率",
-      "media": "媒体"
     }
   },
   "permissions": {

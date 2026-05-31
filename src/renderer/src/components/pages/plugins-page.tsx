@@ -1,7 +1,11 @@
 import type { ReactNode } from "react"
-import { AlertCircle, FolderPlus, PackagePlus, Plug, RefreshCw, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useMemo, useState } from "react"
+import type { PluginRegistryEntry } from "@/lib/electron"
+import { AlertCircle, FolderPlus, PackagePlus, RefreshCw, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
+import { localize } from "@/components/plugins/view-utils"
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import {
   AlertDialog,
   AlertDialogAction,
@@ -14,8 +18,14 @@ import {
 } from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card"
 import {
   Dialog,
   DialogContent,
@@ -25,10 +35,18 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog"
 import { Input } from "@/components/ui/input"
-import { NativeSelect, NativeSelectOption } from "@/components/ui/native-select"
+import { Label } from "@/components/ui/label"
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import {
+  ElectronIpcError,
   installPluginFolder,
   isElectron,
   listPlugins,
@@ -40,279 +58,268 @@ import {
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
 
-type PluginSourceKind = DeskitPluginSourceKind
-type PluginStatus = DeskitPluginRuntimeStatus
-type PluginPreference = NonNullable<DeskitPluginManifest["contributes"]["preferences"]>[number]
-
-const SOURCE_ORDER: PluginSourceKind[] = ["builtin", "user", "dev"]
-const STATUS_CLASSES: Record<PluginStatus, string> = {
-  active: "border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300",
-  disabled: "border-muted-foreground/25 bg-muted text-muted-foreground",
-  invalid: "border-destructive/30 bg-destructive/10 text-destructive",
-  crashed: "border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300",
-  shadowed: "border-sky-500/30 bg-sky-500/10 text-sky-700 dark:text-sky-300",
-}
+type ManifestPreference = NonNullable<
+  NonNullable<PluginRegistryEntry["manifest"]>["contributes"]["preferences"]
+>[number]
 
 export function PluginsPage() {
-  const { t, i18n } = useTranslation()
-  const [plugins, setPlugins] = useState<DeskitPluginRegistryEntry[]>([])
-  const [selectedPluginId, setSelectedPluginId] = useState<string | null>(null)
-  const [busyPluginId, setBusyPluginId] = useState<string | null>(null)
-  const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
-  const [preferenceValues, setPreferenceValues] = useState<Record<string, unknown>>({})
-  const [pendingUninstall, setPendingUninstall] = useState<DeskitPluginRegistryEntry | null>(null)
+  const { i18n, t } = useTranslation()
+  const electronReady = isElectron()
+  const [plugins, setPlugins] = useState<PluginRegistryEntry[]>([])
+  const [loading, setLoading] = useState(electronReady)
+  const [error, setError] = useState<string | null>(null)
+  const [pending, setPending] = useState<string | null>(null)
+  const [pendingUninstall, setPendingUninstall] = useState<PluginRegistryEntry | null>(null)
   const [folderDialogOpen, setFolderDialogOpen] = useState(false)
   const [folderPath, setFolderPath] = useState("")
-  const electron = isElectron()
 
-  const refresh = useCallback(async () => {
-    if (!isElectron()) return
-    const next = await listPlugins()
-    setPlugins(next)
-    setSelectedPluginId((current) => current ?? next[0]?.pluginId ?? null)
-  }, [])
+  const load = useCallback(async () => {
+    if (!electronReady) return
+    setLoading(true)
+    setError(null)
+    try {
+      setPlugins(await listPlugins())
+    } catch (err) {
+      setError(errorMessage(err))
+    } finally {
+      setLoading(false)
+    }
+  }, [electronReady])
 
   useEffect(() => {
-    if (!electron) return
-    void refresh()
-    return onPluginRegistryChanged((next) => {
-      setPlugins(next)
-      setSelectedPluginId((current) => {
-        if (current && next.some((plugin) => plugin.pluginId === current)) return current
-        return next[0]?.pluginId ?? null
-      })
+    if (!electronReady) return
+    void load()
+    return onPluginRegistryChanged((nextPlugins) => setPlugins(nextPlugins))
+  }, [electronReady, load])
+
+  async function onToggle(plugin: PluginRegistryEntry, enabled: boolean) {
+    await mutate(`toggle:${plugin.pluginId}`, async () => {
+      upsertPlugin(await setPluginEnabled(plugin.pluginId, enabled))
+      toast.success(t(enabled ? "plugins.toasts.enabled" : "plugins.toasts.disabled"))
     })
-  }, [electron, refresh])
-
-  const selected = useMemo(
-    () => plugins.find((plugin) => plugin.pluginId === selectedPluginId) ?? plugins[0],
-    [plugins, selectedPluginId]
-  )
-  const sections = useMemo(
-    () =>
-      SOURCE_ORDER.map((source) => ({
-        source,
-        plugins: plugins.filter((plugin) => plugin.source.kind === source),
-      })),
-    [plugins]
-  )
-
-  async function togglePlugin(plugin: DeskitPluginRegistryEntry, enabled: boolean) {
-    setBusyPluginId(plugin.pluginId)
-    setStatus(null)
-    try {
-      const next = await setPluginEnabled(plugin.pluginId, enabled)
-      setPlugins((current) =>
-        current.map((item) => (item.pluginId === plugin.pluginId ? next : item))
-      )
-      setStatus({ kind: "ok", text: t("plugins.messages.updated") })
-    } catch (err) {
-      setStatus({ kind: "error", text: errorMessage(err) })
-    } finally {
-      setBusyPluginId(null)
-    }
   }
 
-  async function reload(plugin: DeskitPluginRegistryEntry) {
-    setBusyPluginId(plugin.pluginId)
-    setStatus(null)
-    try {
-      const next = await reloadPlugin(plugin.pluginId)
-      if (next) {
-        setPlugins((current) =>
-          current.map((item) => (item.pluginId === plugin.pluginId ? next : item))
-        )
-      } else {
-        await refresh()
-      }
-      setStatus({ kind: "ok", text: t("plugins.messages.reloaded") })
-    } catch (err) {
-      setStatus({ kind: "error", text: errorMessage(err) })
-    } finally {
-      setBusyPluginId(null)
-    }
+  async function onReload(plugin: PluginRegistryEntry) {
+    await mutate(`reload:${plugin.pluginId}`, async () => {
+      const reloaded = await reloadPlugin(plugin.pluginId)
+      if (reloaded) upsertPlugin(reloaded)
+      toast.success(t("plugins.toasts.reloaded"))
+    })
   }
 
-  async function uninstall(plugin: DeskitPluginRegistryEntry) {
-    setBusyPluginId(plugin.pluginId)
-    setStatus(null)
-    try {
+  async function confirmUninstall(plugin: PluginRegistryEntry) {
+    await mutate(`uninstall:${plugin.pluginId}`, async () => {
       await uninstallPlugin(plugin.pluginId)
-      await refresh()
+      setPlugins((current) => current.filter((item) => !samePlugin(item, plugin)))
       setPendingUninstall(null)
-      setStatus({ kind: "ok", text: t("plugins.messages.uninstalled") })
-    } catch (err) {
-      setStatus({ kind: "error", text: errorMessage(err) })
-    } finally {
-      setBusyPluginId(null)
-    }
+      toast.success(t("plugins.toasts.uninstalled"))
+    })
   }
 
-  async function installFolder() {
+  async function onInstallFolder() {
     if (!folderPath.trim()) return
-
-    setStatus(null)
-    try {
+    await mutate("install-folder", async () => {
       const installed = await installPluginFolder(folderPath.trim())
-      await refresh()
-      setSelectedPluginId(installed.pluginId)
+      upsertOrAppendPlugin(installed)
       setFolderPath("")
       setFolderDialogOpen(false)
-      setStatus({ kind: "ok", text: t("plugins.messages.installed") })
-    } catch (err) {
-      setStatus({ kind: "error", text: errorMessage(err) })
-    }
+      toast.success(t("plugins.toasts.installed"))
+    })
   }
 
-  async function updatePreference(
-    plugin: DeskitPluginRegistryEntry,
-    preference: PluginPreference,
+  async function onPreferenceChange(
+    plugin: PluginRegistryEntry,
+    preference: ManifestPreference,
     value: unknown
   ) {
-    const key = preferenceKey(plugin.pluginId, preference.id)
-    setPreferenceValues((current) => ({ ...current, [key]: value }))
-    try {
+    await mutate(`preference:${plugin.pluginId}:${preference.id}`, async () => {
       await setPluginPreference(plugin.pluginId, preference.id, value)
-      setStatus({ kind: "ok", text: t("plugins.messages.preferenceSaved") })
+      setPlugins((current) =>
+        current.map((item) =>
+          samePlugin(item, plugin)
+            ? {
+                ...item,
+                preferences: {
+                  ...item.preferences,
+                  [preference.id]: value,
+                },
+              }
+            : item
+        )
+      )
+      toast.success(t("plugins.toasts.preferenceSaved"))
+    })
+  }
+
+  async function mutate(key: string, action: () => Promise<void>) {
+    setPending(key)
+    try {
+      await action()
+      setError(null)
     } catch (err) {
-      setStatus({ kind: "error", text: errorMessage(err) })
+      const message = errorMessage(err)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setPending(null)
     }
   }
 
-  if (!electron) {
+  function upsertPlugin(plugin: PluginRegistryEntry) {
+    setPlugins((current) => current.map((item) => (samePlugin(item, plugin) ? plugin : item)))
+  }
+
+  function upsertOrAppendPlugin(plugin: PluginRegistryEntry) {
+    setPlugins((current) =>
+      current.some((item) => samePlugin(item, plugin))
+        ? current.map((item) => (samePlugin(item, plugin) ? plugin : item))
+        : [...current, plugin]
+    )
+  }
+
+  if (!electronReady) {
     return (
-      <div className="flex flex-col gap-6">
-        <PluginsHeader />
-        <Card>
-          <CardContent className="flex items-center gap-3 py-8 text-sm text-muted-foreground">
-            <AlertCircle className="size-4" aria-hidden />
-            {t("plugins.electronRequired")}
-          </CardContent>
-        </Card>
-      </div>
+      <PageFrame title={t("plugins.title")} subtitle={t("plugins.subtitle")}>
+        <Alert>
+          <AlertCircle className="size-4" aria-hidden />
+          <AlertTitle>{t("plugins.unavailableTitle")}</AlertTitle>
+          <AlertDescription>{t("plugins.unavailableBody")}</AlertDescription>
+        </Alert>
+      </PageFrame>
     )
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <PluginsHeader />
-
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Badge variant="outline">{t("plugins.count", { count: plugins.length })}</Badge>
-          {status && (
-            <span
-              role="status"
-              className={status.kind === "ok" ? "text-emerald-600" : "text-destructive"}
-            >
-              {status.text}
-            </span>
-          )}
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
+    <PageFrame
+      title={t("plugins.title")}
+      subtitle={t("plugins.subtitle")}
+      action={
+        <div className="flex flex-wrap justify-end gap-2">
           <Button
-            type="button"
             variant="outline"
             size="sm"
+            disabled={pending === "install-folder"}
             onClick={() => setFolderDialogOpen(true)}
           >
-            <FolderPlus className="size-3.5" aria-hidden />
+            <FolderPlus className="size-4" aria-hidden />
             {t("plugins.actions.addFolder")}
           </Button>
-          <Button type="button" variant="outline" size="sm" disabled>
-            <PackagePlus className="size-3.5" aria-hidden />
+          <Button variant="outline" size="sm" disabled>
+            <PackagePlus className="size-4" aria-hidden />
             {t("plugins.actions.installPackage")}
           </Button>
-          <Button type="button" variant="outline" size="sm" onClick={() => void refresh()}>
-            <RefreshCw className="size-3.5" aria-hidden />
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden />
             {t("plugins.actions.refresh")}
           </Button>
         </div>
-      </div>
+      }
+    >
+      {!loading && plugins.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          {t("plugins.installedCount", { count: plugins.length })}
+        </p>
+      )}
 
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(320px,0.95fr)]">
-        <Card className="overflow-hidden">
-          <CardHeader className="border-b">
-            <CardTitle className="text-base">{t("plugins.listTitle")}</CardTitle>
-            <CardDescription>{t("plugins.listSubtitle")}</CardDescription>
+      {error && (
+        <Alert variant="destructive">
+          <AlertCircle className="size-4" aria-hidden />
+          <AlertTitle>{t("plugins.errorTitle")}</AlertTitle>
+          <AlertDescription>{error}</AlertDescription>
+        </Alert>
+      )}
+
+      {loading ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("plugins.loading")}</CardTitle>
+            <CardDescription>{t("plugins.loadingHint")}</CardDescription>
           </CardHeader>
-          <CardContent className="p-0">
-            {plugins.length === 0 ? (
-              <div className="flex min-h-44 items-center justify-center px-6 text-sm text-muted-foreground">
-                {t("plugins.empty")}
-              </div>
-            ) : (
-              <div className="divide-y">
-                {sections.map((section) => (
-                  <PluginSection
-                    key={section.source}
-                    source={section.source}
-                    plugins={section.plugins}
-                    selectedPluginId={selected?.pluginId}
-                    busyPluginId={busyPluginId}
-                    locale={i18n.language}
-                    onSelect={setSelectedPluginId}
-                    onToggle={togglePlugin}
-                    onReload={reload}
-                    onUninstall={setPendingUninstall}
-                  />
-                ))}
-              </div>
-            )}
-          </CardContent>
         </Card>
-
-        <PluginDetail
-          plugin={selected}
-          busy={selected ? busyPluginId === selected.pluginId : false}
-          preferenceValues={preferenceValues}
-          locale={i18n.language}
-          onPreferenceChange={updatePreference}
-        />
-      </div>
+      ) : plugins.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("plugins.emptyTitle")}</CardTitle>
+            <CardDescription>{t("plugins.emptyBody")}</CardDescription>
+          </CardHeader>
+        </Card>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {plugins.map((plugin) => (
+            <PluginCard
+              key={`${plugin.pluginId}:${plugin.source.kind}:${plugin.rootDir}`}
+              locale={i18n.language}
+              pending={pending}
+              plugin={plugin}
+              onPreferenceChange={onPreferenceChange}
+              onReload={onReload}
+              onToggle={onToggle}
+              onUninstall={setPendingUninstall}
+            />
+          ))}
+        </div>
+      )}
 
       <InstallFolderDialog
-        open={folderDialogOpen}
         folderPath={folderPath}
-        onOpenChange={setFolderDialogOpen}
+        open={folderDialogOpen}
+        pending={pending === "install-folder"}
         onFolderPathChange={setFolderPath}
-        onInstall={() => void installFolder()}
+        onInstall={() => void onInstallFolder()}
+        onOpenChange={setFolderDialogOpen}
       />
       <UninstallConfirmDialog
-        plugin={pendingUninstall}
+        busy={pendingUninstall ? pending === `uninstall:${pendingUninstall.pluginId}` : false}
         locale={i18n.language}
-        busy={pendingUninstall ? busyPluginId === pendingUninstall.pluginId : false}
+        plugin={pendingUninstall}
+        onConfirm={(plugin) => void confirmUninstall(plugin)}
         onOpenChange={(open) => {
           if (!open) setPendingUninstall(null)
         }}
-        onConfirm={(plugin) => void uninstall(plugin)}
       />
+    </PageFrame>
+  )
+}
+
+function PageFrame({
+  action,
+  children,
+  subtitle,
+  title,
+}: {
+  action?: ReactNode
+  children: ReactNode
+  subtitle: string
+  title: string
+}) {
+  return (
+    <div className="flex flex-col gap-6">
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-2xl font-semibold tracking-tight">{title}</h1>
+          <p className="text-sm text-muted-foreground">{subtitle}</p>
+        </div>
+        {action}
+      </header>
+      {children}
     </div>
   )
 }
 
-function PluginsHeader() {
-  const { t } = useTranslation()
-  return (
-    <header className="flex flex-col gap-1">
-      <h1 className="text-2xl font-semibold tracking-tight">{t("plugins.title")}</h1>
-      <p className="text-sm text-muted-foreground">{t("plugins.subtitle")}</p>
-    </header>
-  )
-}
-
 function InstallFolderDialog({
-  open,
   folderPath,
-  onOpenChange,
   onFolderPathChange,
   onInstall,
+  onOpenChange,
+  open,
+  pending,
 }: {
-  open: boolean
   folderPath: string
-  onOpenChange: (open: boolean) => void
   onFolderPathChange: (value: string) => void
   onInstall: () => void
+  onOpenChange: (open: boolean) => void
+  open: boolean
+  pending: boolean
 }) {
   const { t } = useTranslation()
   return (
@@ -325,17 +332,23 @@ function InstallFolderDialog({
         <label className="grid gap-2 text-sm">
           <span className="font-medium">{t("plugins.installFolder.pathLabel")}</span>
           <Input
+            autoFocus
+            disabled={pending}
+            placeholder={t("plugins.installFolder.pathPlaceholder")}
             value={folderPath}
             onChange={(event) => onFolderPathChange(event.target.value)}
-            placeholder={t("plugins.installFolder.pathPlaceholder")}
-            autoFocus
           />
         </label>
         <DialogFooter>
-          <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+          <Button
+            type="button"
+            variant="outline"
+            disabled={pending}
+            onClick={() => onOpenChange(false)}
+          >
             {t("plugins.actions.cancel")}
           </Button>
-          <Button type="button" disabled={!folderPath.trim()} onClick={onInstall}>
+          <Button type="button" disabled={!folderPath.trim() || pending} onClick={onInstall}>
             {t("plugins.actions.install")}
           </Button>
         </DialogFooter>
@@ -345,30 +358,31 @@ function InstallFolderDialog({
 }
 
 function UninstallConfirmDialog({
-  plugin,
-  locale,
   busy,
-  onOpenChange,
+  locale,
   onConfirm,
+  onOpenChange,
+  plugin,
 }: {
-  plugin: DeskitPluginRegistryEntry | null
-  locale: string
   busy: boolean
+  locale: string
+  onConfirm: (plugin: PluginRegistryEntry) => void
   onOpenChange: (open: boolean) => void
-  onConfirm: (plugin: DeskitPluginRegistryEntry) => void
+  plugin: PluginRegistryEntry | null
 }) {
   const { t } = useTranslation()
-  const label = plugin?.manifest
-    ? localized(plugin.manifest.displayName, locale)
-    : (plugin?.pluginId ?? "")
-  const invalid = plugin?.status === "invalid"
+  const label = plugin
+    ? localize(plugin.manifest?.displayName, locale) || plugin.manifest?.name || plugin.pluginId
+    : ""
   return (
     <AlertDialog open={Boolean(plugin)} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>{t("plugins.confirm.title", { name: label })}</AlertDialogTitle>
           <AlertDialogDescription>
-            {invalid ? t("plugins.confirm.uninstallInvalid") : t("plugins.confirm.uninstall")}
+            {plugin?.status === "invalid"
+              ? t("plugins.confirm.uninstallInvalid")
+              : t("plugins.confirm.uninstall")}
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -388,376 +402,284 @@ function UninstallConfirmDialog({
   )
 }
 
-function PluginSection({
-  source,
-  plugins,
-  selectedPluginId,
-  busyPluginId,
-  locale,
-  onSelect,
-  onToggle,
-  onReload,
-  onUninstall,
-}: {
-  source: PluginSourceKind
-  plugins: DeskitPluginRegistryEntry[]
-  selectedPluginId?: string
-  busyPluginId: string | null
-  locale: string
-  onSelect: (pluginId: string) => void
-  onToggle: (plugin: DeskitPluginRegistryEntry, enabled: boolean) => void | Promise<void>
-  onReload: (plugin: DeskitPluginRegistryEntry) => void | Promise<void>
-  onUninstall: (plugin: DeskitPluginRegistryEntry) => void | Promise<void>
-}) {
-  const { t } = useTranslation()
-  if (plugins.length === 0) return null
-  return (
-    <section className="py-2">
-      <div className="flex items-center justify-between px-4 py-2">
-        <h2 className="text-xs font-medium uppercase text-muted-foreground">
-          {t(`plugins.source.${source}`)}
-        </h2>
-        <Badge variant="outline">{plugins.length}</Badge>
-      </div>
-      <div className="flex flex-col">
-        {plugins.map((plugin) => {
-          const manifest = plugin.manifest
-          const selected = selectedPluginId === plugin.pluginId
-          const busy = busyPluginId === plugin.pluginId
-          const toggleable =
-            Boolean(manifest) && plugin.status !== "invalid" && plugin.status !== "shadowed"
-          const uninstallable = plugin.source.kind !== "builtin" || plugin.status === "invalid"
-          return (
-            <div
-              key={`${plugin.pluginId}:${plugin.source.kind}:${plugin.rootDir}`}
-              role="button"
-              tabIndex={0}
-              onClick={() => onSelect(plugin.pluginId)}
-              onKeyDown={(event) => {
-                if (event.key !== "Enter" && event.key !== " ") return
-                event.preventDefault()
-                onSelect(plugin.pluginId)
-              }}
-              className={cn(
-                "grid w-full grid-cols-[minmax(0,1fr)_auto] gap-3 px-4 py-3 text-left transition-colors",
-                "hover:bg-accent/70 focus-visible:bg-accent focus-visible:outline-none",
-                selected && "bg-accent"
-              )}
-            >
-              <span className="flex min-w-0 items-start gap-3">
-                <span className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-md border bg-background">
-                  <Plug className="size-4 text-muted-foreground" aria-hidden />
-                </span>
-                <span className="min-w-0">
-                  <span className="flex min-w-0 flex-wrap items-center gap-2">
-                    <span className="truncate text-sm font-medium">
-                      {manifest ? localized(manifest.displayName, locale) : plugin.pluginId}
-                    </span>
-                    {manifest?.version && (
-                      <span className="text-xs text-muted-foreground">v{manifest.version}</span>
-                    )}
-                  </span>
-                  <span className="mt-1 line-clamp-2 text-xs text-muted-foreground">
-                    {manifest ? localized(manifest.description, locale) : plugin.error}
-                  </span>
-                </span>
-              </span>
-
-              <span className="flex flex-col items-end gap-2">
-                <StatusBadge status={plugin.status} />
-                <span className="flex items-center gap-1">
-                  <Switch
-                    checked={plugin.status === "active"}
-                    disabled={!toggleable || busy}
-                    onClick={(event) => event.stopPropagation()}
-                    onCheckedChange={(checked) => void onToggle(plugin, checked)}
-                    aria-label={t("plugins.actions.enable")}
-                  />
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={busy}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void onReload(plugin)
-                    }}
-                    aria-label={t("plugins.actions.reload")}
-                  >
-                    <RefreshCw className={cn("size-3", busy && "animate-spin")} aria-hidden />
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon-xs"
-                    disabled={!uninstallable || busy}
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void onUninstall(plugin)
-                    }}
-                    aria-label={t("plugins.actions.uninstall")}
-                  >
-                    <Trash2 className="size-3" aria-hidden />
-                  </Button>
-                </span>
-              </span>
-            </div>
-          )
-        })}
-      </div>
-    </section>
-  )
-}
-
-function PluginDetail({
-  plugin,
-  busy,
-  preferenceValues,
+function PluginCard({
   locale,
   onPreferenceChange,
+  onReload,
+  onToggle,
+  onUninstall,
+  pending,
+  plugin,
 }: {
-  plugin?: DeskitPluginRegistryEntry
-  busy: boolean
-  preferenceValues: Record<string, unknown>
   locale: string
   onPreferenceChange: (
-    plugin: DeskitPluginRegistryEntry,
-    preference: PluginPreference,
+    plugin: PluginRegistryEntry,
+    preference: ManifestPreference,
     value: unknown
-  ) => void | Promise<void>
+  ) => Promise<void>
+  onReload: (plugin: PluginRegistryEntry) => Promise<void>
+  onToggle: (plugin: PluginRegistryEntry, enabled: boolean) => Promise<void>
+  onUninstall: (plugin: PluginRegistryEntry) => void
+  pending: string | null
+  plugin: PluginRegistryEntry
 }) {
   const { t } = useTranslation()
-  if (!plugin) {
-    return (
-      <Card>
-        <CardContent className="flex min-h-64 items-center justify-center px-6 text-sm text-muted-foreground">
-          {t("plugins.detail.empty")}
-        </CardContent>
-      </Card>
-    )
-  }
-
   const manifest = plugin.manifest
-  const preferences = manifest?.contributes.preferences ?? []
-  const commands = manifest?.contributes.commands ?? []
+  const title = localize(manifest?.displayName, locale) || manifest?.name || plugin.pluginId
+  const description = localize(manifest?.description, locale) || plugin.error || plugin.rootDir
+  const togglePending = pending === `toggle:${plugin.pluginId}`
+  const reloadPending = pending === `reload:${plugin.pluginId}`
+  const uninstallPending = pending === `uninstall:${plugin.pluginId}`
+  const canToggle = plugin.status === "active" || plugin.status === "disabled"
+  const canUninstall = plugin.source.kind !== "builtin" || plugin.status === "invalid"
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="border-b">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <CardTitle className="truncate text-base">
-              {manifest ? localized(manifest.displayName, locale) : plugin.pluginId}
+    <Card className={cn("gap-4", plugin.status === "invalid" && "border-destructive/50")}>
+      <CardHeader>
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0 space-y-2">
+            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
+              <span className="truncate">{title}</span>
+              <StatusBadge status={plugin.status} />
+              <Badge variant="outline">{plugin.pluginId}</Badge>
             </CardTitle>
-            <CardDescription className="mt-1 break-all">{plugin.pluginId}</CardDescription>
+            <CardDescription>{description}</CardDescription>
           </div>
-          <StatusBadge status={plugin.status} />
+          <CardAction className="static col-auto row-auto justify-self-auto">
+            <div className="flex items-center gap-2">
+              <Label htmlFor={`plugin-enabled-${plugin.pluginId}`} className="text-xs">
+                {t(
+                  plugin.status === "disabled"
+                    ? "plugins.actions.enable"
+                    : "plugins.actions.disable"
+                )}
+              </Label>
+              <Switch
+                id={`plugin-enabled-${plugin.pluginId}`}
+                size="sm"
+                checked={plugin.status === "active"}
+                disabled={!canToggle || togglePending}
+                onCheckedChange={(checked) => void onToggle(plugin, checked)}
+              />
+            </div>
+          </CardAction>
         </div>
       </CardHeader>
-      <CardContent className="flex flex-col gap-5 p-4">
-        {manifest?.description && (
-          <p className="text-sm text-muted-foreground">{localized(manifest.description, locale)}</p>
-        )}
 
-        <div className="grid gap-2 text-sm">
-          <MetadataRow label={t("plugins.detail.version")} value={manifest?.version ?? "—"} />
-          <MetadataRow label={t("plugins.detail.author")} value={manifest?.author ?? "—"} />
-          <MetadataRow
-            label={t("plugins.detail.source")}
-            value={t(`plugins.source.${plugin.source.kind}`)}
-          />
-          <MetadataRow label={t("plugins.detail.path")} value={plugin.rootDir} mono />
-          {plugin.error && <MetadataRow label={t("plugins.detail.error")} value={plugin.error} />}
+      <CardContent className="flex flex-col gap-4">
+        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+          <span>
+            {t("plugins.meta.version")}: {manifest?.version ?? "—"}
+          </span>
+          <span>
+            {t("plugins.meta.author")}: {manifest?.author ?? "—"}
+          </span>
+          <span>
+            {t("plugins.meta.commands")}: {manifest?.contributes.commands.length ?? 0}
+          </span>
+          <span className="truncate" title={plugin.rootDir}>
+            {t("plugins.meta.path")}: {plugin.rootDir}
+          </span>
         </div>
 
+        {plugin.error && (
+          <Alert variant="destructive">
+            <AlertCircle className="size-4" aria-hidden />
+            <AlertTitle>{t("plugins.pluginErrorTitle")}</AlertTitle>
+            <AlertDescription>{plugin.error}</AlertDescription>
+          </Alert>
+        )}
+
+        {manifest?.contributes.preferences?.length ? (
+          <>
+            <Separator />
+            <PluginPreferences
+              locale={locale}
+              pending={pending}
+              plugin={plugin}
+              preferences={manifest.contributes.preferences}
+              onPreferenceChange={onPreferenceChange}
+            />
+          </>
+        ) : null}
+
         <Separator />
-
-        <DetailSection title={t("plugins.detail.commands")}>
-          {commands.length === 0 ? (
-            <EmptyDetailText>{t("plugins.detail.noCommands")}</EmptyDetailText>
-          ) : (
-            <div className="flex flex-col gap-2">
-              {commands.map((command) => (
-                <div
-                  key={command.id}
-                  className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-                >
-                  <div className="min-w-0">
-                    <p className="truncate text-sm font-medium">
-                      {localized(command.title, locale)}
-                    </p>
-                    <p className="truncate text-xs text-muted-foreground">{command.id}</p>
-                  </div>
-                  <Badge variant="outline">{command.mode}</Badge>
-                </div>
-              ))}
-            </div>
-          )}
-        </DetailSection>
-
-        <DetailSection title={t("plugins.detail.permissions")}>
-          {manifest?.permissions.length ? (
-            <div className="flex flex-wrap gap-2">
-              {manifest.permissions.map((permission) => (
-                <Badge key={permission} variant="secondary">
-                  {t(`permissions.${permission}`, { defaultValue: permission })}
-                </Badge>
-              ))}
-            </div>
-          ) : (
-            <EmptyDetailText>{t("plugins.detail.noPermissions")}</EmptyDetailText>
-          )}
-        </DetailSection>
-
-        <DetailSection title={t("plugins.detail.preferences")}>
-          {preferences.length === 0 ? (
-            <EmptyDetailText>{t("plugins.detail.noPreferences")}</EmptyDetailText>
-          ) : (
-            <div className="flex flex-col gap-3">
-              {preferences.map((preference) => (
-                <PreferenceField
-                  key={preference.id}
-                  plugin={plugin}
-                  preference={preference}
-                  value={preferenceValues[preferenceKey(plugin.pluginId, preference.id)]}
-                  locale={locale}
-                  disabled={busy}
-                  onChange={onPreferenceChange}
-                />
-              ))}
-            </div>
-          )}
-        </DetailSection>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={reloadPending}
+            onClick={() => void onReload(plugin)}
+          >
+            <RefreshCw className={cn("size-4", reloadPending && "animate-spin")} aria-hidden />
+            {t("plugins.actions.reload")}
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={!canUninstall || uninstallPending}
+            onClick={() => onUninstall(plugin)}
+          >
+            <Trash2 className="size-4" aria-hidden />
+            {t("plugins.actions.uninstall")}
+          </Button>
+        </div>
       </CardContent>
     </Card>
   )
 }
 
-function PreferenceField({
-  plugin,
-  preference,
-  value,
+function PluginPreferences({
   locale,
-  disabled,
-  onChange,
+  onPreferenceChange,
+  pending,
+  plugin,
+  preferences,
 }: {
-  plugin: DeskitPluginRegistryEntry
-  preference: PluginPreference
-  value: unknown
   locale: string
-  disabled: boolean
-  onChange: (
-    plugin: DeskitPluginRegistryEntry,
-    preference: PluginPreference,
+  onPreferenceChange: (
+    plugin: PluginRegistryEntry,
+    preference: ManifestPreference,
     value: unknown
-  ) => void | Promise<void>
+  ) => Promise<void>
+  pending: string | null
+  plugin: PluginRegistryEntry
+  preferences: ManifestPreference[]
 }) {
-  const label = localized(preference.label, locale)
-  const current = value ?? preference.default
-  if (preference.type === "checkbox") {
-    return (
-      <label className="flex items-center justify-between gap-4 rounded-md border px-3 py-2 text-sm">
-        <span>{label}</span>
-        <Checkbox
-          checked={Boolean(current)}
-          disabled={disabled}
-          onCheckedChange={(checked) => void onChange(plugin, preference, checked === true)}
-        />
-      </label>
-    )
-  }
-  if (preference.type === "select") {
-    return (
-      <label className="grid gap-1.5 text-sm">
-        <span className="font-medium">{label}</span>
-        <NativeSelect
-          value={typeof current === "string" ? current : ""}
-          disabled={disabled}
-          onChange={(event) => void onChange(plugin, preference, event.target.value)}
-        >
-          {(preference.options ?? []).map((option) => (
-            <NativeSelectOption key={option.value} value={option.value}>
-              {localized(option.label, locale)}
-            </NativeSelectOption>
-          ))}
-        </NativeSelect>
-      </label>
-    )
-  }
+  const { t } = useTranslation()
   return (
-    <label className="grid gap-1.5 text-sm">
-      <span className="font-medium">{label}</span>
-      <Input
-        type={preference.type === "number" ? "number" : "text"}
-        value={typeof current === "string" || typeof current === "number" ? current : ""}
-        disabled={disabled}
-        onChange={(event) =>
-          void onChange(
-            plugin,
-            preference,
-            preference.type === "number" ? event.target.valueAsNumber : event.target.value
-          )
-        }
-      />
-    </label>
-  )
-}
-
-function DetailSection({ title, children }: { title: string; children: ReactNode }) {
-  return (
-    <section className="flex flex-col gap-2">
-      <h3 className="text-xs font-medium uppercase text-muted-foreground">{title}</h3>
-      {children}
-    </section>
-  )
-}
-
-function EmptyDetailText({ children }: { children: ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>
-}
-
-function MetadataRow({
-  label,
-  value,
-  mono = false,
-}: {
-  label: string
-  value: string
-  mono?: boolean
-}) {
-  return (
-    <div className="grid grid-cols-[7rem_minmax(0,1fr)] gap-3">
-      <span className="text-muted-foreground">{label}</span>
-      <span className={cn("min-w-0 truncate", mono && "font-mono text-xs")}>{value}</span>
+    <div className="flex flex-col gap-3">
+      <div>
+        <h3 className="text-sm font-medium">{t("plugins.preferences.title")}</h3>
+        <p className="text-xs text-muted-foreground">{t("plugins.preferences.body")}</p>
+      </div>
+      <div className="grid gap-3 sm:grid-cols-2">
+        {preferences.map((preference) => (
+          <PreferenceControl
+            key={preference.id}
+            locale={locale}
+            pending={pending === `preference:${plugin.pluginId}:${preference.id}`}
+            plugin={plugin}
+            preference={preference}
+            onPreferenceChange={onPreferenceChange}
+          />
+        ))}
+      </div>
     </div>
   )
 }
 
-function StatusBadge({ status }: { status: PluginStatus }) {
+function PreferenceControl({
+  locale,
+  onPreferenceChange,
+  pending,
+  plugin,
+  preference,
+}: {
+  locale: string
+  onPreferenceChange: (
+    plugin: PluginRegistryEntry,
+    preference: ManifestPreference,
+    value: unknown
+  ) => Promise<void>
+  pending: boolean
+  plugin: PluginRegistryEntry
+  preference: ManifestPreference
+}) {
   const { t } = useTranslation()
+  const id = `plugin-preference-${plugin.pluginId}-${preference.id}`
+  const value =
+    plugin.preferences && preference.id in plugin.preferences
+      ? plugin.preferences[preference.id]
+      : preference.default
+  const label = localize(preference.label, locale) || preference.id
+
   return (
-    <Badge variant="outline" className={STATUS_CLASSES[status]}>
-      {t(`plugins.status.${status}`)}
-    </Badge>
+    <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
+      <Label htmlFor={id}>{label}</Label>
+      {preference.type === "checkbox" ? (
+        <Switch
+          id={id}
+          checked={Boolean(value)}
+          disabled={pending}
+          onCheckedChange={(checked) => void onPreferenceChange(plugin, preference, checked)}
+        />
+      ) : preference.type === "select" ? (
+        <Select
+          value={typeof value === "string" ? value : (preference.options?.[0]?.value ?? "")}
+          disabled={pending || !preference.options?.length}
+          onValueChange={(nextValue) => void onPreferenceChange(plugin, preference, nextValue)}
+        >
+          <SelectTrigger id={id} className="w-full">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            {preference.options?.map((option) => (
+              <SelectItem key={option.value} value={option.value}>
+                {localize(option.label, locale) || option.value}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+      ) : preference.type === "number" ? (
+        <Input
+          id={id}
+          key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+          type="number"
+          disabled={pending}
+          defaultValue={typeof value === "number" ? String(value) : ""}
+          onBlur={(event) => {
+            const raw = event.currentTarget.value.trim()
+            if (!raw) return
+            const nextValue = Number(raw)
+            if (!Number.isFinite(nextValue)) {
+              toast.error(t("plugins.preferences.invalidNumber"))
+              event.currentTarget.value = typeof value === "number" ? String(value) : ""
+              return
+            }
+            if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
+          }}
+        />
+      ) : (
+        <Input
+          id={id}
+          key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+          disabled={pending}
+          defaultValue={typeof value === "string" ? value : ""}
+          onBlur={(event) => {
+            const nextValue = event.currentTarget.value
+            if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
+          }}
+        />
+      )}
+    </div>
   )
 }
 
-function localized(value: DeskitLocalizedString, locale: string): string {
-  if (typeof value === "string") return value
-  return (
-    value[locale] ??
-    value[locale.split("-")[0]] ??
-    value.en ??
-    value["zh-CN"] ??
-    Object.values(value)[0] ??
-    ""
-  )
+function StatusBadge({ status }: { status: PluginRegistryEntry["status"] }) {
+  const { t } = useTranslation()
+  const variant =
+    status === "active"
+      ? "default"
+      : status === "disabled"
+        ? "secondary"
+        : status === "shadowed"
+          ? "outline"
+          : "destructive"
+
+  return <Badge variant={variant}>{t(`plugins.status.${status}`)}</Badge>
 }
 
-function preferenceKey(pluginId: string, preferenceId: string): string {
-  return `${pluginId}:${preferenceId}`
+function samePlugin(left: PluginRegistryEntry, right: PluginRegistryEntry): boolean {
+  return (
+    left.pluginId === right.pluginId &&
+    left.rootDir === right.rootDir &&
+    left.source.kind === right.source.kind
+  )
 }
 
 function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
+  if (err instanceof ElectronIpcError) return err.message
+  if (err instanceof Error) return err.message
+  return String(err)
 }

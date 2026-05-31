@@ -103,6 +103,7 @@ declare global {
     source: DeskitPluginSource
     status: DeskitPluginRuntimeStatus
     manifest?: DeskitPluginManifest
+    preferences?: Record<string, unknown>
     error?: string
     shadowedBy?: DeskitPluginSourceKind
     loadedAt?: number
@@ -132,6 +133,7 @@ declare global {
       launchApp: (id: string) => Promise<boolean>
       refreshApps: () => Promise<LauncherAppEntry[]>
       hideLauncher: () => Promise<void>
+      openExternalUrl: (url: string) => Promise<boolean>
       notifyLauncherReady: () => void
       openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
       toggleFloatingBallMenu: () => Promise<void>

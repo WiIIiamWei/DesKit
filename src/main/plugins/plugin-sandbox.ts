@@ -8,6 +8,7 @@ import vm from "node:vm"
 import { commandInvocation } from "./types"
 
 type TimerCallback = (...args: unknown[]) => void
+type SandboxHookPhase = PluginInvokeRequest["phase"] | "dispose"
 
 export class PluginSandboxError extends Error {
   constructor(message: string) {
@@ -31,6 +32,37 @@ interface LoadedPlugin extends PluginSandboxModule {
 interface CommonJSModule {
   exports: unknown
 }
+
+interface SandboxHookRequest {
+  commandId: string
+  phase: SandboxHookPhase
+  invocation?: unknown
+  searchText?: string
+  actionId?: string
+  actionPayload?: unknown
+}
+
+const invokeRequestKey = "__deskitInvokeRequest"
+const invokeContextKey = "__deskitInvokeContext"
+const invokeHookScript = `
+(() => {
+  const request = globalThis.${invokeRequestKey}
+  const ctx = globalThis.${invokeContextKey}
+  const handler = module.exports.commands[request.commandId]
+  if (request.phase === "run") return handler.run(request.invocation, ctx)
+  if (request.phase === "onSearchChange") return handler.onSearchChange(request.searchText, ctx)
+  if (request.phase === "onAction") return handler.onAction(request.actionId, request.actionPayload, ctx)
+  return handler.dispose(ctx)
+})()
+`
+
+// Compiled once: the hook body has no per-call literals (it reads the
+// request/ctx from injected globals), so the same Script is reused across
+// every invoke. onSearchChange fires on every keystroke, so avoiding a
+// recompile per call is a real saving.
+const compiledInvokeHookScript = new vm.Script(invokeHookScript, {
+  filename: "deskit-plugin:invoke-hook",
+})
 
 // P0 isolation is a lightweight compatibility boundary. node:vm lets the host
 // curate globals and enforce timeouts, but it is not a strong security sandbox.
@@ -116,16 +148,45 @@ export class PluginSandbox {
     const pluginCtx = this.options.bridge.createContext(request.pluginId, plugin.manifest)
     if (request.phase === "run") {
       return this.withTimeout(
-        handler.run(commandInvocation(request.commandId, request.payload), pluginCtx)
+        this.runHookInContext(
+          plugin,
+          {
+            commandId: request.commandId,
+            phase: "run",
+            invocation: commandInvocation(request.commandId, request.payload),
+          },
+          pluginCtx
+        )
       )
     }
     if (request.phase === "onSearchChange") {
       if (!handler.onSearchChange) return undefined
-      return this.withTimeout(handler.onSearchChange(String(request.payload ?? ""), pluginCtx))
+      return this.withTimeout(
+        this.runHookInContext(
+          plugin,
+          {
+            commandId: request.commandId,
+            phase: "onSearchChange",
+            searchText: String(request.payload ?? ""),
+          },
+          pluginCtx
+        )
+      )
     }
     if (!handler.onAction) return undefined
     const action = normalizeActionPayload(request.payload)
-    return this.withTimeout(handler.onAction(action.actionId, action.payload, pluginCtx))
+    return this.withTimeout(
+      this.runHookInContext(
+        plugin,
+        {
+          commandId: request.commandId,
+          phase: "onAction",
+          actionId: action.actionId,
+          actionPayload: action.payload,
+        },
+        pluginCtx
+      )
+    )
   }
 
   async disposeCommand(pluginId: string, commandId: string): Promise<void> {
@@ -133,7 +194,9 @@ export class PluginSandbox {
     const handler = plugin?.module.commands[commandId]
     if (!plugin || !handler?.dispose) return
     const pluginCtx = this.options.bridge.createContext(pluginId, plugin.manifest)
-    await this.withTimeout(handler.dispose(pluginCtx))
+    await this.withTimeout(
+      this.runHookInContext(plugin, { commandId, phase: "dispose" }, pluginCtx)
+    )
   }
 
   getLoadedModule(pluginId: string): PluginSandboxModule | undefined {
@@ -156,6 +219,29 @@ export class PluginSandbox {
       ])
     } finally {
       if (timer) clearTimeout(timer)
+    }
+  }
+
+  private runHookInContext<T>(
+    plugin: LoadedPlugin,
+    request: SandboxHookRequest,
+    pluginCtx: unknown
+  ): Promise<T> | T {
+    const sandboxGlobals = plugin.sandboxVm as Record<string, unknown>
+    sandboxGlobals[invokeRequestKey] = request
+    sandboxGlobals[invokeContextKey] = pluginCtx
+    try {
+      return compiledInvokeHookScript.runInContext(plugin.sandboxVm, {
+        timeout: this.invokeTimeoutMs,
+      }) as Promise<T> | T
+    } catch (err) {
+      if (isVmTimeout(err)) {
+        throw new PluginSandboxError(`Plugin call exceeded ${this.invokeTimeoutMs}ms`)
+      }
+      throw err
+    } finally {
+      delete sandboxGlobals[invokeRequestKey]
+      delete sandboxGlobals[invokeContextKey]
     }
   }
 }
@@ -243,4 +329,15 @@ function resolveInside(rootDir: string, relativePath: string): string {
     throw new PluginSandboxError("Plugin main path escapes the plugin directory")
   }
   return target
+}
+
+function isVmTimeout(err: unknown): boolean {
+  // node:vm reports a synchronous timeout with this fixed message; there is
+  // no error code to match on, so the string check is the documented signal.
+  return Boolean(
+    err &&
+    typeof err === "object" &&
+    typeof (err as { message?: unknown }).message === "string" &&
+    /Script execution timed out/.test((err as { message: string }).message)
+  )
 }

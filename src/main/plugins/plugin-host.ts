@@ -119,15 +119,16 @@ export class PluginHost {
   }
 
   list(): PluginRegistryEntry[] {
-    return this.registry.list()
+    return this.registry.list().map((entry) => this.withPreferences(entry))
   }
 
   get(pluginId: string): PluginRegistryEntry | undefined {
-    return this.registry.get(pluginId)
+    const entry = this.registry.get(pluginId)
+    return entry ? this.withPreferences(entry) : undefined
   }
 
-  setEnabled(pluginId: string, enabled: boolean): Promise<PluginRegistryEntry> {
-    return this.registry.setEnabled(pluginId, enabled)
+  async setEnabled(pluginId: string, enabled: boolean): Promise<PluginRegistryEntry> {
+    return this.withPreferences(await this.registry.setEnabled(pluginId, enabled))
   }
 
   searchCommands(query: string, locale?: string, limit?: number): PluginCommandResult[] {
@@ -209,7 +210,8 @@ export class PluginHost {
 
   async reload(pluginId?: string): Promise<PluginRegistryEntry | undefined> {
     await this.init()
-    return pluginId ? this.registry.get(pluginId) : undefined
+    const entry = pluginId ? this.registry.get(pluginId) : undefined
+    return entry ? this.withPreferences(entry) : undefined
   }
 
   async flush(): Promise<void> {
@@ -294,6 +296,14 @@ export class PluginHost {
           pluginId: manifest.id,
         }
       )
+    }
+  }
+
+  private withPreferences(entry: PluginRegistryEntry): PluginRegistryEntry {
+    if (!entry.manifest) return entry
+    return {
+      ...entry,
+      preferences: this.preferencesFor(entry.pluginId, entry.manifest),
     }
   }
 }

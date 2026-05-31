@@ -64,6 +64,10 @@ export async function hideLauncher(): Promise<void> {
   await api().hideLauncher()
 }
 
+export async function openExternalUrl(url: string): Promise<boolean> {
+  return api().openExternalUrl(url)
+}
+
 export function notifyLauncherReady(): void {
   api().notifyLauncherReady()
 }
