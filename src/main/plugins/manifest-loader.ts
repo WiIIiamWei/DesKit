@@ -73,6 +73,7 @@ const manifestSchema = z
     main: relativePathSchema,
     contributes: z
       .object({
+        activationEvents: z.array(z.enum(["clipboard:change"])).optional(),
         commands: z.array(commandSchema).min(1),
         preferences: z.array(preferenceSchema).optional(),
       })

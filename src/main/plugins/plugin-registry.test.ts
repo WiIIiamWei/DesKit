@@ -114,6 +114,37 @@ describe("pluginRegistry", () => {
     // Permission denials are policy decisions — the plugin must stay active.
     expect(registry.get("com.deskit.test")?.status).toBe("active")
   })
+
+  it("dispatches clipboard changes to active listeners", async () => {
+    const onClipboardChange = vi.fn(async () => {})
+    const sandbox = fakeSandbox({
+      commands: {
+        "clipboard.history": {
+          run() {
+            return { type: "toast", level: "success", message: "ok" }
+          },
+        },
+      },
+      events: { onClipboardChange },
+    })
+    const registry = new PluginRegistry({ sandbox })
+    await registry.load([
+      discovered({
+        id: "com.deskit.clipboard",
+        commandId: "clipboard.history",
+        activationEvents: ["clipboard:change"],
+      }),
+    ])
+
+    await registry.dispatchClipboardChange({ type: "text", text: "hello" })
+
+    expect(sandbox.dispatchEvent).toHaveBeenCalledWith({
+      pluginId: "com.deskit.clipboard",
+      event: "clipboard:change",
+      payload: { content: { type: "text", text: "hello" } },
+    })
+    expect(onClipboardChange).toHaveBeenCalledTimes(1)
+  })
 })
 
 function fakeSandbox(pluginModule?: PluginModule): PluginSandboxRuntime {
@@ -130,6 +161,9 @@ function fakeSandbox(pluginModule?: PluginModule): PluginSandboxRuntime {
       return { type: "toast", level: "success", message: "ok" }
     }),
     disposeCommand: vi.fn(async () => {}),
+    dispatchEvent: vi.fn<PluginSandboxRuntime["dispatchEvent"]>(async (request) => {
+      await pluginModule?.events?.onClipboardChange?.(request.payload, {} as never)
+    }),
   }
 }
 
@@ -149,7 +183,12 @@ function moduleFromManifest(pluginManifest: PluginManifest): PluginModule {
 }
 
 function discovered(
-  overrides: { id?: string; commandId?: string; title?: string } = {}
+  overrides: {
+    id?: string
+    commandId?: string
+    title?: string
+    activationEvents?: PluginManifest["contributes"]["activationEvents"]
+  } = {}
 ): DiscoveredPlugin {
   const pluginManifest = manifest(overrides)
   return {
@@ -162,7 +201,12 @@ function discovered(
 }
 
 function manifest(
-  overrides: { id?: string; commandId?: string; title?: string } = {}
+  overrides: {
+    id?: string
+    commandId?: string
+    title?: string
+    activationEvents?: PluginManifest["contributes"]["activationEvents"]
+  } = {}
 ): PluginManifest {
   const id = overrides.id ?? "com.deskit.test"
   const commandId = overrides.commandId ?? "test.run"
@@ -177,6 +221,7 @@ function manifest(
     engines: { deskit: "^0.1.0" },
     main: "dist/index.js",
     contributes: {
+      activationEvents: overrides.activationEvents,
       commands: [
         {
           id: commandId,

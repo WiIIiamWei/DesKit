@@ -1,3 +1,4 @@
+import type { ClipboardContent } from "./clipboard"
 import type { PluginContext } from "./context"
 import type { View } from "./views"
 
@@ -40,6 +41,19 @@ export interface CommandHandler {
   dispose?: (ctx: PluginContext) => void
 }
 
+export interface ClipboardChangeEvent {
+  content: ClipboardContent
+}
+
+export interface PluginEventHandlers {
+  /**
+   * Called by the host when the OS clipboard changes. This hook is only
+   * invoked for plugins that declare `clipboard:change` in
+   * `contributes.activationEvents`.
+   */
+  onClipboardChange?: (event: ClipboardChangeEvent, ctx: PluginContext) => Promise<void> | void
+}
+
 /**
  * The shape a plugin entry module must export.
  *
@@ -64,4 +78,5 @@ export interface CommandHandler {
  */
 export interface PluginModule {
   commands: Record<string, CommandHandler>
+  events?: PluginEventHandlers
 }

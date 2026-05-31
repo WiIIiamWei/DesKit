@@ -32,6 +32,31 @@ describe("parsePluginManifest", () => {
     expect(parsed.contributes.commands[0]?.mode).toBe("view")
   })
 
+  it("accepts clipboard activation events", () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        contributes: {
+          activationEvents: ["clipboard:change"],
+          commands: [{ id: "test.run", title: "Run", mode: "view" }],
+        },
+      })
+    )
+    expect(parsed.contributes.activationEvents).toEqual(["clipboard:change"])
+  })
+
+  it("rejects unknown activation events", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          contributes: {
+            activationEvents: ["window:focus"],
+            commands: [{ id: "test.run", title: "Run", mode: "view" }],
+          },
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
   it("rejects missing required fields", () => {
     const raw = manifest()
     delete raw.main

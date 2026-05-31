@@ -1,8 +1,9 @@
-import type { LocalizedString, View } from "@deskit/plugin-sdk"
+import type { ClipboardContent, LocalizedString, View } from "@deskit/plugin-sdk"
 import type {
   DiscoveredPlugin,
   ManifestCommand,
   PluginCommandResult,
+  PluginEventRequest,
   PluginInvokeRequest,
   PluginRegistryEntry,
   PluginSandboxRuntime,
@@ -156,6 +157,36 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
       if (err instanceof PermissionDenied) throw err
       this.markCrashed(pluginId, err)
       throw new PluginCrashedError(pluginId, err)
+    }
+  }
+
+  async dispatchClipboardChange(content: ClipboardContent): Promise<void> {
+    const entries = this.list().filter(
+      (entry) =>
+        entry.status === "active" &&
+        entry.manifest?.contributes.activationEvents?.includes("clipboard:change")
+    )
+
+    await Promise.all(
+      entries.map((entry) =>
+        this.dispatchEvent({
+          pluginId: entry.pluginId,
+          event: "clipboard:change",
+          payload: { content },
+        })
+      )
+    )
+  }
+
+  private async dispatchEvent(request: PluginEventRequest): Promise<void> {
+    const entry = this.entries.get(request.pluginId)
+    if (!entry || entry.status !== "active") return
+    try {
+      await this.options.sandbox.dispatchEvent(request)
+    } catch (err) {
+      if (err instanceof PermissionDenied) throw err
+      this.markCrashed(request.pluginId, err)
+      throw new PluginCrashedError(request.pluginId, err)
     }
   }
 

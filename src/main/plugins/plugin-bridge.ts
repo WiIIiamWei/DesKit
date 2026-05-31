@@ -161,6 +161,10 @@ export class PluginBridge {
     )
   }
 
+  async readClipboardForHost(): Promise<ClipboardContent | undefined> {
+    return this.options.adapters.clipboard.read()
+  }
+
   private createStorageAPI(
     pluginId: string,
     gate: { check: (permission: string) => void }
