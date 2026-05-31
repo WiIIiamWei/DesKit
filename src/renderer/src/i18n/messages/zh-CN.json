@@ -126,7 +126,6 @@
     "loadingHint": "正在拉取 registry 并检查已安装插件。",
     "empty": "没有符合当前筛选的市场插件。",
     "searchPlaceholder": "搜索插件、作者、分类…",
-    "registryBadge": "Git registry",
     "submit": "提交插件",
     "submitTooltip": "敬请期待",
     "protectedSource": "该插件来自{{source}}，不能从应用市场重新安装。",
