@@ -131,7 +131,6 @@ export function MarketplacePage() {
               className="pl-9"
             />
           </div>
-          <Badge variant="outline">{t("marketplace.registryBadge")}</Badge>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
