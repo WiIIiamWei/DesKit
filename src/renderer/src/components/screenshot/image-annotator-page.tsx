@@ -1,5 +1,17 @@
 import type { PointerEvent, ReactNode } from "react"
-import { Copy, Grid3x3, Pin, Save, Slash, Undo2, X } from "lucide-react"
+import {
+  Circle,
+  Copy,
+  Grid3x3,
+  PencilLine,
+  Pin,
+  RectangleHorizontal,
+  Save,
+  Slash,
+  SlidersHorizontal,
+  Undo2,
+  X,
+} from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -9,25 +21,49 @@ import {
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
 
-type Tool = "arrow" | "mosaic"
+type Tool = "arrow" | "pen" | "rectangle" | "ellipse" | "mosaic"
 interface Point {
   x: number
   y: number
 }
 type AnnotationOp =
   | { type: "arrow"; from: Point; to: Point; color: string; width: number }
+  | { type: "pen"; points: Point[]; color: string; width: number }
+  | {
+      type: "rectangle"
+      x: number
+      y: number
+      width: number
+      height: number
+      color: string
+      lineWidth: number
+    }
+  | {
+      type: "ellipse"
+      x: number
+      y: number
+      width: number
+      height: number
+      color: string
+      lineWidth: number
+    }
   | { type: "mosaic"; x: number; y: number; width: number; height: number }
 
 interface DragState {
   from: Point
+  points: Point[]
   to: Point
 }
+
+const ANNOTATION_COLORS = ["#ef4444", "#f97316", "#facc15", "#22c55e", "#38bdf8", "#ffffff"]
 
 export function ImageAnnotatorPage() {
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const [imageLoaded, setImageLoaded] = useState(false)
   const [tool, setTool] = useState<Tool>("arrow")
+  const [color, setColor] = useState("#ef4444")
+  const [strokeWidth, setStrokeWidth] = useState(3)
   const [ops, setOps] = useState<AnnotationOp[]>([])
   const [drag, setDrag] = useState<DragState | null>(null)
 
@@ -60,8 +96,13 @@ export function ImageAnnotatorPage() {
   }, [])
 
   useLayoutEffect(() => {
-    renderCanvas(canvasRef.current, imageRef.current, ops, drag ? previewOp(tool, drag) : null)
-  }, [drag, imageLoaded, ops, tool])
+    renderCanvas(
+      canvasRef.current,
+      imageRef.current,
+      ops,
+      drag ? previewOp(tool, drag, color, strokeWidth) : null
+    )
+  }, [color, drag, imageLoaded, ops, strokeWidth, tool])
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
@@ -87,18 +128,29 @@ export function ImageAnnotatorPage() {
   function onPointerDown(event: PointerEvent<HTMLCanvasElement>) {
     event.currentTarget.setPointerCapture(event.pointerId)
     const point = canvasPoint(event)
-    setDrag({ from: point, to: point })
+    setDrag({ from: point, points: [point], to: point })
   }
 
   function onPointerMove(event: PointerEvent<HTMLCanvasElement>) {
     if (!drag) return
-    setDrag({ ...drag, to: canvasPoint(event) })
+    const point = canvasPoint(event)
+    setDrag({
+      ...drag,
+      points: tool === "pen" ? [...drag.points, point] : drag.points,
+      to: point,
+    })
   }
 
   function onPointerUp(event: PointerEvent<HTMLCanvasElement>) {
     if (!drag) return
     event.currentTarget.releasePointerCapture(event.pointerId)
-    const next = previewOp(tool, { ...drag, to: canvasPoint(event) })
+    const point = canvasPoint(event)
+    const nextDrag = {
+      ...drag,
+      points: tool === "pen" ? [...drag.points, point] : drag.points,
+      to: point,
+    }
+    const next = previewOp(tool, nextDrag, color, strokeWidth)
     setDrag(null)
     if (!next) return
     setOps((current) => [...current, next])
@@ -117,6 +169,23 @@ export function ImageAnnotatorPage() {
           <ToolButton active={tool === "arrow"} title="Arrow" onClick={() => setTool("arrow")}>
             <Slash className="size-4" aria-hidden />
           </ToolButton>
+          <ToolButton active={tool === "pen"} title="Pen" onClick={() => setTool("pen")}>
+            <PencilLine className="size-4" aria-hidden />
+          </ToolButton>
+          <ToolButton
+            active={tool === "rectangle"}
+            title="Rectangle"
+            onClick={() => setTool("rectangle")}
+          >
+            <RectangleHorizontal className="size-4" aria-hidden />
+          </ToolButton>
+          <ToolButton
+            active={tool === "ellipse"}
+            title="Ellipse"
+            onClick={() => setTool("ellipse")}
+          >
+            <Circle className="size-4" aria-hidden />
+          </ToolButton>
           <ToolButton active={tool === "mosaic"} title="Mosaic" onClick={() => setTool("mosaic")}>
             <Grid3x3 className="size-4" aria-hidden />
           </ToolButton>
@@ -127,6 +196,34 @@ export function ImageAnnotatorPage() {
           >
             <Undo2 className="size-4" aria-hidden />
           </ToolButton>
+        </div>
+        <div className="h-5 w-px bg-white/15" />
+        <div className="flex items-center gap-1">
+          {ANNOTATION_COLORS.map((swatch) => (
+            <button
+              key={swatch}
+              type="button"
+              title={swatch}
+              aria-label={`Color ${swatch}`}
+              onClick={() => setColor(swatch)}
+              className={cn(
+                "size-5 rounded-full border border-white/20 transition hover:scale-105",
+                color === swatch && "ring-2 ring-white/80 ring-offset-1 ring-offset-zinc-950"
+              )}
+              style={{ backgroundColor: swatch }}
+            />
+          ))}
+          <SlidersHorizontal className="ml-1 size-4 text-white/65" aria-hidden />
+          <input
+            aria-label="Stroke width"
+            type="range"
+            min="2"
+            max="10"
+            step="1"
+            value={strokeWidth}
+            onChange={(event) => setStrokeWidth(Number(event.target.value))}
+            className="h-6 w-16 accent-white"
+          />
         </div>
         <div className="h-5 w-px bg-white/15" />
         <div className="flex items-center gap-1">
@@ -193,15 +290,30 @@ function ToolButton({
   )
 }
 
-function previewOp(tool: Tool, drag: DragState): AnnotationOp | null {
+function previewOp(
+  tool: Tool,
+  drag: DragState,
+  color: string,
+  strokeWidth: number
+): AnnotationOp | null {
   if (tool === "arrow") {
-    return { type: "arrow", from: drag.from, to: drag.to, color: "#ef4444", width: 3 }
+    return { type: "arrow", from: drag.from, to: drag.to, color, width: strokeWidth }
+  }
+  if (tool === "pen") {
+    if (drag.points.length < 2) return null
+    return { type: "pen", points: drag.points, color, width: strokeWidth }
   }
   const x = Math.min(drag.from.x, drag.to.x)
   const y = Math.min(drag.from.y, drag.to.y)
   const width = Math.abs(drag.to.x - drag.from.x)
   const height = Math.abs(drag.to.y - drag.from.y)
   if (width < 4 || height < 4) return null
+  if (tool === "rectangle") {
+    return { type: "rectangle", x, y, width, height, color, lineWidth: strokeWidth }
+  }
+  if (tool === "ellipse") {
+    return { type: "ellipse", x, y, width, height, color, lineWidth: strokeWidth }
+  }
   return { type: "mosaic", x, y, width, height }
 }
 
@@ -223,9 +335,73 @@ function renderCanvas(
 function drawOp(ctx: CanvasRenderingContext2D, op: AnnotationOp, preview = false): void {
   if (op.type === "arrow") {
     drawArrow(ctx, op, preview)
+  } else if (op.type === "pen") {
+    drawPen(ctx, op, preview)
+  } else if (op.type === "rectangle") {
+    drawRectangle(ctx, op, preview)
+  } else if (op.type === "ellipse") {
+    drawEllipse(ctx, op, preview)
   } else {
     drawMosaic(ctx, op)
   }
+}
+
+function drawPen(
+  ctx: CanvasRenderingContext2D,
+  op: Extract<AnnotationOp, { type: "pen" }>,
+  preview: boolean
+): void {
+  if (op.points.length < 2) return
+  ctx.save()
+  ctx.globalAlpha = preview ? 0.75 : 1
+  ctx.strokeStyle = op.color
+  ctx.lineWidth = op.width
+  ctx.lineCap = "round"
+  ctx.lineJoin = "round"
+  ctx.beginPath()
+  ctx.moveTo(op.points[0].x, op.points[0].y)
+  for (const point of op.points.slice(1)) {
+    ctx.lineTo(point.x, point.y)
+  }
+  ctx.stroke()
+  ctx.restore()
+}
+
+function drawRectangle(
+  ctx: CanvasRenderingContext2D,
+  op: Extract<AnnotationOp, { type: "rectangle" }>,
+  preview: boolean
+): void {
+  ctx.save()
+  ctx.globalAlpha = preview ? 0.75 : 1
+  ctx.strokeStyle = op.color
+  ctx.lineWidth = op.lineWidth
+  ctx.lineJoin = "round"
+  ctx.strokeRect(op.x, op.y, op.width, op.height)
+  ctx.restore()
+}
+
+function drawEllipse(
+  ctx: CanvasRenderingContext2D,
+  op: Extract<AnnotationOp, { type: "ellipse" }>,
+  preview: boolean
+): void {
+  ctx.save()
+  ctx.globalAlpha = preview ? 0.75 : 1
+  ctx.strokeStyle = op.color
+  ctx.lineWidth = op.lineWidth
+  ctx.beginPath()
+  ctx.ellipse(
+    op.x + op.width / 2,
+    op.y + op.height / 2,
+    op.width / 2,
+    op.height / 2,
+    0,
+    0,
+    Math.PI * 2
+  )
+  ctx.stroke()
+  ctx.restore()
 }
 
 function drawArrow(
