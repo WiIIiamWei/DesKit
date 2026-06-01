@@ -77,6 +77,8 @@
       "loginStarted": "GitHub 登录已开始。",
       "loginDone": "已登录为 @{{login}}。",
       "passphraseSaved": "同步密码已保存。",
+      "passphraseRequired": "请先输入这个 Gist 对应的同步密码再拉取。",
+      "decryptFailed": "无法解密这个 Gist。请输入最初创建它时的同步密码，或切换到这台设备创建的 Gist。",
       "pulled": "已应用远端设置。",
       "pushed": "已上传本机设置。",
       "conflict": "远端和本机修改存在冲突。",

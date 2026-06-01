@@ -77,6 +77,8 @@
       "loginStarted": "GitHub login started.",
       "loginDone": "Logged in as @{{login}}.",
       "passphraseSaved": "Sync password saved.",
+      "passphraseRequired": "Enter the sync password for this Gist before pulling.",
+      "decryptFailed": "Could not decrypt this Gist. Enter the original sync password, or choose the Gist created by this device.",
       "pulled": "Remote settings applied.",
       "pushed": "Local settings uploaded.",
       "conflict": "Remote and local changes conflict.",

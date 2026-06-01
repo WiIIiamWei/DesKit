@@ -33,7 +33,7 @@ import {
   saveSyncGistId,
   startGitHubLogin,
 } from "@/lib/electron"
-import { nextGitHubLoginPollInterval } from "./sync-settings-utils"
+import { nextGitHubLoginPollInterval, syncErrorMessageKey } from "./sync-settings-utils"
 
 type BusyAction =
   | "load"
@@ -81,7 +81,7 @@ export function SyncSettings() {
         setMessage(t(`sync.messages.login.${result.status}`))
       }
     } catch (err) {
-      setMessage(errorMessage(err))
+      setMessage(errorMessage(err, t))
     }
   }, [authorization, t])
 
@@ -204,7 +204,7 @@ export function SyncSettings() {
     try {
       await fn()
     } catch (err) {
-      setMessage(errorMessage(err))
+      setMessage(errorMessage(err, t))
     } finally {
       setBusy(null)
     }
@@ -428,6 +428,8 @@ export function SyncSettings() {
   )
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
+function errorMessage(err: unknown, t: (key: string) => string): string {
+  const message = err instanceof Error ? err.message : String(err)
+  const key = syncErrorMessageKey(message)
+  return key ? t(key) : message
 }
