@@ -46,6 +46,7 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     onLauncherFocus: vi.fn(() => () => undefined),
     onFloatingBallMenuState: vi.fn(() => () => undefined),
     onFloatingBallFeatures: vi.fn(() => () => undefined),
+    onLauncherRunPluginCommand: vi.fn(() => () => undefined),
     onPluginRegistryChanged: vi.fn(() => () => undefined),
     onSettingsChanged: vi.fn(() => () => undefined),
   } satisfies TestElectronApi

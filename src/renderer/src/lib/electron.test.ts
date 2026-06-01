@@ -19,6 +19,7 @@ import {
   onFloatingBallFeatures,
   onFloatingBallMenuState,
   onLauncherFocus,
+  onLauncherRunPluginCommand,
   onPluginRegistryChanged,
   onSettingsChanged,
   openExternalUrl,
@@ -82,6 +83,7 @@ function mockApi() {
     onLauncherFocus: vi.fn().mockReturnValue(() => {}),
     onFloatingBallMenuState: vi.fn().mockReturnValue(() => {}),
     onFloatingBallFeatures: vi.fn().mockReturnValue(() => {}),
+    onLauncherRunPluginCommand: vi.fn().mockReturnValue(() => {}),
     onPluginRegistryChanged: vi.fn().mockReturnValue(() => {}),
     onSettingsChanged: vi.fn().mockReturnValue(() => {}),
   }
@@ -310,6 +312,13 @@ describe("lib/electron", () => {
       const handler = vi.fn()
       onFloatingBallFeatures(handler)
       expect(api.onFloatingBallFeatures).toHaveBeenCalledWith(handler)
+    })
+
+    it("onLauncherRunPluginCommand forwards handler", () => {
+      const api = mockApi()
+      const handler = vi.fn()
+      onLauncherRunPluginCommand(handler)
+      expect(api.onLauncherRunPluginCommand).toHaveBeenCalledWith(handler)
     })
 
     it("onPluginRegistryChanged forwards handler", () => {

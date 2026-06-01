@@ -1,6 +1,7 @@
 import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { IpcMainInvokeEvent } from "electron"
 import type { SearchWindowDeps } from "./search-window"
+import type { FloatingBallFeature } from "./settings/settings"
 import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
@@ -37,6 +38,7 @@ import {
   markSearchWindowReady,
   setSearchWindowQuitting,
   showSearchWindow,
+  showSearchWindowForPluginCommand,
   toggleSearchWindow,
 } from "./search-window"
 import { bindGlobalShortcut, unbindGlobalShortcut } from "./shortcut"
@@ -183,7 +185,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle("floating-ball:open-feature", (_event, feature: unknown) => {
-    if (feature === "appLauncher") {
+    if (isFloatingBallFeature(feature)) {
       openFloatingBallFeature(feature)
     }
   })
@@ -284,7 +286,7 @@ function coercePatch(value: unknown): Partial<{
   themeMode: "light" | "dark" | "system"
   accent: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled: boolean
-  floatingBallFeatures: "appLauncher"[]
+  floatingBallFeatures: FloatingBallFeature[]
 }> {
   if (!value || typeof value !== "object") return {}
   const v = value as Record<string, unknown>
@@ -304,11 +306,21 @@ function coercePatch(value: unknown): Partial<{
   }
   if (typeof v.floatingBallEnabled === "boolean") out.floatingBallEnabled = v.floatingBallEnabled
   if (Array.isArray(v.floatingBallFeatures)) {
-    out.floatingBallFeatures = v.floatingBallFeatures.filter(
-      (feature): feature is "appLauncher" => feature === "appLauncher"
-    )
+    out.floatingBallFeatures = v.floatingBallFeatures.filter(isFloatingBallFeature)
   }
   return out
+}
+
+function isFloatingBallFeature(value: unknown): value is FloatingBallFeature {
+  return (
+    typeof value === "string" && (value === "appLauncher" || isPluginFloatingBallFeature(value))
+  )
+}
+
+function isPluginFloatingBallFeature(value: string): value is `plugin:${string}:${string}` {
+  return /^plugin:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$/.test(
+    value
+  )
 }
 
 function searchWindowDeps(): SearchWindowDeps {
@@ -343,13 +355,28 @@ function floatingBallDeps() {
     appOrigin: APP_ORIGIN,
     getSettings: () => launcher.getSettings(),
     getLocale: () => app.getLocale(),
-    onOpenFeature: (feature: "appLauncher") => {
-      if (feature === "appLauncher") showSearchWindow(searchWindowDeps())
+    onOpenFeature: (feature: FloatingBallFeature) => {
+      if (feature === "appLauncher") {
+        showSearchWindow(searchWindowDeps())
+        return
+      }
+      const command = parseFloatingBallPluginCommand(feature)
+      if (!command) return
+      showSearchWindowForPluginCommand(searchWindowDeps(), command)
     },
     onDisable: () => {
       void disableFloatingBall()
     },
   }
+}
+
+function parseFloatingBallPluginCommand(
+  feature: FloatingBallFeature
+): { pluginId: string; commandId: string } | null {
+  if (!feature.startsWith("plugin:")) return null
+  const [, pluginId, commandId] = feature.split(":")
+  if (!pluginId || !commandId) return null
+  return { pluginId, commandId }
 }
 
 async function disableFloatingBall(): Promise<void> {

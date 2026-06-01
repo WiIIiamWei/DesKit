@@ -6,7 +6,7 @@ export {}
 
 declare global {
   type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
-  type DeskitFloatingBallFeature = "appLauncher"
+  type DeskitFloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
 
   interface LauncherAppEntry {
     id: string
@@ -217,6 +217,9 @@ declare global {
       onFloatingBallMenuState: (handler: (expanded: boolean) => void) => () => void
       onFloatingBallFeatures: (
         handler: (features: DeskitFloatingBallFeature[]) => void
+      ) => () => void
+      onLauncherRunPluginCommand: (
+        handler: (command: { pluginId: string; commandId: string }) => void
       ) => () => void
       onPluginRegistryChanged: (
         handler: (plugins: DeskitPluginRegistryEntry[]) => void

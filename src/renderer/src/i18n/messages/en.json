@@ -63,7 +63,13 @@
       "enable": "Show desktop floating ball",
       "enableHint": "Disabled by default at startup until you turn it on here.",
       "menuFeatures": "Radial menu tools",
-      "menuFeaturesHint": "Choose up to 6 tools. The floating ball itself is not a menu tool."
+      "menuFeaturesHint": "Choose up to 6 tools or plugin commands. The floating ball itself is not a menu tool.",
+      "addFeature": "Add a tool or plugin command",
+      "searchPlaceholder": "Search tools and plugin commands…",
+      "emptyOptions": "No matching tools or plugin commands.",
+      "builtinFeature": "Built-in tool",
+      "unavailableFeature": "Unavailable plugin command",
+      "removeFeature": "Remove {{name}}"
     }
   },
   "plugins": {

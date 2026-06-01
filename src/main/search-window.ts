@@ -18,6 +18,11 @@ export interface SearchWindowDeps {
   appOrigin: string
 }
 
+export interface SearchWindowPluginCommand {
+  pluginId: string
+  commandId: string
+}
+
 let searchWindow: BrowserWindow | null = null
 let searchWindowQuitting = false
 let searchWindowReady = false
@@ -25,6 +30,7 @@ let searchWindowShown = false
 let pendingSearchWindowShow = false
 let searchWindowRevealToken = 0
 let trayOpenSuppressedUntil = 0
+let pendingPluginCommand: SearchWindowPluginCommand | null = null
 
 export function setSearchWindowQuitting(quitting: boolean): void {
   searchWindowQuitting = quitting
@@ -108,6 +114,11 @@ export function getSearchWindow(): BrowserWindow | null {
 }
 
 export function showSearchWindow(deps: SearchWindowDeps): void {
+  pendingPluginCommand = null
+  showSearchWindowInternal(deps)
+}
+
+function showSearchWindowInternal(deps: SearchWindowDeps): void {
   const win = ensureSearchWindow(deps)
   centerOnActiveDisplay(win)
   searchWindowShown = true
@@ -118,6 +129,19 @@ export function showSearchWindow(deps: SearchWindowDeps): void {
   }
 
   revealSearchWindow(win)
+  dispatchPendingPluginCommand(win)
+}
+
+export function showSearchWindowForPluginCommand(
+  deps: SearchWindowDeps,
+  command: SearchWindowPluginCommand
+): void {
+  pendingPluginCommand = command
+  showSearchWindowInternal(deps)
+  const win = getSearchWindow()
+  if (win && searchWindowReady && searchWindowShown) {
+    dispatchPendingPluginCommand(win)
+  }
 }
 
 export function consumeSearchWindowTrayOpenSuppression(): boolean {
@@ -131,6 +155,7 @@ export function hideSearchWindow(): void {
   if (!win) return
   searchWindowShown = false
   pendingSearchWindowShow = false
+  pendingPluginCommand = null
   searchWindowRevealToken += 1
   win.setOpacity(0)
   win.setIgnoreMouseEvents(true)
@@ -157,6 +182,7 @@ export function markSearchWindowReady(sender: WebContents): void {
     pendingSearchWindowShow = false
     searchWindowShown = true
     revealSearchWindow(win)
+    dispatchPendingPluginCommand(win)
   }
 }
 
@@ -181,6 +207,13 @@ function revealSearchWindow(win: BrowserWindow): void {
     win.setOpacity(1)
     win.focus()
   }, SEARCH_REVEAL_DELAY_MS)
+}
+
+function dispatchPendingPluginCommand(win: BrowserWindow): void {
+  if (!pendingPluginCommand || !searchWindowReady || !searchWindowShown || win.isDestroyed()) return
+  const command = pendingPluginCommand
+  pendingPluginCommand = null
+  win.webContents.send("launcher:run-plugin-command", command)
 }
 
 function suppressImmediateTrayOpen(): void {

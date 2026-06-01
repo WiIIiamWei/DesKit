@@ -63,7 +63,13 @@
       "enable": "显示桌面悬浮球",
       "enableHint": "启动时默认关闭，需要在这里手动开启。",
       "menuFeatures": "圆形菜单工具",
-      "menuFeaturesHint": "最多选择 6 个工具。桌面悬浮球本身不会作为菜单工具。"
+      "menuFeaturesHint": "最多选择 6 个工具或插件命令。桌面悬浮球本身不会作为菜单工具。",
+      "addFeature": "添加工具或插件命令",
+      "searchPlaceholder": "搜索工具和插件命令…",
+      "emptyOptions": "没有匹配的工具或插件命令。",
+      "builtinFeature": "内置工具",
+      "unavailableFeature": "不可用的插件命令",
+      "removeFeature": "移除 {{name}}"
     }
   },
   "plugins": {

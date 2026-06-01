@@ -26,11 +26,13 @@ import {
 } from "@/components/ui/command"
 import {
   disposePluginCommand,
+  getPlugin,
   hideLauncher,
   invokePluginCommand,
   launchApp,
   notifyLauncherReady,
   onLauncherFocus,
+  onLauncherRunPluginCommand,
   openExternalUrl,
   searchApps,
   searchPluginCommands,
@@ -213,11 +215,11 @@ export function LauncherPanel() {
   }, [activeCommand, invokeActiveCommand, mode, pluginSearchText])
 
   const runPluginCommand = useCallback(
-    async (command: DeskitPluginCommandResult) => {
+    async (command: DeskitPluginCommandResult, initialQuery = query) => {
       try {
         ++pluginSearchSeqRef.current
         const view = await invokePluginCommand(command.pluginId, command.commandId, "run", {
-          initialQuery: query,
+          initialQuery,
         })
         if (isPluginToastView(view)) {
           showPluginToast(view, i18n.language)
@@ -243,6 +245,43 @@ export function LauncherPanel() {
     },
     [i18n.language, query]
   )
+
+  const runPluginCommandById = useCallback(
+    async (pluginId: string, commandId: string) => {
+      try {
+        const plugin = await getPlugin(pluginId)
+        const command = plugin?.manifest?.contributes.commands.find((item) => item.id === commandId)
+        if (!command) {
+          toast.error("Command unavailable")
+          return
+        }
+        await runPluginCommand(
+          {
+            kind: "plugin-command",
+            pluginId,
+            commandId,
+            title: command.title,
+            subtitle: command.subtitle,
+            icon: command.icon,
+            mode: command.mode,
+            score: 0,
+            matches: [],
+          },
+          ""
+        )
+      } catch (err) {
+        console.error("run floating ball plugin command failed", err)
+        toast.error("Command failed")
+      }
+    },
+    [runPluginCommand]
+  )
+
+  useEffect(() => {
+    return onLauncherRunPluginCommand((command) => {
+      void runPluginCommandById(command.pluginId, command.commandId)
+    })
+  }, [runPluginCommandById])
 
   const onSelect = useCallback(
     async (value: string) => {

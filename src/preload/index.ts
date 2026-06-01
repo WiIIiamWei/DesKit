@@ -5,12 +5,14 @@ import { contextBridge, ipcRenderer } from "electron"
 // The global declared in index.d.ts is only loaded into the renderer's
 // compilation; the preload tsconfig doesn't pick up that .d.ts, so we
 // keep a structurally identical type here for type-only use.
+type FloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
+
 interface SettingsPatch {
   hotkey?: string
   themeMode?: "light" | "dark" | "system"
   accent?: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled?: boolean
-  floatingBallFeatures?: "appLauncher"[]
+  floatingBallFeatures?: FloatingBallFeature[]
 }
 type Settings = Required<SettingsPatch>
 
@@ -26,7 +28,7 @@ const electronAPI = {
   notifyLauncherReady: () => ipcRenderer.send("launcher:ready"),
 
   // ---- Floating Ball ----
-  openFloatingBallFeature: (feature: "appLauncher") =>
+  openFloatingBallFeature: (feature: FloatingBallFeature) =>
     ipcRenderer.invoke("floating-ball:open-feature", feature),
   toggleFloatingBallMenu: () => ipcRenderer.invoke("floating-ball:toggle-menu"),
   moveFloatingBallBy: (delta: { x: number; y: number }) =>
@@ -77,11 +79,22 @@ const electronAPI = {
     return () => ipcRenderer.removeListener("floating-ball:menu-state", listener)
   },
 
-  onFloatingBallFeatures: (handler: (features: "appLauncher"[]) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, features: "appLauncher"[]): void =>
+  onFloatingBallFeatures: (handler: (features: FloatingBallFeature[]) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, features: FloatingBallFeature[]): void =>
       handler(features)
     ipcRenderer.on("floating-ball:features", listener)
     return () => ipcRenderer.removeListener("floating-ball:features", listener)
+  },
+
+  onLauncherRunPluginCommand: (
+    handler: (command: { pluginId: string; commandId: string }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      command: { pluginId: string; commandId: string }
+    ): void => handler(command)
+    ipcRenderer.on("launcher:run-plugin-command", listener)
+    return () => ipcRenderer.removeListener("launcher:run-plugin-command", listener)
   },
 
   onPluginRegistryChanged: (handler: (plugins: unknown[]) => void): (() => void) => {

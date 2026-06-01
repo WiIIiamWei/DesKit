@@ -186,6 +186,12 @@ export function onFloatingBallFeatures(
   return api().onFloatingBallFeatures(handler)
 }
 
+export function onLauncherRunPluginCommand(
+  handler: (command: { pluginId: string; commandId: string }) => void
+): () => void {
+  return api().onLauncherRunPluginCommand(handler)
+}
+
 export function onPluginRegistryChanged(
   handler: (plugins: PluginRegistryEntry[]) => void
 ): () => void {

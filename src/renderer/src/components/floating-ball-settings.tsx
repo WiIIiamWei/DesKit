@@ -1,21 +1,47 @@
-import { CircleDot, Search } from "lucide-react"
-import { useEffect, useState } from "react"
+import { Check, ChevronsUpDown, CircleDot, Plus, Search, X } from "lucide-react"
+import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
+import { localize } from "@/components/plugins/view-utils"
+import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Checkbox } from "@/components/ui/checkbox"
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command"
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover"
+import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
-import { getSettings, isElectron, onSettingsChanged, updateSettings } from "@/lib/electron"
+import {
+  getSettings,
+  isElectron,
+  listPlugins,
+  onPluginRegistryChanged,
+  onSettingsChanged,
+  updateSettings,
+} from "@/lib/electron"
 
-const AVAILABLE_FLOATING_BALL_FEATURES: DeskitFloatingBallFeature[] = ["appLauncher"]
+const MAX_FLOATING_BALL_FEATURES = 6
+const APP_LAUNCHER_FEATURE = "appLauncher"
 
-const FEATURE_ICONS: Record<DeskitFloatingBallFeature, typeof Search> = {
-  appLauncher: Search,
+interface FloatingBallOption {
+  id: DeskitFloatingBallFeature
+  icon?: string
+  title: string
+  subtitle: string
+  kind: "builtin" | "plugin"
 }
 
 export function FloatingBallSettings() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [enabled, setEnabled] = useState(false)
-  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>(["appLauncher"])
+  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([APP_LAUNCHER_FEATURE])
+  const [plugins, setPlugins] = useState<DeskitPluginRegistryEntry[]>([])
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   useEffect(() => {
     if (!isElectron()) return
@@ -23,11 +49,27 @@ export function FloatingBallSettings() {
       setEnabled(settings.floatingBallEnabled)
       setFeatures(settings.floatingBallFeatures)
     })
-    return onSettingsChanged((settings) => {
-      setEnabled(settings.floatingBallEnabled)
-      setFeatures(settings.floatingBallFeatures)
-    })
+    void listPlugins()
+      .then(setPlugins)
+      .catch((err) => console.error("listPlugins failed", err))
+    return mergeCleanups(
+      onSettingsChanged((settings) => {
+        setEnabled(settings.floatingBallEnabled)
+        setFeatures(settings.floatingBallFeatures)
+      }),
+      onPluginRegistryChanged(setPlugins)
+    )
   }, [])
+
+  const options = useMemo(
+    () => floatingBallOptions(plugins, i18n.language, t),
+    [i18n.language, plugins, t]
+  )
+  const selectedOptions = features.map(
+    (feature) => options.find((option) => option.id === feature) ?? fallbackOption(feature, t)
+  )
+  const selected = new Set(features)
+  const canAddMore = features.length < MAX_FLOATING_BALL_FEATURES
 
   async function setFloatingBallEnabled(next: boolean) {
     setEnabled(next)
@@ -38,17 +80,25 @@ export function FloatingBallSettings() {
     }
   }
 
-  async function toggleFeature(feature: DeskitFloatingBallFeature, checked: boolean) {
-    const next = checked
-      ? [...features, feature]
-      : features.filter((existing) => existing !== feature)
-    const normalized = next.length > 0 ? next.slice(0, 6) : features
+  async function setFloatingBallFeatures(next: DeskitFloatingBallFeature[]) {
+    const normalized = next.slice(0, MAX_FLOATING_BALL_FEATURES)
     setFeatures(normalized)
     if (isElectron()) {
       const settings = await updateSettings({ floatingBallFeatures: normalized })
       setEnabled(settings.floatingBallEnabled)
       setFeatures(settings.floatingBallFeatures)
     }
+  }
+
+  function addFeature(feature: DeskitFloatingBallFeature) {
+    if (selected.has(feature) || !canAddMore) return
+    void setFloatingBallFeatures([...features, feature])
+    setPickerOpen(false)
+  }
+
+  function removeFeature(feature: DeskitFloatingBallFeature) {
+    if (features.length === 1) return
+    void setFloatingBallFeatures(features.filter((existing) => existing !== feature))
   }
 
   return (
@@ -76,6 +126,8 @@ export function FloatingBallSettings() {
           />
         </div>
 
+        <Separator />
+
         <div className="flex flex-col gap-3">
           <div className="flex flex-col gap-1">
             <span className="text-sm font-medium">{t("floatingBall.settings.menuFeatures")}</span>
@@ -83,28 +135,183 @@ export function FloatingBallSettings() {
               {t("floatingBall.settings.menuFeaturesHint")}
             </span>
           </div>
-          <div className="flex flex-col gap-2">
-            {AVAILABLE_FLOATING_BALL_FEATURES.map((feature) => {
-              const Icon = FEATURE_ICONS[feature]
-              const checked = features.includes(feature)
-              return (
-                <label
-                  key={feature}
-                  className="flex cursor-pointer items-center gap-3 rounded-md border border-border px-3 py-2 text-sm"
+
+          <FloatingBallFeaturePicker
+            disabled={!enabled || !canAddMore}
+            open={pickerOpen}
+            options={options}
+            selected={selected}
+            onAdd={addFeature}
+            onOpenChange={setPickerOpen}
+          />
+
+          <div className="divide-y rounded-lg border">
+            {selectedOptions.map((option) => (
+              <div key={option.id} className="flex items-center justify-between gap-3 px-3 py-2.5">
+                <div className="flex min-w-0 items-center gap-3">
+                  <FeatureIcon option={option} />
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{option.title}</div>
+                    <div className="truncate text-xs text-muted-foreground">{option.subtitle}</div>
+                  </div>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="size-8 shrink-0"
+                  disabled={!enabled || features.length === 1}
+                  aria-label={t("floatingBall.settings.removeFeature", { name: option.title })}
+                  onClick={() => removeFeature(option.id)}
                 >
-                  <Checkbox
-                    checked={checked}
-                    disabled={!enabled || (checked && features.length === 1)}
-                    onCheckedChange={(value) => toggleFeature(feature, value === true)}
-                  />
-                  <Icon className="size-4 text-muted-foreground" aria-hidden />
-                  <span>{t(`floatingBall.features.${feature}`)}</span>
-                </label>
-              )
-            })}
+                  <X className="size-4" aria-hidden />
+                </Button>
+              </div>
+            ))}
           </div>
         </div>
       </CardContent>
     </Card>
   )
+}
+
+function FloatingBallFeaturePicker({
+  disabled,
+  onAdd,
+  onOpenChange,
+  open,
+  options,
+  selected,
+}: {
+  disabled: boolean
+  onAdd: (feature: DeskitFloatingBallFeature) => void
+  onOpenChange: (open: boolean) => void
+  open: boolean
+  options: FloatingBallOption[]
+  selected: Set<DeskitFloatingBallFeature>
+}) {
+  const { t } = useTranslation()
+  return (
+    <Popover open={open} onOpenChange={onOpenChange}>
+      <PopoverTrigger asChild>
+        <Button
+          type="button"
+          variant="outline"
+          className="w-full justify-between"
+          disabled={disabled}
+          aria-expanded={open}
+        >
+          <span className="flex min-w-0 items-center gap-2">
+            <Plus className="size-4 shrink-0" aria-hidden />
+            <span className="truncate">{t("floatingBall.settings.addFeature")}</span>
+          </span>
+          <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent align="start" className="w-[--radix-popover-trigger-width] p-0">
+        <Command>
+          <CommandInput placeholder={t("floatingBall.settings.searchPlaceholder")} />
+          <CommandList>
+            <CommandEmpty>{t("floatingBall.settings.emptyOptions")}</CommandEmpty>
+            <CommandGroup>
+              {options.map((option) => {
+                const active = selected.has(option.id)
+                return (
+                  <CommandItem
+                    key={option.id}
+                    value={`${option.title} ${option.subtitle} ${option.id}`}
+                    disabled={active}
+                    onSelect={() => onAdd(option.id)}
+                  >
+                    <FeatureIcon option={option} />
+                    <div className="min-w-0 flex-1">
+                      <div className="truncate text-sm">{option.title}</div>
+                      <div className="truncate text-xs text-muted-foreground">
+                        {option.subtitle}
+                      </div>
+                    </div>
+                    {active && <Check className="size-4" aria-hidden />}
+                  </CommandItem>
+                )
+              })}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
+function FeatureIcon({ option }: { option: FloatingBallOption }) {
+  if (option.kind === "builtin") {
+    return <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+  }
+  return <PluginIcon icon={option.icon} className="size-4 shrink-0 text-muted-foreground" />
+}
+
+function floatingBallOptions(
+  plugins: DeskitPluginRegistryEntry[],
+  locale: string,
+  t: (key: string, options?: Record<string, unknown>) => string
+): FloatingBallOption[] {
+  const builtin: FloatingBallOption[] = [
+    {
+      id: APP_LAUNCHER_FEATURE,
+      title: t("floatingBall.features.appLauncher"),
+      subtitle: t("floatingBall.settings.builtinFeature"),
+      kind: "builtin",
+    },
+  ]
+  const pluginOptions = plugins.flatMap((plugin) => {
+    if (plugin.status !== "active" || !plugin.manifest) return []
+    const pluginName =
+      localize(plugin.manifest.displayName, locale) || plugin.manifest.name || plugin.pluginId
+    return plugin.manifest.contributes.commands.map((command) => ({
+      id: pluginFeatureId(plugin.pluginId, command.id),
+      icon: command.icon ?? plugin.manifest?.icon,
+      title: localize(command.title, locale) || command.id,
+      subtitle: `${pluginName} · ${localize(command.subtitle, locale) || command.id}`,
+      kind: "plugin" as const,
+    }))
+  })
+  return [...builtin, ...pluginOptions]
+}
+
+function fallbackOption(
+  feature: DeskitFloatingBallFeature,
+  t: (key: string, options?: Record<string, unknown>) => string
+): FloatingBallOption {
+  if (feature === APP_LAUNCHER_FEATURE) {
+    return {
+      id: feature,
+      icon: undefined,
+      title: t("floatingBall.features.appLauncher"),
+      subtitle: t("floatingBall.settings.builtinFeature"),
+      kind: "builtin",
+    }
+  }
+  const parsed = parsePluginFeatureId(feature)
+  return {
+    id: feature,
+    title: parsed?.commandId ?? feature,
+    subtitle: parsed?.pluginId ?? t("floatingBall.settings.unavailableFeature"),
+    kind: "plugin",
+  }
+}
+
+function pluginFeatureId(pluginId: string, commandId: string): DeskitFloatingBallFeature {
+  return `plugin:${pluginId}:${commandId}`
+}
+
+function parsePluginFeatureId(
+  feature: DeskitFloatingBallFeature
+): { pluginId: string; commandId: string } | null {
+  if (!feature.startsWith("plugin:")) return null
+  const [, pluginId, commandId] = feature.split(":")
+  if (!pluginId || !commandId) return null
+  return { pluginId, commandId }
+}
+
+function mergeCleanups(...cleanups: Array<() => void>): () => void {
+  return () => cleanups.forEach((cleanup) => cleanup())
 }
