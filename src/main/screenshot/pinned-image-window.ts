@@ -73,13 +73,16 @@ export function createPinnedImageWindow(
   const allowedOrigin = deps.rendererDevUrl ? new URL(deps.rendererDevUrl).origin : deps.appOrigin
   attachWindowSecurity(win, allowedOrigin)
   win.setOpacity(state.opacity)
-  pinnedImages.set(win.webContents.id, state)
-  win.on("closed", () => pinnedImages.delete(win.webContents.id))
+  const webContentsId = win.webContents.id
+  pinnedImages.set(webContentsId, state)
+  win.on("closed", () => pinnedImages.delete(webContentsId))
   const url = deps.rendererDevUrl
     ? `${deps.rendererDevUrl}#${PINNED_IMAGE_HASH}`
     : `${deps.appOrigin}/index.html#${PINNED_IMAGE_HASH}`
   void win.loadURL(url)
-  win.once("ready-to-show", () => win.show())
+  win.once("ready-to-show", () => {
+    if (!win.isDestroyed()) win.show()
+  })
   return win
 }
 

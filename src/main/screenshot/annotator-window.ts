@@ -78,7 +78,9 @@ export function openScreenshotAnnotator(
         activeAnnotator = null
       }
     })
-    win.once("ready-to-show", () => win.show())
+    win.once("ready-to-show", () => {
+      if (!win.isDestroyed()) win.show()
+    })
   })
 }
 

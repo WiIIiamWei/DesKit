@@ -92,6 +92,7 @@ export const screen = {
     scaleFactor: 1,
     bounds: { x: 0, y: 0, width: 1440, height: 900 },
     workArea: { x: 0, y: 0, width: 1440, height: 900 },
+    workAreaSize: { width: 1440, height: 900 },
   })),
   getDisplayMatching: vi.fn(() => ({
     id: 1,
@@ -102,7 +103,11 @@ export const screen = {
 }
 export const nativeImage = {
   createEmpty: vi.fn(() => ({ isEmpty: vi.fn(() => true) })),
-  createFromPath: vi.fn(() => ({ isEmpty: vi.fn(() => false), toDataURL: vi.fn(() => "") })),
+  createFromPath: vi.fn(() => ({
+    getSize: vi.fn(() => ({ width: 480, height: 320 })),
+    isEmpty: vi.fn(() => false),
+    toDataURL: vi.fn(() => ""),
+  })),
   createFromDataURL: vi.fn((value: string) => ({ dataUrl: value })),
 }
 export const Notification = Object.assign(
