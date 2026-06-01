@@ -292,6 +292,30 @@ describe("launcher settings", () => {
     expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeEnabled()
   })
 
+  it("uses the visible hotkey input value when reconciling settings broadcasts", async () => {
+    const api = installElectronApi({
+      hotkey: "Control+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    fireEvent.change(input, { target: { value: "Alt+Space" } })
+    api.emitSettingsChanged({
+      hotkey: "Shift+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+
+    expect(input).toHaveValue("Alt+Space")
+    expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeEnabled()
+  })
+
   it("marks a dirty hotkey draft clean when a settings broadcast matches it", async () => {
     const user = userEvent.setup()
     const api = installElectronApi({

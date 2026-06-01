@@ -174,7 +174,7 @@ export function LauncherSettings() {
       setSavedHotkey(settings.hotkey)
     })
     return onSettingsChanged((settings) => {
-      const currentHotkey = hotkeyRef.current
+      const currentHotkey = hotkeyInputRef.current?.value ?? hotkeyRef.current
       const currentSavedHotkey = savedHotkeyRef.current
       if (settings.hotkey === currentSavedHotkey) return
 
@@ -212,6 +212,7 @@ export function LauncherSettings() {
     if (!next) return
 
     setStatus(null)
+    hotkeyRef.current = next
     setHotkey(next)
     setCapturingHotkey(false)
   }
@@ -278,7 +279,10 @@ export function LauncherSettings() {
               id="hotkey-input"
               value={hotkey}
               onChange={(e) => {
-                if (!capturingHotkey) setHotkey(e.target.value)
+                if (!capturingHotkey) {
+                  hotkeyRef.current = e.target.value
+                  setHotkey(e.target.value)
+                }
               }}
               onBlur={() => setCapturingHotkey(false)}
               onKeyDown={onHotkeyKeyDown}
