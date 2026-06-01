@@ -32,6 +32,26 @@ describe("parsePluginManifest", () => {
     expect(parsed.contributes.commands[0]?.mode).toBe("view")
   })
 
+  it("accepts lucide icons in plugin and command manifests", () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        icon: "lucide:puzzle",
+        contributes: {
+          commands: [
+            {
+              id: "test.run",
+              title: "Run",
+              mode: "view",
+              icon: "lucide:clock",
+            },
+          ],
+        },
+      })
+    )
+    expect(parsed.icon).toBe("lucide:puzzle")
+    expect(parsed.contributes.commands[0]?.icon).toBe("lucide:clock")
+  })
+
   it("accepts clipboard activation events", () => {
     const parsed = parsePluginManifest(
       manifest({

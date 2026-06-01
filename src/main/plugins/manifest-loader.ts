@@ -22,6 +22,10 @@ const relativePathSchema = z.string().min(1).refine(isSafeRelativePath, {
   message: "Path must be relative and stay inside the plugin directory",
 })
 
+const iconSchema = z.string().min(1).refine(isSafeIcon, {
+  message: "Icon must be a lucide:<name> reference or a safe relative path",
+})
+
 const commandSchema = z
   .object({
     id: commandIdSchema,
@@ -29,7 +33,7 @@ const commandSchema = z
     subtitle: localizedStringSchema.optional(),
     keywords: z.array(z.string().min(1)).optional(),
     mode: z.enum(["view", "no-view"]).default("view"),
-    icon: relativePathSchema.optional(),
+    icon: iconSchema.optional(),
   })
   .strict()
 
@@ -68,7 +72,7 @@ const manifestSchema = z
     description: localizedStringSchema,
     version: semverSchema,
     author: z.string().min(1),
-    icon: relativePathSchema.optional(),
+    icon: iconSchema.optional(),
     engines: z.object({ deskit: z.string().min(1) }).strict(),
     main: relativePathSchema,
     contributes: z
@@ -175,6 +179,15 @@ function isSafeRelativePath(value: string): boolean {
   if (normalized.split("/").includes("..")) return false
   const posix = path.posix.normalize(normalized)
   return posix !== ".." && !posix.startsWith("../") && !posix.includes("/../")
+}
+
+function isSafeIcon(value: string): boolean {
+  if (isLucideIcon(value)) return true
+  return isSafeRelativePath(value)
+}
+
+function isLucideIcon(value: string): boolean {
+  return /^lucide:[a-z0-9][a-z0-9-]*$/i.test(value)
 }
 
 interface Semver {
