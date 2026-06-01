@@ -125,6 +125,7 @@ export class GitHubGistClient {
   }
 
   async findSyncGist(accessToken: string): Promise<GistSummary | null> {
+    let newest: GistSummary | null = null
     for (let page = 1; page <= 10; page += 1) {
       const response = await this.fetchImpl(`${this.apiUrl}/gists?per_page=100&page=${page}`, {
         headers: authHeaders(accessToken),
@@ -134,11 +135,12 @@ export class GitHubGistClient {
       if (!Array.isArray(data)) throw new GitHubGistClientError("GitHub Gists response is invalid")
       for (const item of data) {
         const gist = parseGistSummary(item)
-        if (gist.files[DESKIT_SYNC_GIST_FILENAME]) return this.getGist(accessToken, gist.id)
+        if (!gist.files[DESKIT_SYNC_GIST_FILENAME]) continue
+        if (!newest || Date.parse(gist.updatedAt) > Date.parse(newest.updatedAt)) newest = gist
       }
       if (!hasNextPage(response)) break
     }
-    return null
+    return newest ? this.getGist(accessToken, newest.id) : null
   }
 
   async getGist(accessToken: string, gistId: string): Promise<GistSummary> {

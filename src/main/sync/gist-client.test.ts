@@ -79,6 +79,24 @@ describe("gitHubGistClient", () => {
     )
   })
 
+  it("uses the newest DesKit sync Gist when multiple exist", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json([
+          gist("old", DESKIT_SYNC_GIST_FILENAME, undefined, "2026-06-01T00:00:00.000Z"),
+          gist("new", DESKIT_SYNC_GIST_FILENAME, undefined, "2026-06-01T00:01:00.000Z"),
+        ])
+      )
+      .mockResolvedValueOnce(
+        Response.json(gist("new", DESKIT_SYNC_GIST_FILENAME, "{}", "2026-06-01T00:01:00.000Z"))
+      )
+    const client = new GitHubGistClient({ fetch })
+
+    await expect(client.findSyncGist("token")).resolves.toMatchObject({ id: "new" })
+    expect(fetch).toHaveBeenNthCalledWith(2, "https://api.github.com/gists/new", expect.any(Object))
+  })
+
   it("creates secret Gists with the fixed sync filename", async () => {
     const fetch = vi.fn(async () => Response.json(gist("new", DESKIT_SYNC_GIST_FILENAME, "{}")))
     const client = new GitHubGistClient({ fetch })
@@ -103,11 +121,16 @@ describe("gitHubGistClient", () => {
   })
 })
 
-function gist(id: string, filename: string, content: string | undefined) {
+function gist(
+  id: string,
+  filename: string,
+  content: string | undefined,
+  updatedAt = "2026-06-01T00:00:00.000Z"
+) {
   return {
     id,
     description: "test",
-    updated_at: "2026-06-01T00:00:00.000Z",
+    updated_at: updatedAt,
     files: {
       [filename]: {
         filename,
