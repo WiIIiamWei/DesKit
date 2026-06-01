@@ -30,13 +30,13 @@ export function syncErrorMessageKey(message: string): string | null {
   if (/401|Bad credentials|GitHub is not connected/i.test(message)) {
     return "sync.messages.authExpired"
   }
-  if (/404|Gist was not found|Unable to read GitHub Gist/i.test(message)) {
+  if (/\b404\b|Gist was not found|Unable to read GitHub Gist|\bNot Found\b/i.test(message)) {
     return "sync.messages.gistNotFound"
   }
   if (/Gist cannot be updated/i.test(message)) {
     return "sync.messages.gistNotWritable"
   }
-  if (/403|rate limit/i.test(message)) {
+  if (/\b403\b|\bForbidden\b|rate limit/i.test(message)) {
     return "sync.messages.githubForbidden"
   }
   if (/invalid JSON|invalid sync payload|Unsupported sync payload/i.test(message)) {

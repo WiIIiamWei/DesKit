@@ -298,10 +298,9 @@ function registerIpc(): void {
   })
 
   ipcMain.handle("sync:use-local", async (_event, passphrase: unknown) => {
+    const result = await syncService.applyLocal(requireAccessToken(), requirePassphrase(passphrase))
     pendingSyncConflict = undefined
-    return syncRunResult(
-      await syncService.applyLocal(requireAccessToken(), requirePassphrase(passphrase))
-    )
+    return syncRunResult(result)
   })
 
   ipcMain.handle("sync:disconnect", async () => {
@@ -432,6 +431,10 @@ function markSyncLocalChanged(): void {
 }
 
 function scheduleSyncUpload(): void {
+  if (pendingSyncConflict) {
+    clearScheduledSyncUpload()
+    return
+  }
   if (syncUploadTimer) clearTimeout(syncUploadTimer)
   syncUploadTimer = setTimeout(() => {
     syncUploadTimer = undefined
@@ -441,7 +444,14 @@ function scheduleSyncUpload(): void {
   }, 3000)
 }
 
+function clearScheduledSyncUpload(): void {
+  if (!syncUploadTimer) return
+  clearTimeout(syncUploadTimer)
+  syncUploadTimer = undefined
+}
+
 async function pushSyncWithSavedCredentials(): Promise<PushSyncResult | undefined> {
+  if (pendingSyncConflict) return undefined
   const state = syncState.get()
   if (!state.enabled || !state.encryptedAccessToken) return undefined
   const passphrase = savedPassphrase()
@@ -459,7 +469,10 @@ async function pullSyncWithSavedCredentials(): Promise<PullSyncResult | undefine
 
 async function pullSyncWithPassphrase(passphrase: string): Promise<PullSyncResult> {
   const result = await syncService.pull(requireAccessToken(), passphrase)
-  if (result.status === "conflict") pendingSyncConflict = result.payload
+  if (result.status === "conflict") {
+    pendingSyncConflict = result.payload
+    clearScheduledSyncUpload()
+  }
   if (result.status === "applied") {
     pendingSyncConflict = undefined
     afterSyncedStateApplied()
@@ -529,14 +542,19 @@ function savedPassphrase(): string | undefined {
 }
 
 function encryptLocalSecret(value: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("Electron safeStorage encryption is not available")
-  }
+  ensureSafeStorageEncryptionAvailable()
   return safeStorage.encryptString(value).toString("base64")
 }
 
 function decryptLocalSecret(value: string): string {
+  ensureSafeStorageEncryptionAvailable()
   return safeStorage.decryptString(Buffer.from(value, "base64"))
+}
+
+function ensureSafeStorageEncryptionAvailable(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("Electron safeStorage encryption is not available")
+  }
 }
 
 function requireRecord(value: unknown, name: string): Record<string, unknown> {

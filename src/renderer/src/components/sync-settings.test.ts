@@ -28,5 +28,11 @@ describe("sync settings", () => {
     expect(syncErrorMessageKey("GitHubGistClientError: 403 Gist cannot be updated.")).toBe(
       "sync.messages.gistNotWritable"
     )
+    expect(syncErrorMessageKey("GitHubGistClientError: Not Found")).toBe(
+      "sync.messages.gistNotFound"
+    )
+    expect(syncErrorMessageKey("GitHubGistClientError: Forbidden")).toBe(
+      "sync.messages.githubForbidden"
+    )
   })
 })

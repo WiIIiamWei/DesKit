@@ -76,7 +76,7 @@ export function SyncSettings() {
         setMessage(t("sync.messages.loginDone", { login: result.login }))
       } else {
         if (result.status === "slow_down") {
-          setLoginPollInterval(nextGitHubLoginPollInterval)
+          setLoginPollInterval((current) => nextGitHubLoginPollInterval(current))
         }
         setMessage(t(`sync.messages.login.${result.status}`))
       }
