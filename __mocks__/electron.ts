@@ -59,7 +59,7 @@ function createBrowserWindowMock() {
 }
 
 export const contextBridge = { exposeInMainWorld: vi.fn() }
-export const ipcRenderer = { invoke: vi.fn(), on: vi.fn() }
+export const ipcRenderer = { invoke: vi.fn(), send: vi.fn(), on: vi.fn() }
 export const ipcMain = { handle: vi.fn(), on: vi.fn() }
 export const app = {
   whenReady: vi.fn(() => Promise.resolve()),

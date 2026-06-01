@@ -250,7 +250,7 @@ function registerIpc(): void {
     return next
   })
 
-  ipcMain.handle("screenshot:selection-complete", (event, payload: unknown) => {
+  ipcMain.on("screenshot:selection-complete", (event, payload: unknown) => {
     if (!payload || typeof payload !== "object") return
     const value = payload as Record<string, unknown>
     const selection = value.selection
@@ -275,7 +275,7 @@ function registerIpc(): void {
     )
   })
 
-  ipcMain.handle("screenshot:selection-cancel", (event) => {
+  ipcMain.on("screenshot:selection-cancel", (event) => {
     cancelScreenshotOverlay(event.sender)
   })
 
@@ -283,7 +283,7 @@ function registerIpc(): void {
     return getScreenshotAnnotatorImage(event.sender)
   })
 
-  ipcMain.handle("screenshot:annotation-complete", (event, payload: unknown) => {
+  ipcMain.on("screenshot:annotation-complete", (event, payload: unknown) => {
     if (!payload || typeof payload !== "object") return
     const value = payload as Record<string, unknown>
     const action = value.action
@@ -294,7 +294,7 @@ function registerIpc(): void {
     completeScreenshotAnnotation(event.sender, { action, dataUrl: value.dataUrl })
   })
 
-  ipcMain.handle("screenshot:annotation-cancel", (event) => {
+  ipcMain.on("screenshot:annotation-cancel", (event) => {
     cancelScreenshotAnnotation(event.sender)
   })
 
@@ -316,7 +316,7 @@ function registerIpc(): void {
     if (typeof opacity === "number") setPinnedImageOpacity(event.sender, opacity)
   })
 
-  ipcMain.handle("pinned-image:close", (event) => {
+  ipcMain.on("pinned-image:close", (event) => {
     closePinnedImageWindow(event.sender)
   })
 

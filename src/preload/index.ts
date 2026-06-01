@@ -52,18 +52,18 @@ const electronAPI = {
   completeScreenshotSelection: (
     selection: { x: number; y: number; width: number; height: number },
     action: ScreenshotAction
-  ) => ipcRenderer.invoke("screenshot:selection-complete", { selection, action }),
-  cancelScreenshotSelection: () => ipcRenderer.invoke("screenshot:selection-cancel"),
+  ) => ipcRenderer.send("screenshot:selection-complete", { selection, action }),
+  cancelScreenshotSelection: () => ipcRenderer.send("screenshot:selection-cancel"),
   getScreenshotAnnotationImage: () => ipcRenderer.invoke("screenshot:annotation-image"),
   completeScreenshotAnnotation: (dataUrl: string, action: Exclude<ScreenshotAction, "annotate">) =>
-    ipcRenderer.invoke("screenshot:annotation-complete", { dataUrl, action }),
-  cancelScreenshotAnnotation: () => ipcRenderer.invoke("screenshot:annotation-cancel"),
+    ipcRenderer.send("screenshot:annotation-complete", { dataUrl, action }),
+  cancelScreenshotAnnotation: () => ipcRenderer.send("screenshot:annotation-cancel"),
   getPinnedImageData: () => ipcRenderer.invoke("pinned-image:data"),
   copyPinnedImage: () => ipcRenderer.invoke("pinned-image:copy"),
   savePinnedImage: () => ipcRenderer.invoke("pinned-image:save"),
   setPinnedImageOpacity: (opacity: number) =>
     ipcRenderer.invoke("pinned-image:set-opacity", opacity),
-  closePinnedImage: () => ipcRenderer.invoke("pinned-image:close"),
+  closePinnedImage: () => ipcRenderer.send("pinned-image:close"),
 
   // ---- Plugins ----
   listPlugins: () => ipcRenderer.invoke("plugin:list"),

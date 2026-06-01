@@ -166,19 +166,19 @@ declare global {
       completeScreenshotSelection: (
         selection: { x: number; y: number; width: number; height: number },
         action: DeskitScreenshotAction
-      ) => Promise<void>
-      cancelScreenshotSelection: () => Promise<void>
+      ) => void
+      cancelScreenshotSelection: () => void
       getScreenshotAnnotationImage: () => Promise<string | null>
       completeScreenshotAnnotation: (
         dataUrl: string,
         action: Exclude<DeskitScreenshotAction, "annotate">
-      ) => Promise<void>
-      cancelScreenshotAnnotation: () => Promise<void>
+      ) => void
+      cancelScreenshotAnnotation: () => void
       getPinnedImageData: () => Promise<string | null>
       copyPinnedImage: () => Promise<void>
       savePinnedImage: () => Promise<void>
       setPinnedImageOpacity: (opacity: number) => Promise<void>
-      closePinnedImage: () => Promise<void>
+      closePinnedImage: () => void
       listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
       getPlugin: (
         pluginId: string
