@@ -1,25 +1,9 @@
 import type { IpcMainInvokeEvent } from "electron"
 import type { SearchWindowDeps } from "./search-window"
-import type {
-  DeskitSyncPayload,
-  PullSyncResult,
-  PushSyncResult,
-} from "./sync/settings-sync-service"
-import { Buffer } from "node:buffer"
 import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
-import {
-  app,
-  BrowserWindow,
-  ipcMain,
-  Menu,
-  net,
-  protocol,
-  safeStorage,
-  session,
-  shell,
-} from "electron"
+import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } from "electron"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -43,10 +27,6 @@ import {
   toggleSearchWindow,
 } from "./search-window"
 import { bindGlobalShortcut, unbindGlobalShortcut } from "./shortcut"
-import { DEFAULT_GITHUB_OAUTH_CLIENT_ID } from "./sync/defaults"
-import { GitHubGistClient, GitHubGistClientError } from "./sync/gist-client"
-import { SettingsSyncService } from "./sync/settings-sync-service"
-import { syncStateFilePath, SyncStateStore } from "./sync/sync-store"
 import { createTray, defaultTrayIcon, destroyTray, refreshTrayMenu } from "./tray"
 import { attachWindowSecurity } from "./window-security"
 
@@ -138,11 +118,6 @@ function registerStaticProtocol(): void {
 
 const launcher = new LauncherService()
 let plugins: PluginHost
-let syncState: SyncStateStore
-let syncService: SettingsSyncService
-let syncUploadTimer: NodeJS.Timeout | undefined
-let sessionPassphrase: string | undefined
-let pendingSyncConflict: DeskitSyncPayload | undefined
 let mainWindow: BrowserWindow | null = null
 // Tracks whether quit was explicitly requested through the tray menu, so
 // the main-window close handler can distinguish "user clicked X" (hide)
@@ -218,108 +193,12 @@ function registerIpc(): void {
     refreshTrayMenu(trayActions())
     syncFloatingBallWindow(floatingBallDeps())
     broadcastSettingsChanged(next)
-    markSyncLocalChanged()
     return next
-  })
-
-  ipcMain.handle("sync:get-status", () => syncStatus())
-
-  ipcMain.handle("sync:save-client-id", async (_event, clientId: unknown) => {
-    await syncState.update({ githubOAuthClientId: requireString(clientId, "clientId") })
-    return syncStatus()
-  })
-
-  ipcMain.handle("sync:save-gist-id", async (_event, gistId: unknown) => {
-    await syncState.update({ gistId: requireString(gistId, "gistId") })
-    return syncStatus()
-  })
-
-  ipcMain.handle("sync:github-login-start", async () => {
-    const state = syncState.get()
-    if (!state.githubOAuthClientId) throw new Error("GitHub OAuth client ID is not configured")
-    return githubSyncClient().startDeviceAuthorization(state.githubOAuthClientId)
-  })
-
-  ipcMain.handle("sync:github-login-poll", async (_event, deviceCode: unknown) => {
-    const state = syncState.get()
-    if (!state.githubOAuthClientId) throw new Error("GitHub OAuth client ID is not configured")
-    try {
-      const token = await githubSyncClient().pollDeviceToken(
-        state.githubOAuthClientId,
-        requireString(deviceCode, "deviceCode")
-      )
-      const user = await githubSyncClient().getAuthenticatedUser(token.accessToken)
-      await syncState.update({
-        encryptedAccessToken: encryptLocalSecret(token.accessToken),
-        githubUserLogin: user.login,
-      })
-      return { status: "authenticated", login: user.login }
-    } catch (err) {
-      if (err instanceof GitHubGistClientError && err.code) {
-        if (err.code === "authorization_pending") return { status: "pending" }
-        if (err.code === "slow_down") return { status: "slow_down" }
-        if (err.code === "expired_token") return { status: "expired" }
-        if (err.code === "access_denied") return { status: "denied" }
-      }
-      throw err
-    }
-  })
-
-  ipcMain.handle("sync:configure-passphrase", async (_event, payload: unknown) => {
-    const value = requireRecord(payload, "sync passphrase payload")
-    const passphrase = requireString(value.passphrase, "passphrase")
-    const rememberPassphrase = Boolean(value.rememberPassphrase)
-    sessionPassphrase = passphrase
-    await syncState.update({
-      enabled: true,
-      rememberPassphrase,
-      encryptedPassphrase: rememberPassphrase ? encryptLocalSecret(passphrase) : undefined,
-    })
-    void pullSyncWithSavedCredentials().catch((err) =>
-      console.warn("[deskit] initial sync pull failed", err)
-    )
-    return syncStatus()
-  })
-
-  ipcMain.handle("sync:push", async (_event, passphrase: unknown) =>
-    syncRunResult(await syncService.push(requireAccessToken(), requirePassphrase(passphrase)))
-  )
-
-  ipcMain.handle("sync:pull", async (_event, passphrase: unknown) =>
-    syncRunResult(await pullSyncWithPassphrase(requirePassphrase(passphrase)))
-  )
-
-  ipcMain.handle("sync:use-remote", async () => {
-    if (!pendingSyncConflict) throw new Error("No sync conflict is pending")
-    await syncService.applyRemote(pendingSyncConflict)
-    pendingSyncConflict = undefined
-    afterSyncedStateApplied()
-    return syncStatus()
-  })
-
-  ipcMain.handle("sync:use-local", async (_event, passphrase: unknown) => {
-    pendingSyncConflict = undefined
-    return syncRunResult(
-      await syncService.applyLocal(requireAccessToken(), requirePassphrase(passphrase))
-    )
-  })
-
-  ipcMain.handle("sync:disconnect", async () => {
-    sessionPassphrase = undefined
-    pendingSyncConflict = undefined
-    await syncState.update({
-      enabled: false,
-      encryptedAccessToken: undefined,
-      encryptedPassphrase: undefined,
-      githubUserLogin: undefined,
-    })
-    return syncStatus()
   })
 
   registerPluginIpc(ipcMain, plugins, {
     isTrustedSender: isTrustedIpcSender,
     onRegistryChanged: broadcastPluginRegistryChanged,
-    onPreferencesChanged: markSyncLocalChanged,
   })
 }
 
@@ -386,169 +265,6 @@ function coercePatch(value: unknown): Partial<{
     )
   }
   return out
-}
-
-function createSyncService(): SettingsSyncService {
-  return new SettingsSyncService({
-    stateStore: syncState,
-    gistClient: githubSyncClient(),
-    getSettings: () => launcher.getSettings(),
-    updateSettings: applySyncedSettings,
-    exportPluginPreferences: () => plugins.exportPreferences(),
-    importPluginPreferences: (preferences) => plugins.importSyncedPreferences(preferences),
-  })
-}
-
-function githubSyncClient(): GitHubGistClient {
-  return new GitHubGistClient({
-    fetch: (url, init) => net.fetch(url instanceof URL ? url.toString() : url, init),
-  })
-}
-
-async function applySyncedSettings(patch: Partial<ReturnType<typeof launcher.getSettings>>) {
-  const previous = launcher.getSettings()
-  const requested = coercePatch(patch)
-  if (requested.hotkey && requested.hotkey !== previous.hotkey && !rebindHotkey(requested.hotkey)) {
-    delete requested.hotkey
-  }
-  const next = await launcher.updateSettings(requested)
-  afterSyncedStateApplied()
-  return next
-}
-
-function afterSyncedStateApplied(): void {
-  refreshTrayMenu(trayActions())
-  syncFloatingBallWindow(floatingBallDeps())
-  broadcastSettingsChanged(launcher.getSettings())
-  broadcastPluginRegistryChanged(plugins.list())
-}
-
-function markSyncLocalChanged(): void {
-  if (!syncService) return
-  void syncService
-    .markLocalChanged()
-    .then(scheduleSyncUpload)
-    .catch((err) => console.warn("[deskit] failed to mark sync local change", err))
-}
-
-function scheduleSyncUpload(): void {
-  if (syncUploadTimer) clearTimeout(syncUploadTimer)
-  syncUploadTimer = setTimeout(() => {
-    syncUploadTimer = undefined
-    void pushSyncWithSavedCredentials().catch((err) =>
-      console.warn("[deskit] background sync upload failed", err)
-    )
-  }, 3000)
-}
-
-async function pushSyncWithSavedCredentials(): Promise<PushSyncResult | undefined> {
-  const state = syncState.get()
-  if (!state.enabled || !state.encryptedAccessToken) return undefined
-  const passphrase = savedPassphrase()
-  if (!passphrase) return undefined
-  return syncService.push(decryptLocalSecret(state.encryptedAccessToken), passphrase)
-}
-
-async function pullSyncWithSavedCredentials(): Promise<PullSyncResult | undefined> {
-  const state = syncState.get()
-  if (!state.enabled || !state.encryptedAccessToken) return undefined
-  const passphrase = savedPassphrase()
-  if (!passphrase) return undefined
-  return pullSyncWithPassphrase(passphrase)
-}
-
-async function pullSyncWithPassphrase(passphrase: string): Promise<PullSyncResult> {
-  const result = await syncService.pull(requireAccessToken(), passphrase)
-  if (result.status === "conflict") pendingSyncConflict = result.payload
-  if (result.status === "applied") {
-    pendingSyncConflict = undefined
-    afterSyncedStateApplied()
-  }
-  return result
-}
-
-function syncRunResult(
-  result: PullSyncResult | PushSyncResult
-):
-  | { status: "empty" | "created" | "updated" | "applied" }
-  | { status: "conflict"; conflict: { updatedAt: string; deviceId: string } } {
-  if (result.status === "conflict") {
-    return {
-      status: "conflict",
-      conflict: {
-        updatedAt: result.payload.updatedAt,
-        deviceId: result.payload.deviceId,
-      },
-    }
-  }
-  return { status: result.status }
-}
-
-function syncStatus() {
-  const state = syncState.get()
-  return {
-    configured: Boolean(state.githubOAuthClientId),
-    enabled: state.enabled,
-    loggedIn: Boolean(state.encryptedAccessToken),
-    githubUserLogin: state.githubUserLogin,
-    gistId: state.gistId,
-    deviceId: state.deviceId,
-    lastSyncedAt: state.lastSyncedAt,
-    lastRemoteUpdatedAt: state.lastRemoteUpdatedAt,
-    lastLocalUpdatedAt: state.lastLocalUpdatedAt,
-    rememberPassphrase: state.rememberPassphrase,
-    hasSavedPassphrase: Boolean(state.encryptedPassphrase || sessionPassphrase),
-    pendingConflict: pendingSyncConflict
-      ? { updatedAt: pendingSyncConflict.updatedAt, deviceId: pendingSyncConflict.deviceId }
-      : undefined,
-  }
-}
-
-function requireAccessToken(): string {
-  const state = syncState.get()
-  if (!state.encryptedAccessToken) throw new Error("GitHub is not connected")
-  return decryptLocalSecret(state.encryptedAccessToken)
-}
-
-function requirePassphrase(value: unknown): string {
-  if (typeof value === "string" && value.trim()) {
-    sessionPassphrase = value.trim()
-    return sessionPassphrase
-  }
-  const saved = savedPassphrase()
-  if (!saved) throw new Error("Sync passphrase is required")
-  return saved
-}
-
-function savedPassphrase(): string | undefined {
-  const state = syncState.get()
-  if (sessionPassphrase) return sessionPassphrase
-  if (!state.encryptedPassphrase) return undefined
-  sessionPassphrase = decryptLocalSecret(state.encryptedPassphrase)
-  return sessionPassphrase
-}
-
-function encryptLocalSecret(value: string): string {
-  if (!safeStorage.isEncryptionAvailable()) {
-    throw new Error("Electron safeStorage encryption is not available")
-  }
-  return safeStorage.encryptString(value).toString("base64")
-}
-
-function decryptLocalSecret(value: string): string {
-  return safeStorage.decryptString(Buffer.from(value, "base64"))
-}
-
-function requireRecord(value: unknown, name: string): Record<string, unknown> {
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error(`${name} must be an object`)
-  }
-  return value as Record<string, unknown>
-}
-
-function requireString(value: unknown, name: string): string {
-  if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`)
-  return value.trim()
 }
 
 function searchWindowDeps(): SearchWindowDeps {
@@ -702,14 +418,6 @@ if (!gotLock) {
     applyCsp()
     registerStaticProtocol()
     plugins = createPluginHost()
-    syncState = new SyncStateStore(syncStateFilePath(app.getPath("userData")))
-    await syncState.load()
-    const defaultClientId =
-      process.env.DESKIT_GITHUB_OAUTH_CLIENT_ID || DEFAULT_GITHUB_OAUTH_CLIENT_ID
-    if (!syncState.get().githubOAuthClientId && defaultClientId) {
-      await syncState.update({ githubOAuthClientId: defaultClientId })
-    }
-    syncService = createSyncService()
     registerIpc()
 
     // Remove the default File/Edit/View… menu bar — the app uses a tray icon
@@ -718,9 +426,6 @@ if (!gotLock) {
 
     const settings = await launcher.init()
     await plugins.init()
-    void pullSyncWithSavedCredentials().catch((err) =>
-      console.warn("[deskit] startup sync pull failed", err)
-    )
 
     // Pre-warm both the main window (so the first show is instant) and the
     // app cache (so the first launcher query has results).

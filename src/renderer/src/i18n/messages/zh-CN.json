@@ -36,61 +36,6 @@
     "accent.rose": "玫红",
     "accent.violet": "紫罗兰"
   },
-  "sync": {
-    "title": "Gist 同步",
-    "subtitle": "通过端到端加密的 GitHub 私密 Gist 同步用户设置和插件偏好。",
-    "unavailable": "同步仅在桌面应用内可用。",
-    "loading": "正在读取同步状态…",
-    "clientId": "GitHub OAuth Client ID",
-    "clientIdPlaceholder": "粘贴 OAuth App client ID",
-    "clientIdHint": "DesKit 已内置默认 OAuth App。只有开发调试或自托管构建时才需要覆盖。",
-    "gistId": "已有 Gist ID",
-    "gistIdPlaceholder": "可选高级配置",
-    "gistIdHint": "可选。粘贴已有 DesKit 同步 Gist ID，让这台设备复用它。",
-    "save": "保存",
-    "login": "登录 GitHub",
-    "userCode": "GitHub 设备验证码",
-    "openGitHub": "打开 GitHub",
-    "passphrase": "同步密码",
-    "passphraseSaved": "已保存在本机",
-    "remember": "记住这台设备",
-    "savePassphrase": "保存密码",
-    "pull": "拉取",
-    "push": "上传",
-    "refresh": "刷新",
-    "disconnect": "断开",
-    "conflictTitle": "同步冲突",
-    "conflictBody": "远端设置在 {{updatedAt}} 发生变化，同时这台设备也有本地修改。",
-    "useRemote": "使用远端",
-    "useLocal": "使用本机",
-    "lastSynced": "上次同步：{{time}}",
-    "status": {
-      "needsClient": "需要先配置 GitHub OAuth",
-      "needsLogin": "需要登录 GitHub",
-      "needsPassphrase": "设置同步密码后才能启用加密同步",
-      "conflict": "需要选择如何处理冲突",
-      "ready": "加密同步已就绪"
-    },
-    "messages": {
-      "clientSaved": "OAuth client ID 已保存。",
-      "gistSaved": "Gist ID 已保存。",
-      "loginStarted": "GitHub 登录已开始。",
-      "loginDone": "已登录为 @{{login}}。",
-      "passphraseSaved": "同步密码已保存。",
-      "pulled": "已应用远端设置。",
-      "pushed": "已上传本机设置。",
-      "conflict": "远端和本机修改存在冲突。",
-      "remoteApplied": "已应用远端设置。",
-      "localUploaded": "已上传本机设置。",
-      "disconnected": "已在这台设备断开同步。",
-      "login": {
-        "pending": "等待 GitHub 授权…",
-        "slow_down": "GitHub 要求降低轮询频率。",
-        "expired": "GitHub 设备验证码已过期。",
-        "denied": "GitHub 授权已取消。"
-      }
-    }
-  },
   "appLauncher": {
     "feature": {
       "title": "应用启动器",

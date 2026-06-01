@@ -70,23 +70,6 @@ describe("pluginPreferenceStore", () => {
     expect(reopened.get("com.deskit.test")).toEqual({ unit: "s" })
   })
 
-  it("exports and imports preference snapshots", async () => {
-    const file = path.join(dir, "store.json")
-    const store = new PluginPreferenceStore(file)
-    await store.load()
-    await store.set("com.deskit.test", "unit", "s")
-
-    expect(store.exportAll()).toEqual({ "com.deskit.test": { unit: "s" } })
-
-    await store.importPreferences({
-      "com.deskit.test": { unit: "ms" },
-      "com.deskit.pending": { enabled: true },
-    })
-
-    expect(store.get("com.deskit.test")).toEqual({ unit: "ms" })
-    expect(store.get("com.deskit.pending")).toEqual({ enabled: true })
-  })
-
   it("delete(pluginId) drops the whole plugin from the file", async () => {
     const file = path.join(dir, "store.json")
     const store = new PluginPreferenceStore(file)
