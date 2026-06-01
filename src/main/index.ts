@@ -1,9 +1,22 @@
 import type { IpcMainInvokeEvent } from "electron"
+import type { LanDevice, LanPairing, LanStatus, LanTransfer } from "./lan/types"
 import type { SearchWindowDeps } from "./search-window"
+import { Buffer } from "node:buffer"
 import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } from "electron"
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  ipcMain,
+  Menu,
+  net,
+  protocol,
+  safeStorage,
+  session,
+  shell,
+} from "electron"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -12,8 +25,11 @@ import {
   syncFloatingBallWindow,
   toggleFloatingBallMenu,
 } from "./floating-ball-window"
+import { registerLanIpc } from "./ipc/lan"
 import { LauncherService } from "./ipc/launcher-service"
 import { registerPluginIpc } from "./ipc/plugins"
+import { BonjourLanDiscoveryAdapter } from "./lan/bonjour-discovery-adapter"
+import { LanService } from "./lan/lan-service"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { PluginHost } from "./plugins/plugin-host"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
@@ -118,6 +134,7 @@ function registerStaticProtocol(): void {
 
 const launcher = new LauncherService()
 let plugins: PluginHost
+let lan: LanService
 let mainWindow: BrowserWindow | null = null
 // Tracks whether quit was explicitly requested through the tray menu, so
 // the main-window close handler can distinguish "user clicked X" (hide)
@@ -189,6 +206,9 @@ function registerIpc(): void {
     if (next.hotkey !== previous.hotkey && !rebindHotkey(next.hotkey)) {
       next = await launcher.updateSettings({ hotkey: previous.hotkey })
     }
+    if (next.lanEnabled !== previous.lanEnabled) {
+      next = await syncLanEnabled(next, previous)
+    }
 
     refreshTrayMenu(trayActions())
     syncFloatingBallWindow(floatingBallDeps())
@@ -199,6 +219,21 @@ function registerIpc(): void {
   registerPluginIpc(ipcMain, plugins, {
     isTrustedSender: isTrustedIpcSender,
     onRegistryChanged: broadcastPluginRegistryChanged,
+  })
+  registerLanIpc(ipcMain, lan, {
+    isTrustedSender: isTrustedIpcSender,
+    onDevicesChanged: broadcastLanDevicesChanged,
+    onStatusChanged: broadcastLanStatusChanged,
+    onPairingsChanged: broadcastLanPairingsChanged,
+    onTransfersChanged: broadcastLanTransfersChanged,
+    selectSendFile: async () => {
+      const result = await dialog.showOpenDialog({ properties: ["openFile"] })
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    },
+    selectSaveFile: async (suggestedName) => {
+      const result = await dialog.showSaveDialog({ defaultPath: suggestedName })
+      return result.canceled ? null : (result.filePath ?? null)
+    },
   })
 }
 
@@ -235,12 +270,37 @@ function broadcastSettingsChanged(settings: ReturnType<typeof launcher.getSettin
   }
 }
 
+function broadcastLanDevicesChanged(devices: LanDevice[]): void {
+  broadcast("lan:devices-changed", devices)
+}
+
+function broadcastLanStatusChanged(status: LanStatus): void {
+  broadcast("lan:status-changed", status)
+}
+
+function broadcastLanPairingsChanged(pairings: LanPairing[]): void {
+  broadcast("lan:pairings-changed", pairings)
+}
+
+function broadcastLanTransfersChanged(transfers: LanTransfer[]): void {
+  broadcast("lan:transfers-changed", transfers)
+}
+
+function broadcast(channel: string, payload: unknown): void {
+  for (const win of BrowserWindow.getAllWindows()) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, payload)
+    }
+  }
+}
+
 function coercePatch(value: unknown): Partial<{
   hotkey: string
   themeMode: "light" | "dark" | "system"
   accent: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled: boolean
   floatingBallFeatures: "appLauncher"[]
+  lanEnabled: boolean
 }> {
   if (!value || typeof value !== "object") return {}
   const v = value as Record<string, unknown>
@@ -264,7 +324,25 @@ function coercePatch(value: unknown): Partial<{
       (feature): feature is "appLauncher" => feature === "appLauncher"
     )
   }
+  if (typeof v.lanEnabled === "boolean") out.lanEnabled = v.lanEnabled
   return out
+}
+
+async function syncLanEnabled(
+  next: ReturnType<typeof launcher.getSettings>,
+  previous: ReturnType<typeof launcher.getSettings>
+): Promise<ReturnType<typeof launcher.getSettings>> {
+  try {
+    if (next.lanEnabled) {
+      await lan.start()
+    } else {
+      await lan.stop()
+    }
+    return next
+  } catch (err) {
+    console.error("[deskit] failed to update LAN discovery state", err)
+    return launcher.updateSettings({ lanEnabled: previous.lanEnabled })
+  }
 }
 
 function searchWindowDeps(): SearchWindowDeps {
@@ -418,13 +496,32 @@ if (!gotLock) {
     applyCsp()
     registerStaticProtocol()
     plugins = createPluginHost()
+    lan = new LanService({
+      userDataDir: app.getPath("userData"),
+      adapter: new BonjourLanDiscoveryAdapter(),
+      protector: {
+        encrypt: (plainText) => {
+          if (!safeStorage.isEncryptionAvailable()) {
+            throw new Error("OS-backed encryption is unavailable for LAN credentials.")
+          }
+          return safeStorage.encryptString(plainText).toString("base64")
+        },
+        decrypt: (encryptedText) => safeStorage.decryptString(Buffer.from(encryptedText, "base64")),
+      },
+    })
     registerIpc()
 
     // Remove the default File/Edit/View… menu bar — the app uses a tray icon
     // and sidebar navigation instead.
     Menu.setApplicationMenu(null)
 
-    const settings = await launcher.init()
+    let settings = await launcher.init()
+    try {
+      await lan.init(settings.lanEnabled)
+    } catch (err) {
+      console.error("[deskit] failed to initialize LAN discovery", err)
+      settings = await launcher.updateSettings({ lanEnabled: false })
+    }
     await plugins.init()
 
     // Pre-warm both the main window (so the first show is instant) and the
@@ -453,6 +550,7 @@ if (!gotLock) {
   app.on("will-quit", () => {
     setSearchWindowQuitting(true)
     destroyFloatingBallWindow()
+    void lan?.stop().catch((err) => console.error("[deskit] failed to stop LAN discovery", err))
     unbindGlobalShortcut()
     destroyTray()
   })

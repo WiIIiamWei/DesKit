@@ -29,6 +29,23 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
+    getLanStatus: vi.fn().mockResolvedValue({
+      enabled: false,
+      discovering: false,
+      localDeviceId: "local",
+      localDeviceName: "Desktop",
+      deviceCount: 0,
+    }),
+    listLanDevices: vi.fn().mockResolvedValue([]),
+    listLanPairings: vi.fn().mockResolvedValue([]),
+    pairLanDevice: vi.fn(),
+    confirmLanPairing: vi.fn(),
+    rejectLanPairing: vi.fn(),
+    listLanTransfers: vi.fn().mockResolvedValue([]),
+    sendLanFile: vi.fn(),
+    resumeLanTransfer: vi.fn(),
+    acceptLanTransfer: vi.fn(),
+    rejectLanTransfer: vi.fn(),
     listPlugins: vi.fn().mockResolvedValue(ok([])),
     getPlugin: vi.fn().mockResolvedValue(ok(null)),
     setPluginEnabled: vi.fn().mockResolvedValue(ok(null)),
@@ -47,6 +64,10 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     onFloatingBallFeatures: vi.fn(() => () => undefined),
     onPluginRegistryChanged: vi.fn(() => () => undefined),
     onSettingsChanged: vi.fn(() => () => undefined),
+    onLanDevicesChanged: vi.fn(() => () => undefined),
+    onLanStatusChanged: vi.fn(() => () => undefined),
+    onLanPairingsChanged: vi.fn(() => () => undefined),
+    onLanTransfersChanged: vi.fn(() => () => undefined),
   } satisfies TestElectronApi
 
   window.electronAPI = api
@@ -71,6 +92,7 @@ describe("launcher settings", () => {
       accent: "neutral",
       floatingBallEnabled: false,
       floatingBallFeatures: [],
+      lanEnabled: false,
     })
   })
 

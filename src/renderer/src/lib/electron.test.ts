@@ -2,6 +2,7 @@ import type { ElectronIpcError } from "./electron"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
   disposePluginCommand,
+  getLanStatus,
   getPlugin,
   getSettings,
   hideFloatingBall,
@@ -12,21 +13,27 @@ import {
   invokePluginCommand,
   isElectron,
   launchApp,
+  listLanDevices,
   listMarketplacePlugins,
   listPlugins,
   moveFloatingBallBy,
   notifyLauncherReady,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
+  onLanDevicesChanged,
+  onLanStatusChanged,
+  onLanTransfersChanged,
   onLauncherFocus,
   onPluginRegistryChanged,
   onSettingsChanged,
   openExternalUrl,
   openFloatingBallFeature,
+  pairLanDevice,
   refreshApps,
   reloadPlugin,
   searchApps,
   searchPluginCommands,
+  sendLanFile,
   setPluginEnabled,
   setPluginPreference,
   toggleFloatingBallMenu,
@@ -69,6 +76,7 @@ function mockApi() {
       accent: "blue",
       floatingBallEnabled: true,
       floatingBallFeatures: ["appLauncher"],
+      lanEnabled: false,
     }),
     updateSettings: vi.fn().mockResolvedValue({
       hotkey: "CommandOrControl+Space",
@@ -76,12 +84,34 @@ function mockApi() {
       accent: "blue",
       floatingBallEnabled: true,
       floatingBallFeatures: ["appLauncher"],
+      lanEnabled: false,
     }),
     onLauncherFocus: vi.fn().mockReturnValue(() => {}),
     onFloatingBallMenuState: vi.fn().mockReturnValue(() => {}),
     onFloatingBallFeatures: vi.fn().mockReturnValue(() => {}),
     onPluginRegistryChanged: vi.fn().mockReturnValue(() => {}),
     onSettingsChanged: vi.fn().mockReturnValue(() => {}),
+    getLanStatus: vi.fn().mockResolvedValue({
+      enabled: false,
+      discovering: false,
+      localDeviceId: "local",
+      localDeviceName: "Desktop",
+      deviceCount: 0,
+    }),
+    listLanDevices: vi.fn().mockResolvedValue([]),
+    listLanPairings: vi.fn().mockResolvedValue([]),
+    pairLanDevice: vi.fn(),
+    confirmLanPairing: vi.fn(),
+    rejectLanPairing: vi.fn(),
+    listLanTransfers: vi.fn().mockResolvedValue([]),
+    sendLanFile: vi.fn(),
+    resumeLanTransfer: vi.fn(),
+    acceptLanTransfer: vi.fn(),
+    rejectLanTransfer: vi.fn(),
+    onLanDevicesChanged: vi.fn().mockReturnValue(() => {}),
+    onLanStatusChanged: vi.fn().mockReturnValue(() => {}),
+    onLanPairingsChanged: vi.fn().mockReturnValue(() => {}),
+    onLanTransfersChanged: vi.fn().mockReturnValue(() => {}),
   }
   ;(window as unknown as { electronAPI: object }).electronAPI = api
   return api
@@ -180,6 +210,30 @@ describe("lib/electron", () => {
       const api = mockApi()
       await updateSettings({ themeMode: "dark" })
       expect(api.updateSettings).toHaveBeenCalledWith({ themeMode: "dark" })
+    })
+
+    it("getLanStatus calls getLanStatus", async () => {
+      const api = mockApi()
+      await getLanStatus()
+      expect(api.getLanStatus).toHaveBeenCalled()
+    })
+
+    it("listLanDevices calls listLanDevices", async () => {
+      const api = mockApi()
+      await listLanDevices()
+      expect(api.listLanDevices).toHaveBeenCalled()
+    })
+
+    it("pairLanDevice forwards device id", async () => {
+      const api = mockApi()
+      await pairLanDevice("peer")
+      expect(api.pairLanDevice).toHaveBeenCalledWith("peer")
+    })
+
+    it("sendLanFile forwards device id", async () => {
+      const api = mockApi()
+      await sendLanFile("peer")
+      expect(api.sendLanFile).toHaveBeenCalledWith("peer")
     })
 
     it("listPlugins calls listPlugins", async () => {
@@ -315,6 +369,27 @@ describe("lib/electron", () => {
       const handler = vi.fn()
       onSettingsChanged(handler)
       expect(api.onSettingsChanged).toHaveBeenCalledWith(handler)
+    })
+
+    it("onLanDevicesChanged forwards handler", () => {
+      const api = mockApi()
+      const handler = vi.fn()
+      onLanDevicesChanged(handler)
+      expect(api.onLanDevicesChanged).toHaveBeenCalledWith(handler)
+    })
+
+    it("onLanStatusChanged forwards handler", () => {
+      const api = mockApi()
+      const handler = vi.fn()
+      onLanStatusChanged(handler)
+      expect(api.onLanStatusChanged).toHaveBeenCalledWith(handler)
+    })
+
+    it("onLanTransfersChanged forwards handler", () => {
+      const api = mockApi()
+      const handler = vi.fn()
+      onLanTransfersChanged(handler)
+      expect(api.onLanTransfersChanged).toHaveBeenCalledWith(handler)
     })
   })
 })
