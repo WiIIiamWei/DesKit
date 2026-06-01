@@ -14,4 +14,19 @@ describe("sync settings", () => {
       )
     ).toBe("sync.messages.decryptFailed")
   })
+
+  it("maps common network and GitHub sync failures to localized messages", () => {
+    expect(syncErrorMessageKey("Error: net::ERR_TUNNEL_CONNECTION_FAILED")).toBe(
+      "sync.messages.network.proxyFailed"
+    )
+    expect(syncErrorMessageKey("Error: net::ERR_NAME_NOT_RESOLVED")).toBe(
+      "sync.messages.network.dnsFailed"
+    )
+    expect(syncErrorMessageKey("GitHubGistClientError: Bad credentials")).toBe(
+      "sync.messages.authExpired"
+    )
+    expect(syncErrorMessageKey("GitHubGistClientError: 403 Gist cannot be updated.")).toBe(
+      "sync.messages.gistNotWritable"
+    )
+  })
 })

@@ -428,8 +428,11 @@ export function SyncSettings() {
   )
 }
 
-function errorMessage(err: unknown, t: (key: string) => string): string {
+function errorMessage(
+  err: unknown,
+  t: (key: string, options?: Record<string, unknown>) => string
+): string {
   const message = err instanceof Error ? err.message : String(err)
   const key = syncErrorMessageKey(message)
-  return key ? t(key) : message
+  return key ? t(key) : t("sync.messages.unexpected", { detail: message })
 }
