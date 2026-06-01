@@ -33,6 +33,7 @@ import {
   saveSyncGistId,
   startGitHubLogin,
 } from "@/lib/electron"
+import { nextGitHubLoginPollInterval } from "./sync-settings-utils"
 
 type BusyAction =
   | "load"
@@ -53,6 +54,7 @@ export function SyncSettings() {
   const [passphrase, setPassphrase] = useState("")
   const [rememberPassphrase, setRememberPassphrase] = useState(true)
   const [authorization, setAuthorization] = useState<GitHubDeviceAuthorization | null>(null)
+  const [loginPollInterval, setLoginPollInterval] = useState(5)
   const [busy, setBusy] = useState<BusyAction | null>(null)
   const [message, setMessage] = useState<string>("")
 
@@ -69,9 +71,13 @@ export function SyncSettings() {
       const result = await pollGitHubLogin(authorization.deviceCode)
       if (result.status === "authenticated") {
         setAuthorization(null)
+        setLoginPollInterval(5)
         setStatus(await getSyncStatus())
         setMessage(t("sync.messages.loginDone", { login: result.login }))
       } else {
+        if (result.status === "slow_down") {
+          setLoginPollInterval(nextGitHubLoginPollInterval)
+        }
         setMessage(t(`sync.messages.login.${result.status}`))
       }
     } catch (err) {
@@ -81,12 +87,12 @@ export function SyncSettings() {
 
   useEffect(() => {
     if (!authorization) return
-    const intervalMs = Math.max(authorization.interval, 2) * 1000
+    const intervalMs = Math.max(loginPollInterval, 2) * 1000
     const timer = window.setInterval(() => {
       void pollLogin()
     }, intervalMs)
     return () => window.clearInterval(timer)
-  }, [authorization, pollLogin])
+  }, [authorization, loginPollInterval, pollLogin])
 
   const statusText = useMemo(() => {
     if (!isElectron()) return t("sync.unavailable")
@@ -131,6 +137,7 @@ export function SyncSettings() {
     await run("login", async () => {
       const next = await startGitHubLogin()
       setAuthorization(next)
+      setLoginPollInterval(next.interval)
       setMessage(t("sync.messages.loginStarted"))
       await openExternalUrl(next.verificationUri)
     })
@@ -176,6 +183,7 @@ export function SyncSettings() {
     await run("disconnect", async () => {
       setStatus(await disconnectSync())
       setAuthorization(null)
+      setLoginPollInterval(5)
       setMessage(t("sync.messages.disconnected"))
     })
   }
