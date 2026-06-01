@@ -44,12 +44,39 @@ describe("gitHubGistClient", () => {
   })
 
   it("finds the DesKit sync gist by filename", async () => {
-    const fetch = vi.fn(async () =>
-      Response.json([gist("one", "other.json", "{}"), gist("two", DESKIT_SYNC_GIST_FILENAME, "{}")])
-    )
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json([
+          gist("one", "other.json", undefined),
+          gist("two", DESKIT_SYNC_GIST_FILENAME, undefined),
+        ])
+      )
+      .mockResolvedValueOnce(Response.json(gist("two", DESKIT_SYNC_GIST_FILENAME, "{}")))
     const client = new GitHubGistClient({ fetch })
 
     await expect(client.findSyncGist("token")).resolves.toMatchObject({ id: "two" })
+    expect(fetch).toHaveBeenNthCalledWith(2, "https://api.github.com/gists/two", expect.any(Object))
+  })
+
+  it("checks later Gist pages when the first page has a next link", async () => {
+    const fetch = vi
+      .fn()
+      .mockResolvedValueOnce(
+        Response.json([gist("one", "other.json", undefined)], {
+          headers: { link: '<https://api.github.com/gists?per_page=100&page=2>; rel="next"' },
+        })
+      )
+      .mockResolvedValueOnce(Response.json([gist("two", DESKIT_SYNC_GIST_FILENAME, undefined)]))
+      .mockResolvedValueOnce(Response.json(gist("two", DESKIT_SYNC_GIST_FILENAME, "{}")))
+    const client = new GitHubGistClient({ fetch })
+
+    await expect(client.findSyncGist("token")).resolves.toMatchObject({ id: "two" })
+    expect(fetch).toHaveBeenNthCalledWith(
+      2,
+      "https://api.github.com/gists?per_page=100&page=2",
+      expect.any(Object)
+    )
   })
 
   it("creates secret Gists with the fixed sync filename", async () => {
@@ -76,7 +103,7 @@ describe("gitHubGistClient", () => {
   })
 })
 
-function gist(id: string, filename: string, content: string) {
+function gist(id: string, filename: string, content: string | undefined) {
   return {
     id,
     description: "test",
@@ -84,7 +111,7 @@ function gist(id: string, filename: string, content: string) {
     files: {
       [filename]: {
         filename,
-        content,
+        ...(content === undefined ? {} : { content }),
         raw_url: `https://gist.githubusercontent.com/${id}/${filename}`,
       },
     },

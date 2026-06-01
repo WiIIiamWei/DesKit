@@ -125,15 +125,18 @@ export class GitHubGistClient {
   }
 
   async findSyncGist(accessToken: string): Promise<GistSummary | null> {
-    const response = await this.fetchImpl(`${this.apiUrl}/gists`, {
-      headers: authHeaders(accessToken),
-    })
-    const data = await readJson(response)
-    if (!response.ok) throw githubError(response, data, "Unable to list GitHub Gists")
-    if (!Array.isArray(data)) throw new GitHubGistClientError("GitHub Gists response is invalid")
-    for (const item of data) {
-      const gist = parseGistSummary(item)
-      if (gist.files[DESKIT_SYNC_GIST_FILENAME]) return gist
+    for (let page = 1; page <= 10; page += 1) {
+      const response = await this.fetchImpl(`${this.apiUrl}/gists?per_page=100&page=${page}`, {
+        headers: authHeaders(accessToken),
+      })
+      const data = await readJson(response)
+      if (!response.ok) throw githubError(response, data, "Unable to list GitHub Gists")
+      if (!Array.isArray(data)) throw new GitHubGistClientError("GitHub Gists response is invalid")
+      for (const item of data) {
+        const gist = parseGistSummary(item)
+        if (gist.files[DESKIT_SYNC_GIST_FILENAME]) return this.getGist(accessToken, gist.id)
+      }
+      if (!hasNextPage(response)) break
     }
     return null
   }
@@ -264,6 +267,10 @@ function parseGistFiles(files: Record<string, unknown>): Record<string, GistFile
     }
   }
   return parsed
+}
+
+function hasNextPage(response: Response): boolean {
+  return /\brel="next"/.test(response.headers.get("link") ?? "")
 }
 
 function requireNonEmpty(value: string, name: string): string {
