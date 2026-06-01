@@ -1,5 +1,6 @@
 import type { MarketplaceEntry } from "./marketplace-registry"
 import type { PluginBridgeAdapters, PluginRuntimeSnapshot } from "./plugin-bridge"
+import type { PreferenceFile } from "./plugin-preferences"
 import type {
   PluginCommandResult,
   PluginInvokeRequest,
@@ -71,6 +72,12 @@ export class PluginInstallError extends Error {
     this.name = "PluginInstallError"
     this.details = details
   }
+}
+
+export interface PluginPreferenceImportResult {
+  applied: number
+  pending: number
+  skipped: Array<{ pluginId: string; key: string; reason: string }>
 }
 
 export class PluginHost {
@@ -152,6 +159,53 @@ export class PluginHost {
     }
 
     await this.preferences.set(pluginId, key, value)
+  }
+
+  exportPreferences(): PreferenceFile {
+    return this.preferences.exportAll()
+  }
+
+  async importSyncedPreferences(
+    preferences: PreferenceFile
+  ): Promise<PluginPreferenceImportResult> {
+    const next: PreferenceFile = {}
+    const skipped: PluginPreferenceImportResult["skipped"] = []
+    let applied = 0
+    let pending = 0
+
+    for (const [pluginId, pluginPreferences] of Object.entries(preferences)) {
+      const entry = this.registry.get(pluginId)
+      if (!entry?.manifest) {
+        next[pluginId] = { ...pluginPreferences }
+        pending += Object.keys(pluginPreferences).length
+        continue
+      }
+
+      const declared = entry.manifest.contributes.preferences ?? []
+      const valid: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(pluginPreferences)) {
+        const preference = declared.find((item) => item.id === key)
+        if (!preference) {
+          skipped.push({ pluginId, key, reason: "unknown preference" })
+          continue
+        }
+        try {
+          validatePreferenceValue(pluginId, key, value, preference)
+          valid[key] = value
+          applied += 1
+        } catch (err) {
+          skipped.push({
+            pluginId,
+            key,
+            reason: err instanceof Error ? err.message : "invalid preference",
+          })
+        }
+      }
+      if (Object.keys(valid).length > 0) next[pluginId] = valid
+    }
+
+    await this.preferences.importPreferences(next)
+    return { applied, pending, skipped }
   }
 
   // Implemented in a later stage (folder install + chokidar hot reload).

@@ -181,6 +181,38 @@ describe("pluginHost.setPreference value validation", () => {
       /Unknown plugin preference/
     )
   })
+
+  it("imports synced preferences and leaves uninstalled plugin preferences pending", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockImplementation((pluginId: string) =>
+      pluginId === "com.deskit.test" ? baseEntry : undefined
+    )
+
+    await expect(
+      host.importSyncedPreferences({
+        "com.deskit.test": {
+          label: "remote",
+          unit: "s",
+          missing: true,
+          limit: "large",
+        },
+        "com.deskit.pending": { token: "encrypted upstream" },
+      })
+    ).resolves.toMatchObject({
+      applied: 2,
+      pending: 1,
+      skipped: [
+        { pluginId: "com.deskit.test", key: "missing" },
+        { pluginId: "com.deskit.test", key: "limit" },
+      ],
+    })
+
+    expect(host.exportPreferences()).toEqual({
+      "com.deskit.test": { label: "remote", unit: "s" },
+      "com.deskit.pending": { token: "encrypted upstream" },
+    })
+  })
 })
 
 describe("pluginHost unsupported operations", () => {
