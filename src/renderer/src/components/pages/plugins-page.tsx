@@ -1,6 +1,6 @@
 import type { ReactNode } from "react"
 import type { PluginRegistryEntry } from "@/lib/electron"
-import { AlertCircle, RefreshCw, Trash2 } from "lucide-react"
+import { AlertCircle, ChevronDown, RefreshCw, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -8,14 +8,8 @@ import { localize } from "@/components/plugins/view-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -189,7 +183,7 @@ export function PluginsPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {plugins.map((plugin) => (
-            <PluginCard
+            <PluginListItem
               key={`${plugin.pluginId}:${plugin.source.kind}:${plugin.rootDir}`}
               locale={i18n.language}
               pending={pending}
@@ -231,7 +225,7 @@ function PageFrame({
   )
 }
 
-function PluginCard({
+function PluginListItem({
   locale,
   onPreferenceChange,
   onReload,
@@ -263,98 +257,111 @@ function PluginCard({
   const canUninstall = plugin.source.kind !== "builtin"
 
   return (
-    <Card className={cn("gap-4", plugin.status === "invalid" && "border-destructive/50")}>
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-2">
-            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-              <span className="truncate">{title}</span>
-              <StatusBadge status={plugin.status} />
-              <Badge variant="outline">{plugin.pluginId}</Badge>
-            </CardTitle>
-            <CardDescription>{description}</CardDescription>
-          </div>
-          <CardAction className="static col-auto row-auto justify-self-auto">
-            <div className="flex items-center gap-2">
-              <Label htmlFor={`plugin-enabled-${plugin.pluginId}`} className="text-xs">
-                {t(
-                  plugin.status === "disabled"
-                    ? "plugins.actions.enable"
-                    : "plugins.actions.disable"
-                )}
-              </Label>
-              <Switch
-                id={`plugin-enabled-${plugin.pluginId}`}
-                size="sm"
-                checked={plugin.status === "active"}
-                disabled={!canToggle || togglePending}
-                onCheckedChange={(checked) => void onToggle(plugin, checked)}
-              />
+    <Collapsible
+      className={cn(
+        "overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow",
+        plugin.status === "invalid" && "border-destructive/50"
+      )}
+    >
+      <div className="flex items-start gap-3 px-4 py-3">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="group flex min-w-0 flex-1 items-start gap-3 text-left outline-none"
+          >
+            <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-medium">{title}</span>
+                <StatusBadge status={plugin.status} />
+                <Badge variant="outline">{t(`plugins.source.${plugin.source.kind}`)}</Badge>
+              </div>
+              <p className="truncate text-sm text-muted-foreground" title={description}>
+                {description}
+              </p>
             </div>
-          </CardAction>
+          </button>
+        </CollapsibleTrigger>
+        <div className="flex shrink-0 items-center pt-0.5">
+          <Switch
+            id={`plugin-enabled-${plugin.pluginId}`}
+            checked={plugin.status === "active"}
+            disabled={!canToggle || togglePending}
+            aria-label={t(
+              plugin.status === "disabled" ? "plugins.actions.enable" : "plugins.actions.disable"
+            )}
+            onCheckedChange={(checked) => void onToggle(plugin, checked)}
+          />
         </div>
-      </CardHeader>
+      </div>
 
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-          <span>
-            {t("plugins.meta.version")}: {manifest?.version ?? "—"}
-          </span>
-          <span>
-            {t("plugins.meta.author")}: {manifest?.author ?? "—"}
-          </span>
-          <span>
-            {t("plugins.meta.commands")}: {manifest?.contributes.commands.length ?? 0}
-          </span>
-          <span className="truncate" title={plugin.rootDir}>
-            {t("plugins.meta.path")}: {plugin.rootDir}
-          </span>
-        </div>
+      <CollapsibleContent>
+        <div className="border-t px-4 py-4">
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <span className="min-w-0 truncate sm:col-span-2" title={plugin.pluginId}>
+                {t("plugins.meta.id")}: {plugin.pluginId}
+              </span>
+              <span>
+                {t("plugins.meta.version")}: {manifest?.version ?? "—"}
+              </span>
+              <span>
+                {t("plugins.meta.author")}: {manifest?.author ?? "—"}
+              </span>
+              <span>
+                {t("plugins.meta.commands")}: {manifest?.contributes.commands.length ?? 0}
+              </span>
+              <span className="min-w-0 truncate sm:col-span-2" title={plugin.rootDir}>
+                {t("plugins.meta.path")}: {plugin.rootDir}
+              </span>
+            </div>
 
-        {plugin.error && (
-          <Alert variant="destructive">
-            <AlertCircle className="size-4" aria-hidden />
-            <AlertTitle>{t("plugins.pluginErrorTitle")}</AlertTitle>
-            <AlertDescription>{plugin.error}</AlertDescription>
-          </Alert>
-        )}
+            {plugin.error && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" aria-hidden />
+                <AlertTitle>{t("plugins.pluginErrorTitle")}</AlertTitle>
+                <AlertDescription>{plugin.error}</AlertDescription>
+              </Alert>
+            )}
 
-        {manifest?.contributes.preferences?.length ? (
-          <>
+            {manifest?.contributes.preferences?.length ? (
+              <>
+                <Separator />
+                <PluginPreferences
+                  locale={locale}
+                  pending={pending}
+                  plugin={plugin}
+                  preferences={manifest.contributes.preferences}
+                  onPreferenceChange={onPreferenceChange}
+                />
+              </>
+            ) : null}
+
             <Separator />
-            <PluginPreferences
-              locale={locale}
-              pending={pending}
-              plugin={plugin}
-              preferences={manifest.contributes.preferences}
-              onPreferenceChange={onPreferenceChange}
-            />
-          </>
-        ) : null}
-
-        <Separator />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={reloadPending}
-            onClick={() => void onReload(plugin)}
-          >
-            <RefreshCw className={cn("size-4", reloadPending && "animate-spin")} aria-hidden />
-            {t("plugins.actions.reload")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!canUninstall || uninstallPending}
-            onClick={() => void onUninstall(plugin)}
-          >
-            <Trash2 className="size-4" aria-hidden />
-            {t("plugins.actions.uninstall")}
-          </Button>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={reloadPending}
+                onClick={() => void onReload(plugin)}
+              >
+                <RefreshCw className={cn("size-4", reloadPending && "animate-spin")} aria-hidden />
+                {t("plugins.actions.reload")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canUninstall || uninstallPending}
+                onClick={() => void onUninstall(plugin)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                {t("plugins.actions.uninstall")}
+              </Button>
+            </div>
+          </div>
         </div>
-      </CardContent>
-    </Card>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 

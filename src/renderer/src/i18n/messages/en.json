@@ -91,6 +91,7 @@
       "dev": "Development"
     },
     "meta": {
+      "id": "Plugin ID",
       "version": "Version",
       "author": "Author",
       "commands": "Commands",

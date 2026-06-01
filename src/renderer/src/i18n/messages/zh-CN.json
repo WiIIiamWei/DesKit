@@ -91,6 +91,7 @@
       "dev": "开发插件"
     },
     "meta": {
+      "id": "插件 ID",
       "version": "版本",
       "author": "作者",
       "commands": "命令",
