@@ -32,6 +32,10 @@ export function ImageAnnotatorPage() {
   const [drag, setDrag] = useState<DragState | null>(null)
 
   useEffect(() => {
+    const previousBodyBackground = document.body.style.background
+    const previousHtmlBackground = document.documentElement.style.background
+    document.body.style.background = "transparent"
+    document.documentElement.style.background = "transparent"
     let cancelled = false
     void getScreenshotAnnotationImage().then((dataUrl) => {
       if (cancelled || !dataUrl) return
@@ -50,6 +54,8 @@ export function ImageAnnotatorPage() {
     })
     return () => {
       cancelled = true
+      document.body.style.background = previousBodyBackground
+      document.documentElement.style.background = previousHtmlBackground
     }
   }, [])
 
@@ -105,8 +111,8 @@ export function ImageAnnotatorPage() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-zinc-950 text-white">
-      <div className="flex h-12 shrink-0 items-center justify-between border-b border-white/10 px-3">
+    <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white [-webkit-app-region:drag]">
+      <div className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border border-white/15 bg-zinc-950/85 px-1.5 py-1 shadow-2xl backdrop-blur [-webkit-app-region:no-drag]">
         <div className="flex items-center gap-1">
           <ToolButton active={tool === "arrow"} title="Arrow" onClick={() => setTool("arrow")}>
             <Slash className="size-4" aria-hidden />
@@ -122,6 +128,7 @@ export function ImageAnnotatorPage() {
             <Undo2 className="size-4" aria-hidden />
           </ToolButton>
         </div>
+        <div className="h-5 w-px bg-white/15" />
         <div className="flex items-center gap-1">
           <ToolButton title="Copy" onClick={() => void finish("copy")}>
             <Copy className="size-4" aria-hidden />
@@ -137,11 +144,11 @@ export function ImageAnnotatorPage() {
           </ToolButton>
         </div>
       </div>
-      <div className="grid min-h-0 flex-1 place-items-center overflow-auto p-4">
+      <div className="grid h-full place-items-center overflow-hidden [-webkit-app-region:no-drag]">
         <canvas
           ref={canvasRef}
           className={cn(
-            "max-h-full max-w-full bg-black shadow-2xl ring-1 ring-white/10",
+            "max-h-full max-w-full bg-transparent",
             tool === "mosaic" ? "cursor-cell" : "cursor-crosshair"
           )}
           onPointerDown={onPointerDown}

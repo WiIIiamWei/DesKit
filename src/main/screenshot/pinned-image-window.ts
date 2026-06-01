@@ -1,7 +1,7 @@
 import type { BrowserWindow as BrowserWindowType, WebContents } from "electron"
 import type { PinnedImageOptions, PinnedImageState } from "./types"
 import * as path from "node:path"
-import { BrowserWindow, nativeImage } from "electron"
+import { BrowserWindow, nativeImage, screen } from "electron"
 import { attachWindowSecurity } from "../window-security"
 
 export const DEFAULT_PINNED_IMAGE_OPACITY = 1
@@ -43,14 +43,17 @@ export function createPinnedImageWindow(
   state: PinnedImageState,
   deps: PinnedImageWindowDeps
 ): BrowserWindowType {
+  const bounds = getPinnedImageInitialBounds(state.imagePath)
   const win = new BrowserWindow({
-    width: 480,
-    height: 320,
+    width: bounds.width,
+    height: bounds.height,
     minWidth: 120,
     minHeight: 80,
     show: false,
     frame: false,
-    transparent: false,
+    transparent: true,
+    backgroundColor: "#00000000",
+    hasShadow: false,
     resizable: true,
     movable: true,
     minimizable: false,
@@ -78,6 +81,21 @@ export function createPinnedImageWindow(
   void win.loadURL(url)
   win.once("ready-to-show", () => win.show())
   return win
+}
+
+function getPinnedImageInitialBounds(imagePath: string): { width: number; height: number } {
+  const size = nativeImage.createFromPath(imagePath).getSize()
+  if (size.width <= 0 || size.height <= 0) return { width: 480, height: 320 }
+
+  const workArea = screen.getPrimaryDisplay().workAreaSize
+  const maxWidth = Math.max(240, Math.round(workArea.width * 0.7))
+  const maxHeight = Math.max(160, Math.round(workArea.height * 0.7))
+  const scale = Math.min(1, maxWidth / size.width, maxHeight / size.height)
+
+  return {
+    width: Math.max(120, Math.round(size.width * scale)),
+    height: Math.max(80, Math.round(size.height * scale)),
+  }
 }
 
 export function getPinnedImageDataUrl(sender: WebContents): string | null {
