@@ -1,9 +1,14 @@
 import type { ElectronIpcError } from "./electron"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  applyLocalSync,
+  applyRemoteSync,
+  configureSyncPassphrase,
+  disconnectSync,
   disposePluginCommand,
   getPlugin,
   getSettings,
+  getSyncStatus,
   hideFloatingBall,
   hideLauncher,
   installMarketplacePlugin,
@@ -23,12 +28,18 @@ import {
   onSettingsChanged,
   openExternalUrl,
   openFloatingBallFeature,
+  pollGitHubLogin,
+  pullSync,
+  pushSync,
   refreshApps,
   reloadPlugin,
+  saveSyncClientId,
+  saveSyncGistId,
   searchApps,
   searchPluginCommands,
   setPluginEnabled,
   setPluginPreference,
+  startGitHubLogin,
   toggleFloatingBallMenu,
   uninstallPlugin,
   updateSettings,
@@ -77,6 +88,30 @@ function mockApi() {
       floatingBallEnabled: true,
       floatingBallFeatures: ["appLauncher"],
     }),
+    getSyncStatus: vi.fn().mockResolvedValue({
+      configured: true,
+      enabled: true,
+      loggedIn: true,
+      deviceId: "device",
+      rememberPassphrase: true,
+      hasSavedPassphrase: true,
+    }),
+    saveSyncClientId: vi.fn().mockResolvedValue({ configured: true }),
+    saveSyncGistId: vi.fn().mockResolvedValue({ gistId: "gist" }),
+    startGitHubLogin: vi.fn().mockResolvedValue({
+      deviceCode: "device-code",
+      userCode: "ABCD-EFGH",
+      verificationUri: "https://github.com/login/device",
+      expiresIn: 900,
+      interval: 5,
+    }),
+    pollGitHubLogin: vi.fn().mockResolvedValue({ status: "pending" }),
+    configureSyncPassphrase: vi.fn().mockResolvedValue({ enabled: true }),
+    pushSync: vi.fn().mockResolvedValue({ status: "updated" }),
+    pullSync: vi.fn().mockResolvedValue({ status: "applied" }),
+    applyRemoteSync: vi.fn().mockResolvedValue({ enabled: true }),
+    applyLocalSync: vi.fn().mockResolvedValue({ status: "updated" }),
+    disconnectSync: vi.fn().mockResolvedValue({ enabled: false }),
     onLauncherFocus: vi.fn().mockReturnValue(() => {}),
     onFloatingBallMenuState: vi.fn().mockReturnValue(() => {}),
     onFloatingBallFeatures: vi.fn().mockReturnValue(() => {}),
@@ -180,6 +215,33 @@ describe("lib/electron", () => {
       const api = mockApi()
       await updateSettings({ themeMode: "dark" })
       expect(api.updateSettings).toHaveBeenCalledWith({ themeMode: "dark" })
+    })
+
+    it("sync wrappers forward payloads", async () => {
+      const api = mockApi()
+      await getSyncStatus()
+      await saveSyncClientId("client")
+      await saveSyncGistId("gist")
+      await startGitHubLogin()
+      await pollGitHubLogin("device")
+      await configureSyncPassphrase("secret", true)
+      await pushSync("secret")
+      await pullSync("secret")
+      await applyRemoteSync()
+      await applyLocalSync("secret")
+      await disconnectSync()
+
+      expect(api.getSyncStatus).toHaveBeenCalled()
+      expect(api.saveSyncClientId).toHaveBeenCalledWith("client")
+      expect(api.saveSyncGistId).toHaveBeenCalledWith("gist")
+      expect(api.startGitHubLogin).toHaveBeenCalled()
+      expect(api.pollGitHubLogin).toHaveBeenCalledWith("device")
+      expect(api.configureSyncPassphrase).toHaveBeenCalledWith("secret", true)
+      expect(api.pushSync).toHaveBeenCalledWith("secret")
+      expect(api.pullSync).toHaveBeenCalledWith("secret")
+      expect(api.applyRemoteSync).toHaveBeenCalled()
+      expect(api.applyLocalSync).toHaveBeenCalledWith("secret")
+      expect(api.disconnectSync).toHaveBeenCalled()
     })
 
     it("listPlugins calls listPlugins", async () => {

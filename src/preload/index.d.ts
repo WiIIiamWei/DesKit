@@ -35,6 +35,42 @@ declare global {
     floatingBallFeatures: DeskitFloatingBallFeature[]
   }
 
+  interface DeskitSyncStatus {
+    configured: boolean
+    enabled: boolean
+    loggedIn: boolean
+    githubUserLogin?: string
+    gistId?: string
+    deviceId: string
+    lastSyncedAt?: string
+    lastRemoteUpdatedAt?: string
+    lastLocalUpdatedAt?: string
+    rememberPassphrase: boolean
+    hasSavedPassphrase: boolean
+    pendingConflict?: DeskitSyncConflict
+  }
+
+  interface DeskitSyncConflict {
+    updatedAt: string
+    deviceId: string
+  }
+
+  interface DeskitGitHubDeviceAuthorization {
+    deviceCode: string
+    userCode: string
+    verificationUri: string
+    expiresIn: number
+    interval: number
+  }
+
+  type DeskitGitHubLoginPollResult =
+    | { status: "pending" | "slow_down" | "expired" | "denied" }
+    | { status: "authenticated"; login: string }
+
+  type DeskitSyncRunResult =
+    | { status: "empty" | "created" | "updated" | "applied" }
+    | { status: "conflict"; conflict: DeskitSyncConflict }
+
   type DeskitLocalizedString = string | Record<string, string>
   type DeskitPluginSourceKind = "builtin" | "user" | "dev"
   type DeskitPluginRuntimeStatus = "active" | "disabled" | "invalid" | "crashed" | "shadowed"
@@ -156,6 +192,20 @@ declare global {
       hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
       updateSettings: (patch: Partial<DeskitUserSettings>) => Promise<DeskitUserSettings>
+      getSyncStatus: () => Promise<DeskitSyncStatus>
+      saveSyncClientId: (clientId: string) => Promise<DeskitSyncStatus>
+      saveSyncGistId: (gistId: string) => Promise<DeskitSyncStatus>
+      startGitHubLogin: () => Promise<DeskitGitHubDeviceAuthorization>
+      pollGitHubLogin: (deviceCode: string) => Promise<DeskitGitHubLoginPollResult>
+      configureSyncPassphrase: (
+        passphrase: string,
+        rememberPassphrase: boolean
+      ) => Promise<DeskitSyncStatus>
+      pushSync: (passphrase?: string) => Promise<DeskitSyncRunResult>
+      pullSync: (passphrase?: string) => Promise<DeskitSyncRunResult>
+      applyRemoteSync: () => Promise<DeskitSyncStatus>
+      applyLocalSync: (passphrase?: string) => Promise<DeskitSyncRunResult>
+      disconnectSync: () => Promise<DeskitSyncStatus>
       listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
       getPlugin: (
         pluginId: string

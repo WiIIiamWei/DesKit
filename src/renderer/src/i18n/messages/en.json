@@ -36,6 +36,61 @@
     "accent.rose": "Rose",
     "accent.violet": "Violet"
   },
+  "sync": {
+    "title": "Gist Sync",
+    "subtitle": "Sync user settings and plugin preferences through an encrypted secret GitHub Gist.",
+    "unavailable": "Sync is only available inside the desktop app.",
+    "loading": "Loading sync status…",
+    "clientId": "GitHub OAuth Client ID",
+    "clientIdPlaceholder": "Paste the OAuth App client ID",
+    "clientIdHint": "DesKit includes a default OAuth App. Override this only for development or self-hosted builds.",
+    "gistId": "Existing Gist ID",
+    "gistIdPlaceholder": "Optional advanced override",
+    "gistIdHint": "Optional. Paste an existing DesKit sync Gist ID to reuse it on this device.",
+    "save": "Save",
+    "login": "Log in with GitHub",
+    "userCode": "GitHub device code",
+    "openGitHub": "Open GitHub",
+    "passphrase": "Sync password",
+    "passphraseSaved": "Saved on this device",
+    "remember": "Remember on this device",
+    "savePassphrase": "Save password",
+    "pull": "Pull",
+    "push": "Push",
+    "refresh": "Refresh",
+    "disconnect": "Disconnect",
+    "conflictTitle": "Sync conflict",
+    "conflictBody": "Remote settings changed at {{updatedAt}} while this device also has local changes.",
+    "useRemote": "Use remote",
+    "useLocal": "Use local",
+    "lastSynced": "Last synced: {{time}}",
+    "status": {
+      "needsClient": "Configure GitHub OAuth before syncing",
+      "needsLogin": "GitHub login required",
+      "needsPassphrase": "Set a sync password to enable encryption",
+      "conflict": "Conflict needs your choice",
+      "ready": "Encrypted sync is ready"
+    },
+    "messages": {
+      "clientSaved": "OAuth client ID saved.",
+      "gistSaved": "Gist ID saved.",
+      "loginStarted": "GitHub login started.",
+      "loginDone": "Logged in as @{{login}}.",
+      "passphraseSaved": "Sync password saved.",
+      "pulled": "Remote settings applied.",
+      "pushed": "Local settings uploaded.",
+      "conflict": "Remote and local changes conflict.",
+      "remoteApplied": "Remote settings applied.",
+      "localUploaded": "Local settings uploaded.",
+      "disconnected": "Sync disconnected on this device.",
+      "login": {
+        "pending": "Waiting for GitHub authorization…",
+        "slow_down": "GitHub asked us to slow down polling.",
+        "expired": "The GitHub device code expired.",
+        "denied": "GitHub authorization was denied."
+      }
+    }
+  },
   "appLauncher": {
     "feature": {
       "title": "App Launcher",

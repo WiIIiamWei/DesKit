@@ -62,6 +62,7 @@ export interface PluginIpcHandlers {
 export interface RegisterPluginIpcOptions {
   isTrustedSender: (event: IpcMainInvokeEvent) => boolean
   onRegistryChanged: (entries: unknown) => void
+  onPreferencesChanged?: () => void
 }
 
 export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
@@ -158,7 +159,10 @@ export function registerPluginIpc(
     invokePluginIpcHandler(
       "plugin:set-preference",
       event,
-      () => handlers.setPreference(payload),
+      async () => {
+        await handlers.setPreference(payload)
+        options.onPreferencesChanged?.()
+      },
       options.isTrustedSender
     )
   )
