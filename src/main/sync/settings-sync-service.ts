@@ -6,6 +6,7 @@ import type { GistSummary, GitHubGistClient } from "./gist-client"
 import type { SyncStateStore } from "./sync-store"
 import { decryptSyncPayload, encryptSyncPayload } from "./encryption"
 import { DESKIT_SYNC_GIST_FILENAME, GitHubGistClientError } from "./gist-client"
+import { settingsForSync, settingsFromSync } from "./hotkey-sync"
 
 export const SYNC_PAYLOAD_SCHEMA_VERSION = 1
 
@@ -24,6 +25,7 @@ export interface SyncServiceDeps {
   updateSettings: (patch: Partial<UserSettings>) => Promise<UserSettings>
   exportPluginPreferences: () => PreferenceFile
   importPluginPreferences: (preferences: PreferenceFile) => Promise<PluginPreferenceImportResult>
+  platform?: NodeJS.Platform | string
   now?: () => Date
 }
 
@@ -121,13 +123,13 @@ export class SettingsSyncService {
       schemaVersion: SYNC_PAYLOAD_SCHEMA_VERSION,
       updatedAt: this.nowIso(),
       deviceId,
-      settings: this.deps.getSettings(),
+      settings: settingsForSync(this.deps.getSettings(), this.deps.platform),
       pluginPreferences: this.deps.exportPluginPreferences(),
     }
   }
 
   private async applyPayload(payload: DeskitSyncPayload): Promise<PluginPreferenceImportResult> {
-    await this.deps.updateSettings(payload.settings)
+    await this.deps.updateSettings(settingsFromSync(payload.settings, this.deps.platform))
     return this.deps.importPluginPreferences(payload.pluginPreferences)
   }
 

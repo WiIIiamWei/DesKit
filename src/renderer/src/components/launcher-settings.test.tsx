@@ -202,7 +202,7 @@ describe("launcher settings", () => {
     expect(input).toHaveValue("Control+Tab")
   })
 
-  it("captures the command key as an Electron macOS accelerator on macOS", async () => {
+  it("captures the command key as a portable accelerator on macOS", async () => {
     mockPlatform("MacIntel")
     const user = userEvent.setup()
     render(<LauncherSettings />)
@@ -211,7 +211,7 @@ describe("launcher settings", () => {
     await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
-    expect(input).toHaveValue("Command+K")
+    expect(input).toHaveValue("CommandOrControl+K")
   })
 
   it("cancels capture when the input loses focus", async () => {
