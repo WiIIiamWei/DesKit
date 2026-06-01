@@ -5,7 +5,7 @@ import type { SyncEncryptionEnvelope } from "./encryption"
 import type { GistSummary, GitHubGistClient } from "./gist-client"
 import type { SyncStateStore } from "./sync-store"
 import { decryptSyncPayload, encryptSyncPayload } from "./encryption"
-import { DESKIT_SYNC_GIST_FILENAME } from "./gist-client"
+import { DESKIT_SYNC_GIST_FILENAME, GitHubGistClientError } from "./gist-client"
 
 export const SYNC_PAYLOAD_SCHEMA_VERSION = 1
 
@@ -58,9 +58,7 @@ export class SettingsSyncService {
     const payload = this.localPayload(state.deviceId)
     const envelope = await encryptSyncPayload(payload, passphrase)
     const content = serializeEnvelope(envelope)
-    const gist = state.gistId
-      ? await this.deps.gistClient.updateSyncGist(accessToken, state.gistId, content)
-      : await this.deps.gistClient.createSyncGist(accessToken, content)
+    const { gist, status } = await this.writeSyncGist(accessToken, state.gistId, content)
 
     await this.deps.stateStore.update({
       enabled: true,
@@ -69,7 +67,7 @@ export class SettingsSyncService {
       lastLocalUpdatedAt: payload.updatedAt,
       lastRemoteUpdatedAt: gist.updatedAt,
     })
-    return { status: state.gistId ? "updated" : "created", gist, payload }
+    return { status, gist, payload }
   }
 
   async pull(accessToken: string, passphrase: string): Promise<PullSyncResult> {
@@ -131,6 +129,32 @@ export class SettingsSyncService {
   private async applyPayload(payload: DeskitSyncPayload): Promise<PluginPreferenceImportResult> {
     await this.deps.updateSettings(payload.settings)
     return this.deps.importPluginPreferences(payload.pluginPreferences)
+  }
+
+  private async writeSyncGist(
+    accessToken: string,
+    gistId: string | undefined,
+    content: string
+  ): Promise<{ status: PushSyncResult["status"]; gist: GistSummary }> {
+    if (!gistId) {
+      return {
+        status: "created",
+        gist: await this.deps.gistClient.createSyncGist(accessToken, content),
+      }
+    }
+
+    try {
+      return {
+        status: "updated",
+        gist: await this.deps.gistClient.updateSyncGist(accessToken, gistId, content),
+      }
+    } catch (err) {
+      if (!isStaleWritableGistError(err)) throw err
+      return {
+        status: "created",
+        gist: await this.deps.gistClient.createSyncGist(accessToken, content),
+      }
+    }
   }
 
   private nowIso(): string {
@@ -195,6 +219,12 @@ function hasLocalConflict(
 function isRemoteNewer(lastSyncedAt: string | undefined, remoteUpdatedAt: string): boolean {
   if (!lastSyncedAt) return true
   return Date.parse(remoteUpdatedAt) > Date.parse(lastSyncedAt)
+}
+
+function isStaleWritableGistError(err: unknown): boolean {
+  if (!(err instanceof GitHubGistClientError)) return false
+  if (err.status === 404) return true
+  return err.status === 403 && /cannot be updated/i.test(err.message)
 }
 
 function serializeEnvelope(envelope: SyncEncryptionEnvelope): string {

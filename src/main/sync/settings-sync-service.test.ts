@@ -7,7 +7,7 @@ import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { defaultSettings } from "../settings/settings"
 import { encryptSyncPayload } from "./encryption"
-import { DESKIT_SYNC_GIST_FILENAME } from "./gist-client"
+import { DESKIT_SYNC_GIST_FILENAME, GitHubGistClientError } from "./gist-client"
 import { SettingsSyncService } from "./settings-sync-service"
 import { syncStateFilePath, SyncStateStore } from "./sync-store"
 
@@ -51,6 +51,37 @@ describe("settingsSyncService", () => {
     const uploadedContent = createSyncGist.mock.calls[0]?.[1]
     expect(uploadedContent).not.toContain("com.deskit.test")
     expect(uploadedContent).not.toContain("dark")
+  })
+
+  it("creates a replacement Gist when the saved Gist cannot be updated", async () => {
+    const stateStore = await loadedStateStore()
+    await stateStore.update({ gistId: "stale-gist" })
+    const updateSyncGist = vi.fn(async () => {
+      throw new GitHubGistClientError("Gist cannot be updated.", { status: 403 })
+    })
+    const createSyncGist = vi.fn(async (_token: string, content: string) =>
+      gist("replacement-gist", content, "2026-06-01T00:00:02.000Z")
+    )
+    const service = new SettingsSyncService({
+      stateStore,
+      gistClient: {
+        updateSyncGist,
+        createSyncGist,
+      } as unknown as GitHubGistClient,
+      getSettings: () => defaultSettings,
+      updateSettings: vi.fn(),
+      exportPluginPreferences: () => ({}),
+      importPluginPreferences: vi.fn(),
+      now: () => new Date("2026-06-01T00:00:01.000Z"),
+    })
+
+    await expect(service.push("token", "passphrase")).resolves.toMatchObject({
+      status: "created",
+      gist: { id: "replacement-gist" },
+    })
+    expect(updateSyncGist).toHaveBeenCalledWith("token", "stale-gist", expect.any(String))
+    expect(createSyncGist).toHaveBeenCalledWith("token", expect.any(String))
+    expect(stateStore.get().gistId).toBe("replacement-gist")
   })
 
   it("pulls and applies remote payloads when there is no local conflict", async () => {
