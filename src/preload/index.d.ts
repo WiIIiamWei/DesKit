@@ -6,7 +6,7 @@ export {}
 
 declare global {
   type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
-  type DeskitFloatingBallFeature = "appLauncher"
+  type DeskitFloatingBallFeature = "appLauncher" | "screenshot"
 
   interface LauncherAppEntry {
     id: string
@@ -27,13 +27,20 @@ declare global {
   type DeskitThemeMode = "light" | "dark" | "system"
   type DeskitThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
 
+  interface DeskitHotkeySettings {
+    launcher: string
+    screenshot: string
+  }
+
   interface DeskitUserSettings {
-    hotkey: string
+    hotkeys: DeskitHotkeySettings
     themeMode: DeskitThemeMode
     accent: DeskitThemeAccent
     floatingBallEnabled: boolean
     floatingBallFeatures: DeskitFloatingBallFeature[]
   }
+
+  type DeskitScreenshotAction = "copy" | "save" | "pin" | "annotate"
 
   type DeskitLocalizedString = string | Record<string, string>
   type DeskitPluginSourceKind = "builtin" | "user" | "dev"
@@ -156,6 +163,22 @@ declare global {
       hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
       updateSettings: (patch: Partial<DeskitUserSettings>) => Promise<DeskitUserSettings>
+      completeScreenshotSelection: (
+        selection: { x: number; y: number; width: number; height: number },
+        action: DeskitScreenshotAction
+      ) => Promise<void>
+      cancelScreenshotSelection: () => Promise<void>
+      getScreenshotAnnotationImage: () => Promise<string | null>
+      completeScreenshotAnnotation: (
+        dataUrl: string,
+        action: Exclude<DeskitScreenshotAction, "annotate">
+      ) => Promise<void>
+      cancelScreenshotAnnotation: () => Promise<void>
+      getPinnedImageData: () => Promise<string | null>
+      copyPinnedImage: () => Promise<void>
+      savePinnedImage: () => Promise<void>
+      setPinnedImageOpacity: (opacity: number) => Promise<void>
+      closePinnedImage: () => Promise<void>
       listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
       getPlugin: (
         pluginId: string

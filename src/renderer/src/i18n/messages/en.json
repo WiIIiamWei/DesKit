@@ -48,7 +48,8 @@
   "floatingBall": {
     "title": "DesKit Floating Ball",
     "features": {
-      "appLauncher": "App Launcher"
+      "appLauncher": "App Launcher",
+      "screenshot": "Screenshot"
     },
     "feature": {
       "title": "Floating Ball",
@@ -169,13 +170,20 @@
     "settings": {
       "title": "Launcher",
       "subtitle": "Summon the command palette from anywhere with a global shortcut.",
-      "hotkeyLabel": "Global shortcut",
+      "hotkeyLabel": "Launcher shortcut",
       "hotkeyHint": "You can manually enter Electron shortcut syntax, or click to capture and then press the key combination. Shortcut combinations that are already in use may not be captured; please use unused combinations or enter them manually.",
+      "screenshotHotkeyLabel": "Screenshot shortcut",
+      "screenshotHotkeyHint": "Starts region screenshot capture. The screenshot flow is implemented by the host so it can work before any plugin UI opens.",
       "capture": "Capture",
       "capturing": "Press keys...",
+      "launcherCaptureLabel": "Capture launcher shortcut",
+      "launcherCapturingLabel": "Capturing launcher shortcut",
+      "screenshotCaptureLabel": "Capture screenshot shortcut",
+      "screenshotCapturingLabel": "Capturing screenshot shortcut",
       "save": "Save",
-      "examples": "Examples: Control+Space · Alt+Space · CommandOrControl+Shift+P",
-      "active": "Active shortcut",
+      "examples": "Examples: Control+Space · Control+Shift+A · CommandOrControl+Shift+P",
+      "activeLauncher": "Active launcher shortcut",
+      "activeScreenshot": "Active screenshot shortcut",
       "rescan": "Rescan apps",
       "rescanning": "Rescanning…",
       "rescanned": "App list refreshed.",

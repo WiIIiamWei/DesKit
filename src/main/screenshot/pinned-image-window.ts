@@ -1,0 +1,100 @@
+import type { BrowserWindow as BrowserWindowType, WebContents } from "electron"
+import type { PinnedImageOptions, PinnedImageState } from "./types"
+import * as path from "node:path"
+import { BrowserWindow, nativeImage } from "electron"
+import { attachWindowSecurity } from "../window-security"
+
+export const DEFAULT_PINNED_IMAGE_OPACITY = 1
+export const MIN_PINNED_IMAGE_OPACITY = 0.2
+export const MAX_PINNED_IMAGE_OPACITY = 1
+const PINNED_IMAGE_HASH = "pinned-image"
+
+export interface PinnedImageWindowDeps {
+  rendererDevUrl: string | undefined
+  appOrigin: string
+}
+
+const pinnedImages = new Map<number, PinnedImageState>()
+
+export function createPinnedImageState(
+  id: string,
+  imagePath: string,
+  options: PinnedImageOptions = {}
+): PinnedImageState {
+  return {
+    id,
+    imagePath,
+    opacity: normalizePinnedImageOpacity(options.opacity),
+  }
+}
+
+export function normalizePinnedImageOpacity(value: unknown): number {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return DEFAULT_PINNED_IMAGE_OPACITY
+  }
+  return clamp(value, MIN_PINNED_IMAGE_OPACITY, MAX_PINNED_IMAGE_OPACITY)
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(Math.max(value, min), max)
+}
+
+export function createPinnedImageWindow(
+  state: PinnedImageState,
+  deps: PinnedImageWindowDeps
+): BrowserWindowType {
+  const win = new BrowserWindow({
+    width: 480,
+    height: 320,
+    minWidth: 120,
+    minHeight: 80,
+    show: false,
+    frame: false,
+    transparent: false,
+    resizable: true,
+    movable: true,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    title: "DesKit Pinned Image",
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/index.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+      webviewTag: false,
+    },
+  })
+  const allowedOrigin = deps.rendererDevUrl ? new URL(deps.rendererDevUrl).origin : deps.appOrigin
+  attachWindowSecurity(win, allowedOrigin)
+  win.setOpacity(state.opacity)
+  pinnedImages.set(win.webContents.id, state)
+  win.on("closed", () => pinnedImages.delete(win.webContents.id))
+  const url = deps.rendererDevUrl
+    ? `${deps.rendererDevUrl}#${PINNED_IMAGE_HASH}`
+    : `${deps.appOrigin}/index.html#${PINNED_IMAGE_HASH}`
+  void win.loadURL(url)
+  win.once("ready-to-show", () => win.show())
+  return win
+}
+
+export function getPinnedImageDataUrl(sender: WebContents): string | null {
+  const state = pinnedImages.get(sender.id)
+  if (!state) return null
+  return nativeImage.createFromPath(state.imagePath).toDataURL()
+}
+
+export function closePinnedImageWindow(sender: WebContents): void {
+  BrowserWindow.fromWebContents(sender)?.close()
+}
+
+export function setPinnedImageOpacity(sender: WebContents, opacity: number): void {
+  const state = pinnedImages.get(sender.id)
+  const win = BrowserWindow.fromWebContents(sender)
+  if (!state || !win) return
+  const next = normalizePinnedImageOpacity(opacity)
+  pinnedImages.set(sender.id, { ...state, opacity: next })
+  win.setOpacity(next)
+}

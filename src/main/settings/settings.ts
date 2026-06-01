@@ -6,16 +6,26 @@ import * as path from "node:path"
 // versions of the app interoperate cleanly.
 export type ThemeMode = "light" | "dark" | "system"
 export type ThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
-export type FloatingBallFeature = "appLauncher"
+export type FloatingBallFeature = "appLauncher" | "screenshot"
 
 export const THEME_MODES: readonly ThemeMode[] = ["light", "dark", "system"]
 export const THEME_ACCENTS: readonly ThemeAccent[] = ["neutral", "blue", "green", "rose", "violet"]
-export const FLOATING_BALL_FEATURES: readonly FloatingBallFeature[] = ["appLauncher"]
+export const FLOATING_BALL_FEATURES: readonly FloatingBallFeature[] = ["appLauncher", "screenshot"]
 const MAX_FLOATING_BALL_FEATURES = 6
+const CURRENT_SETTINGS_VERSION = 2
+
+export interface HotkeySettings {
+  /** Electron Accelerator string for the command launcher. */
+  launcher: string
+  /** Electron Accelerator string for region screenshot capture. */
+  screenshot: string
+}
 
 export interface UserSettings {
-  /** Electron Accelerator string, e.g. "Control+Space". */
-  hotkey: string
+  /** Internal schema version for one-time settings migrations. */
+  settingsVersion: number
+  /** Global Electron Accelerator strings. */
+  hotkeys: HotkeySettings
   /** Preferred color scheme. "system" defers to OS preference. */
   themeMode: ThemeMode
   /** Accent palette key — only --primary / --ring shift per accent. */
@@ -26,12 +36,20 @@ export interface UserSettings {
   floatingBallFeatures: FloatingBallFeature[]
 }
 
+export type UserSettingsPatch = Partial<Omit<UserSettings, "hotkeys">> & {
+  hotkeys?: Partial<HotkeySettings>
+}
+
 export const defaultSettings: UserSettings = {
-  hotkey: "Control+Space",
+  settingsVersion: CURRENT_SETTINGS_VERSION,
+  hotkeys: {
+    launcher: "Control+Space",
+    screenshot: "Control+Shift+A",
+  },
   themeMode: "system",
   accent: "neutral",
   floatingBallEnabled: false,
-  floatingBallFeatures: ["appLauncher"],
+  floatingBallFeatures: ["appLauncher", "screenshot"],
 }
 
 export function settingsFilePath(userDataDir: string): string {
@@ -42,9 +60,7 @@ export function normalizeSettings(raw: unknown): UserSettings {
   const next: UserSettings = { ...defaultSettings }
   if (raw && typeof raw === "object") {
     const r = raw as Record<string, unknown>
-    if (typeof r.hotkey === "string" && r.hotkey.trim()) {
-      next.hotkey = r.hotkey.trim()
-    }
+    next.hotkeys = normalizeHotkeys(r)
     if (
       typeof r.themeMode === "string" &&
       (THEME_MODES as readonly string[]).includes(r.themeMode)
@@ -58,13 +74,39 @@ export function normalizeSettings(raw: unknown): UserSettings {
       next.floatingBallEnabled = r.floatingBallEnabled
     }
     if (Array.isArray(r.floatingBallFeatures)) {
-      next.floatingBallFeatures = normalizeFloatingBallFeatures(r.floatingBallFeatures)
+      next.floatingBallFeatures = normalizeFloatingBallFeatures(
+        r.floatingBallFeatures,
+        typeof r.settingsVersion === "number" ? r.settingsVersion : 1
+      )
     }
   }
   return next
 }
 
-function normalizeFloatingBallFeatures(raw: unknown[]): FloatingBallFeature[] {
+function normalizeHotkeys(raw: Record<string, unknown>): HotkeySettings {
+  const next: HotkeySettings = { ...defaultSettings.hotkeys }
+
+  if (typeof raw.hotkey === "string" && raw.hotkey.trim()) {
+    next.launcher = raw.hotkey.trim()
+  }
+
+  if (raw.hotkeys && typeof raw.hotkeys === "object" && !Array.isArray(raw.hotkeys)) {
+    const hotkeys = raw.hotkeys as Record<string, unknown>
+    if (typeof hotkeys.launcher === "string" && hotkeys.launcher.trim()) {
+      next.launcher = hotkeys.launcher.trim()
+    }
+    if (typeof hotkeys.screenshot === "string" && hotkeys.screenshot.trim()) {
+      next.screenshot = hotkeys.screenshot.trim()
+    }
+  }
+
+  return next
+}
+
+function normalizeFloatingBallFeatures(
+  raw: unknown[],
+  sourceSettingsVersion: number
+): FloatingBallFeature[] {
   const seen = new Set<FloatingBallFeature>()
   for (const item of raw) {
     if (
@@ -75,6 +117,14 @@ function normalizeFloatingBallFeatures(raw: unknown[]): FloatingBallFeature[] {
       seen.add(item as FloatingBallFeature)
       if (seen.size === MAX_FLOATING_BALL_FEATURES) break
     }
+  }
+  if (
+    sourceSettingsVersion < 2 &&
+    seen.has("appLauncher") &&
+    !seen.has("screenshot") &&
+    seen.size < MAX_FLOATING_BALL_FEATURES
+  ) {
+    seen.add("screenshot")
   }
   return seen.size > 0 ? [...seen] : [...defaultSettings.floatingBallFeatures]
 }

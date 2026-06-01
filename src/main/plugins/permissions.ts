@@ -8,6 +8,7 @@ export type PluginPermission =
   | "system:open-url"
   | "system:open-path"
   | "system:capture-screen"
+  | "system:pin-image"
 
 export class PermissionDenied extends Error {
   readonly pluginId: string

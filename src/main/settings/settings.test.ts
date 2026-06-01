@@ -20,7 +20,42 @@ describe("normalizeSettings", () => {
   it("keeps a valid hotkey and trims whitespace", () => {
     expect(normalizeSettings({ hotkey: "  Alt+Space  " })).toEqual({
       ...defaultSettings,
-      hotkey: "Alt+Space",
+      hotkeys: {
+        ...defaultSettings.hotkeys,
+        launcher: "Alt+Space",
+      },
+    })
+  })
+
+  it("keeps valid structured hotkeys and trims whitespace", () => {
+    expect(
+      normalizeSettings({
+        hotkeys: {
+          launcher: "  Alt+Space  ",
+          screenshot: "  Control+Shift+S  ",
+        },
+      })
+    ).toEqual({
+      ...defaultSettings,
+      hotkeys: {
+        launcher: "Alt+Space",
+        screenshot: "Control+Shift+S",
+      },
+    })
+  })
+
+  it("lets structured hotkeys override the legacy launcher hotkey", () => {
+    expect(
+      normalizeSettings({
+        hotkey: "Alt+Space",
+        hotkeys: { launcher: "Control+Alt+K" },
+      })
+    ).toEqual({
+      ...defaultSettings,
+      hotkeys: {
+        ...defaultSettings.hotkeys,
+        launcher: "Control+Alt+K",
+      },
     })
   })
 
@@ -28,10 +63,19 @@ describe("normalizeSettings", () => {
     expect(normalizeSettings({ hotkey: "   " })).toEqual(defaultSettings)
   })
 
+  it("keeps defaults for blank structured hotkeys", () => {
+    expect(normalizeSettings({ hotkeys: { launcher: " ", screenshot: "" } })).toEqual(
+      defaultSettings
+    )
+  })
+
   it("strips unknown fields", () => {
     expect(normalizeSettings({ hotkey: "Alt+K", evil: true })).toEqual({
       ...defaultSettings,
-      hotkey: "Alt+K",
+      hotkeys: {
+        ...defaultSettings.hotkeys,
+        launcher: "Alt+K",
+      },
     })
   })
 
@@ -60,6 +104,18 @@ describe("normalizeSettings", () => {
     ).toEqual({
       ...defaultSettings,
       floatingBallEnabled: true,
+      floatingBallFeatures: ["appLauncher", "screenshot"],
+    })
+  })
+
+  it("preserves an explicit post-migration floating ball feature list", () => {
+    expect(
+      normalizeSettings({
+        settingsVersion: 2,
+        floatingBallFeatures: ["appLauncher"],
+      })
+    ).toEqual({
+      ...defaultSettings,
       floatingBallFeatures: ["appLauncher"],
     })
   })
@@ -88,7 +144,14 @@ describe("loadSettings / saveSettings", () => {
 
   it("round-trips through save + load", async () => {
     const file = settingsFilePath(dir)
-    const written = { ...defaultSettings, hotkey: "Alt+Shift+P", themeMode: "dark" as const }
+    const written = {
+      ...defaultSettings,
+      hotkeys: {
+        launcher: "Alt+Shift+P",
+        screenshot: "Control+Shift+S",
+      },
+      themeMode: "dark" as const,
+    }
     await saveSettings(file, written)
     const settings = await loadSettings(file)
     expect(settings).toEqual(written)

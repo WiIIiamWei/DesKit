@@ -76,6 +76,7 @@ function splitAccelerator(accelerator: string, isMac = isMacPlatform()): string[
 }
 
 const modifierKeys = new Set(["Alt", "Control", "Meta", "Shift"])
+type HotkeyTarget = "launcher" | "screenshot"
 
 function acceleratorFromKeyboardEvent(event: KeyboardEvent<HTMLInputElement>): string | null {
   if (modifierKeys.has(event.key)) return null
@@ -142,33 +143,43 @@ function normalizeAcceleratorKey(event: KeyboardEvent<HTMLInputElement>): string
  */
 export function LauncherSettings() {
   const { t } = useTranslation()
-  const [hotkey, setHotkey] = useState("")
-  const [savedHotkey, setSavedHotkey] = useState("")
+  const [hotkeys, setHotkeys] = useState<DeskitHotkeySettings>({
+    launcher: "",
+    screenshot: "",
+  })
+  const [savedHotkeys, setSavedHotkeys] = useState<DeskitHotkeySettings>({
+    launcher: "",
+    screenshot: "",
+  })
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
-  const [capturingHotkey, setCapturingHotkey] = useState(false)
-  const hotkeyInputRef = useRef<HTMLInputElement>(null)
+  const [capturingHotkey, setCapturingHotkey] = useState<HotkeyTarget | null>(null)
+  const launcherHotkeyInputRef = useRef<HTMLInputElement>(null)
+  const screenshotHotkeyInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     if (!isElectron()) return
     void getSettings().then((settings) => {
-      setHotkey(settings.hotkey)
-      setSavedHotkey(settings.hotkey)
+      setHotkeys(settings.hotkeys)
+      setSavedHotkeys(settings.hotkeys)
     })
   }, [])
 
   if (!isElectron()) return null
 
-  const dirty = hotkey.trim() !== "" && hotkey !== savedHotkey
+  const dirty =
+    hotkeys.launcher.trim() !== "" &&
+    hotkeys.screenshot.trim() !== "" &&
+    (hotkeys.launcher !== savedHotkeys.launcher || hotkeys.screenshot !== savedHotkeys.screenshot)
 
-  function onHotkeyKeyDown(event: KeyboardEvent<HTMLInputElement>) {
-    if (!capturingHotkey) return
+  function onHotkeyKeyDown(target: HotkeyTarget, event: KeyboardEvent<HTMLInputElement>) {
+    if (capturingHotkey !== target) return
 
     event.preventDefault()
     event.stopPropagation()
 
     if (event.key === "Escape") {
-      setCapturingHotkey(false)
+      setCapturingHotkey(null)
       return
     }
 
@@ -180,26 +191,28 @@ export function LauncherSettings() {
     if (!next) return
 
     setStatus(null)
-    setHotkey(next)
-    setCapturingHotkey(false)
+    setHotkeys((current) => ({ ...current, [target]: next }))
+    setCapturingHotkey(null)
   }
 
-  function onCaptureHotkey() {
-    setCapturingHotkey(true)
+  function onCaptureHotkey(target: HotkeyTarget) {
+    setCapturingHotkey(target)
     setStatus(null)
-    hotkeyInputRef.current?.focus()
+    const ref = target === "launcher" ? launcherHotkeyInputRef : screenshotHotkeyInputRef
+    ref.current?.focus()
   }
 
   async function onSave() {
     setStatus(null)
     try {
-      const next = await updateSettings({ hotkey })
-      setSavedHotkey(next.hotkey)
+      const requestedHotkeys = hotkeys
+      const next = await updateSettings({ hotkeys: requestedHotkeys })
+      setHotkeys(next.hotkeys)
+      setSavedHotkeys(next.hotkeys)
       // Main process keeps the previous hotkey if the new accelerator
       // can't be registered (returns the still-active value). Detect
       // that mismatch and surface it to the user.
-      if (next.hotkey !== hotkey) {
-        setHotkey(next.hotkey)
+      if (next.hotkeys.launcher !== requestedHotkeys.launcher) {
         setStatus({ kind: "error", text: t("launcher.settings.invalid") })
       } else {
         setStatus({ kind: "ok", text: t("launcher.settings.saved") })
@@ -222,6 +235,70 @@ export function LauncherSettings() {
     }
   }
 
+  function renderHotkeyField({
+    description,
+    label,
+    placeholder,
+    target,
+  }: {
+    description: string
+    label: string
+    placeholder: string
+    target: HotkeyTarget
+  }) {
+    const inputRef = target === "launcher" ? launcherHotkeyInputRef : screenshotHotkeyInputRef
+    const isCapturing = capturingHotkey === target
+
+    return (
+      <Field>
+        <FieldLabel htmlFor={`${target}-hotkey-input`} className="flex items-center gap-2">
+          <Keyboard className="size-3.5 text-muted-foreground" aria-hidden />
+          {label}
+        </FieldLabel>
+        <div className="flex gap-2">
+          <Input
+            ref={inputRef}
+            id={`${target}-hotkey-input`}
+            value={hotkeys[target]}
+            onChange={(e) => {
+              if (!isCapturing) {
+                const value = e.target.value
+                setHotkeys((current) => ({ ...current, [target]: value }))
+              }
+            }}
+            onBlur={() => {
+              if (isCapturing) setCapturingHotkey(null)
+            }}
+            onKeyDown={(event) => onHotkeyKeyDown(target, event)}
+            onPaste={(e) => {
+              if (isCapturing) e.preventDefault()
+            }}
+            placeholder={placeholder}
+            spellCheck={false}
+            autoComplete="off"
+            readOnly={isCapturing}
+            className="font-mono text-sm"
+          />
+          <Button
+            type="button"
+            variant={isCapturing ? "secondary" : "outline"}
+            onClick={() => onCaptureHotkey(target)}
+            aria-label={t(
+              isCapturing
+                ? `launcher.settings.${target}CapturingLabel`
+                : `launcher.settings.${target}CaptureLabel`
+            )}
+            aria-pressed={isCapturing}
+          >
+            <Keyboard className="size-4" aria-hidden />
+            {isCapturing ? t("launcher.settings.capturing") : t("launcher.settings.capture")}
+          </Button>
+        </div>
+        <FieldDescription className="text-xs">{description}</FieldDescription>
+      </Field>
+    )
+  }
+
   return (
     <Card className="w-full">
       <CardHeader>
@@ -233,55 +310,41 @@ export function LauncherSettings() {
       </CardHeader>
 
       <CardContent className="flex flex-col gap-6">
-        <Field>
-          <FieldLabel htmlFor="hotkey-input" className="flex items-center gap-2">
-            <Keyboard className="size-3.5 text-muted-foreground" aria-hidden />
-            {t("launcher.settings.hotkeyLabel")}
-          </FieldLabel>
-          <div className="flex gap-2">
-            <Input
-              ref={hotkeyInputRef}
-              id="hotkey-input"
-              value={hotkey}
-              onChange={(e) => {
-                if (!capturingHotkey) setHotkey(e.target.value)
-              }}
-              onBlur={() => setCapturingHotkey(false)}
-              onKeyDown={onHotkeyKeyDown}
-              onPaste={(e) => {
-                if (capturingHotkey) e.preventDefault()
-              }}
-              placeholder="Control+Space"
-              spellCheck={false}
-              autoComplete="off"
-              readOnly={capturingHotkey}
-              className="font-mono text-sm"
-            />
-            <Button
-              type="button"
-              variant={capturingHotkey ? "secondary" : "outline"}
-              onClick={onCaptureHotkey}
-              aria-pressed={capturingHotkey}
-            >
-              <Keyboard className="size-4" aria-hidden />
-              {capturingHotkey ? t("launcher.settings.capturing") : t("launcher.settings.capture")}
-            </Button>
-            <Button onClick={onSave} disabled={!dirty}>
-              {t("launcher.settings.save")}
-            </Button>
-          </div>
-          <FieldDescription className="text-xs">
-            {t("launcher.settings.hotkeyHint")}
-          </FieldDescription>
+        {renderHotkeyField({
+          target: "launcher",
+          label: t("launcher.settings.hotkeyLabel"),
+          description: t("launcher.settings.hotkeyHint"),
+          placeholder: "Control+Space",
+        })}
+        {renderHotkeyField({
+          target: "screenshot",
+          label: t("launcher.settings.screenshotHotkeyLabel"),
+          description: t("launcher.settings.screenshotHotkeyHint"),
+          placeholder: "Control+Shift+A",
+        })}
+        <div className="flex items-center justify-between gap-3">
           <FieldDescription className="text-xs">{t("launcher.settings.examples")}</FieldDescription>
-        </Field>
+          <Button onClick={onSave} disabled={!dirty}>
+            {t("launcher.settings.save")}
+          </Button>
+        </div>
 
         <Separator />
 
         <div className="flex items-center justify-between gap-4">
-          <div className="flex min-w-0 flex-col gap-1.5">
-            <span className="text-xs text-muted-foreground">{t("launcher.settings.active")}</span>
-            <HotkeyChips accelerator={savedHotkey} />
+          <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">
+                {t("launcher.settings.activeLauncher")}
+              </span>
+              <HotkeyChips accelerator={savedHotkeys.launcher} />
+            </div>
+            <div className="flex min-w-0 flex-col gap-1.5">
+              <span className="text-xs text-muted-foreground">
+                {t("launcher.settings.activeScreenshot")}
+              </span>
+              <HotkeyChips accelerator={savedHotkeys.screenshot} />
+            </div>
           </div>
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
             <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden />

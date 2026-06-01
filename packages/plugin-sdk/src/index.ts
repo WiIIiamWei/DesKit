@@ -30,7 +30,14 @@ export type {
 
 export type { CommandHandler, CommandInvocation, PluginModule } from "./commands"
 
-export type { ClipboardAPI, NotificationAPI, PluginContext, StorageAPI, SystemAPI } from "./context"
+export type {
+  CaptureRegionResult,
+  ClipboardAPI,
+  NotificationAPI,
+  PluginContext,
+  StorageAPI,
+  SystemAPI,
+} from "./context"
 
 export type { LocalizedString } from "./locales"
 

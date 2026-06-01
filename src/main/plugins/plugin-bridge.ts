@@ -1,4 +1,5 @@
 import type {
+  CaptureRegionResult,
   ClipboardContent,
   NotificationAPI,
   PluginContext,
@@ -33,6 +34,8 @@ export interface SystemAdapter {
   openUrl: SystemAPI["openUrl"]
   openPath: SystemAPI["openPath"]
   captureScreen: (pluginId: string, options?: CaptureScreenOptions) => Promise<{ path: string }>
+  captureRegion: () => Promise<CaptureRegionResult | null>
+  pinImage: (imagePath: string) => Promise<void>
 }
 
 export interface PluginBridgeAdapters {
@@ -126,6 +129,14 @@ export class PluginBridge {
         captureScreen: async (options) => {
           gate.check("system:capture-screen")
           return this.options.adapters.system.captureScreen(pluginId, options)
+        },
+        captureRegion: async () => {
+          gate.check("system:capture-screen")
+          return this.options.adapters.system.captureRegion()
+        },
+        pinImage: async (imagePath) => {
+          gate.check("system:pin-image")
+          await this.options.adapters.system.pinImage(imagePath)
         },
       },
       log: (...args) => {

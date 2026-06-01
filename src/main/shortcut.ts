@@ -1,16 +1,24 @@
 import { globalShortcut } from "electron"
 
-let currentAccelerator: string | null = null
+const DEFAULT_SHORTCUT_ID = "default"
+const currentAccelerators = new Map<string, string>()
 
 /**
- * Replace the current global shortcut binding. Returns true if the new
+ * Replace a named global shortcut binding. Returns true if the new
  * accelerator was registered successfully — false means it was rejected
  * by Electron or is already owned by another process, in which case the
- * previous binding remains active.
+ * previous binding for that name remains active.
  */
-export function bindGlobalShortcut(accelerator: string, handler: () => void): boolean {
+export function bindNamedGlobalShortcut(
+  id: string,
+  accelerator: string,
+  handler: () => void
+): boolean {
+  const key = id.trim()
   const trimmed = accelerator.trim()
-  if (!trimmed) return false
+  if (!key || !trimmed) return false
+
+  const currentAccelerator = currentAccelerators.get(key) ?? null
   if (currentAccelerator === trimmed && globalShortcut.isRegistered(trimmed)) return true
 
   if (currentAccelerator) globalShortcut.unregister(currentAccelerator)
@@ -21,7 +29,7 @@ export function bindGlobalShortcut(accelerator: string, handler: () => void): bo
     ok = false
   }
   if (ok) {
-    currentAccelerator = trimmed
+    currentAccelerators.set(key, trimmed)
     return true
   }
   if (currentAccelerator) {
@@ -35,11 +43,32 @@ export function bindGlobalShortcut(accelerator: string, handler: () => void): bo
   return false
 }
 
-export function unbindGlobalShortcut(): void {
+export function unbindNamedGlobalShortcut(id: string): void {
+  const key = id.trim()
+  const currentAccelerator = currentAccelerators.get(key)
   if (currentAccelerator) globalShortcut.unregister(currentAccelerator)
-  currentAccelerator = null
+  currentAccelerators.delete(key)
 }
 
-export function currentBinding(): string | null {
-  return currentAccelerator
+export function unbindAllGlobalShortcuts(): void {
+  for (const accelerator of currentAccelerators.values()) {
+    globalShortcut.unregister(accelerator)
+  }
+  currentAccelerators.clear()
+}
+
+export function currentBinding(id = DEFAULT_SHORTCUT_ID): string | null {
+  return currentAccelerators.get(id) ?? null
+}
+
+export function currentBindings(): Record<string, string> {
+  return Object.fromEntries(currentAccelerators)
+}
+
+export function bindGlobalShortcut(accelerator: string, handler: () => void): boolean {
+  return bindNamedGlobalShortcut(DEFAULT_SHORTCUT_ID, accelerator, handler)
+}
+
+export function unbindGlobalShortcut(): void {
+  unbindAllGlobalShortcuts()
 }

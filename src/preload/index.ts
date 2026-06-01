@@ -6,13 +6,26 @@ import { contextBridge, ipcRenderer } from "electron"
 // compilation; the preload tsconfig doesn't pick up that .d.ts, so we
 // keep a structurally identical type here for type-only use.
 interface SettingsPatch {
-  hotkey?: string
+  hotkeys?: {
+    launcher?: string
+    screenshot?: string
+  }
   themeMode?: "light" | "dark" | "system"
   accent?: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled?: boolean
-  floatingBallFeatures?: "appLauncher"[]
+  floatingBallFeatures?: Array<"appLauncher" | "screenshot">
 }
-type Settings = Required<SettingsPatch>
+interface Settings {
+  hotkeys: {
+    launcher: string
+    screenshot: string
+  }
+  themeMode: "light" | "dark" | "system"
+  accent: "neutral" | "blue" | "green" | "rose" | "violet"
+  floatingBallEnabled: boolean
+  floatingBallFeatures: Array<"appLauncher" | "screenshot">
+}
+type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
 
 const electronAPI = {
   // ---- Launcher ----
@@ -24,7 +37,7 @@ const electronAPI = {
   notifyLauncherReady: () => ipcRenderer.send("launcher:ready"),
 
   // ---- Floating Ball ----
-  openFloatingBallFeature: (feature: "appLauncher") =>
+  openFloatingBallFeature: (feature: "appLauncher" | "screenshot") =>
     ipcRenderer.invoke("floating-ball:open-feature", feature),
   toggleFloatingBallMenu: () => ipcRenderer.invoke("floating-ball:toggle-menu"),
   moveFloatingBallBy: (delta: { x: number; y: number }) =>
@@ -34,6 +47,23 @@ const electronAPI = {
   // ---- Settings ----
   getSettings: () => ipcRenderer.invoke("settings:get"),
   updateSettings: (patch: SettingsPatch) => ipcRenderer.invoke("settings:update", patch),
+
+  // ---- Screenshot ----
+  completeScreenshotSelection: (
+    selection: { x: number; y: number; width: number; height: number },
+    action: ScreenshotAction
+  ) => ipcRenderer.invoke("screenshot:selection-complete", { selection, action }),
+  cancelScreenshotSelection: () => ipcRenderer.invoke("screenshot:selection-cancel"),
+  getScreenshotAnnotationImage: () => ipcRenderer.invoke("screenshot:annotation-image"),
+  completeScreenshotAnnotation: (dataUrl: string, action: Exclude<ScreenshotAction, "annotate">) =>
+    ipcRenderer.invoke("screenshot:annotation-complete", { dataUrl, action }),
+  cancelScreenshotAnnotation: () => ipcRenderer.invoke("screenshot:annotation-cancel"),
+  getPinnedImageData: () => ipcRenderer.invoke("pinned-image:data"),
+  copyPinnedImage: () => ipcRenderer.invoke("pinned-image:copy"),
+  savePinnedImage: () => ipcRenderer.invoke("pinned-image:save"),
+  setPinnedImageOpacity: (opacity: number) =>
+    ipcRenderer.invoke("pinned-image:set-opacity", opacity),
+  closePinnedImage: () => ipcRenderer.invoke("pinned-image:close"),
 
   // ---- Plugins ----
   listPlugins: () => ipcRenderer.invoke("plugin:list"),
@@ -75,9 +105,13 @@ const electronAPI = {
     return () => ipcRenderer.removeListener("floating-ball:menu-state", listener)
   },
 
-  onFloatingBallFeatures: (handler: (features: "appLauncher"[]) => void): (() => void) => {
-    const listener = (_event: IpcRendererEvent, features: "appLauncher"[]): void =>
-      handler(features)
+  onFloatingBallFeatures: (
+    handler: (features: Array<"appLauncher" | "screenshot">) => void
+  ): (() => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      features: Array<"appLauncher" | "screenshot">
+    ): void => handler(features)
     ipcRenderer.on("floating-ball:features", listener)
     return () => ipcRenderer.removeListener("floating-ball:features", listener)
   },

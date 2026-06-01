@@ -1,5 +1,5 @@
 import type { PointerEvent } from "react"
-import { Search } from "lucide-react"
+import { ScanLine, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import logoUrl from "@/assets/logo.svg"
@@ -16,6 +16,7 @@ import { cn } from "@/lib/utils"
 
 const FEATURE_ICONS: Record<DeskitFloatingBallFeature, typeof Search> = {
   appLauncher: Search,
+  screenshot: ScanLine,
 }
 const MENU_SLOT_ANGLES = [30, 90, 150, 210, 270, 330] as const
 const DRAG_THRESHOLD = 4
@@ -23,7 +24,10 @@ const DRAG_THRESHOLD = 4
 export function FloatingBallPanel() {
   const { t } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>(["appLauncher"])
+  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([
+    "appLauncher",
+    "screenshot",
+  ])
   const dragRef = useRef<{
     pointerId: number
     startX: number

@@ -141,6 +141,8 @@ function sandboxForTest(invokeTimeoutMs = 100, loadTimeoutMs = 100): PluginSandb
         openUrl: async () => {},
         openPath: async () => {},
         captureScreen: async () => ({ path: "capture.png" }),
+        captureRegion: async () => null,
+        pinImage: async () => {},
       },
     },
     storageFlushMs: 0,

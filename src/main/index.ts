@@ -1,9 +1,23 @@
 import type { IpcMainInvokeEvent } from "electron"
 import type { SearchWindowDeps } from "./search-window"
+import type { UserSettingsPatch } from "./settings/settings"
+import { Buffer } from "node:buffer"
+import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import process from "node:process"
 import { pathToFileURL } from "node:url"
-import { app, BrowserWindow, ipcMain, Menu, net, protocol, session, shell } from "electron"
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  Menu,
+  nativeImage,
+  net,
+  protocol,
+  session,
+  shell,
+} from "electron"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -15,8 +29,30 @@ import {
 import { LauncherService } from "./ipc/launcher-service"
 import { registerPluginIpc } from "./ipc/plugins"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
+import { createElectronPluginAdapters } from "./plugins/electron-adapters"
 import { PluginHost } from "./plugins/plugin-host"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
+import {
+  cancelScreenshotAnnotation,
+  completeScreenshotAnnotation,
+  getScreenshotAnnotatorImage,
+  openScreenshotAnnotator,
+} from "./screenshot/annotator-window"
+import { captureSelectionBitmap } from "./screenshot/capture-bitmap"
+import { captureRegion } from "./screenshot/capture-region"
+import {
+  cancelScreenshotOverlay,
+  completeScreenshotOverlay,
+  selectScreenshotRegion,
+} from "./screenshot/overlay-window"
+import {
+  closePinnedImageWindow,
+  createPinnedImageState,
+  createPinnedImageWindow,
+  getPinnedImageDataUrl,
+  setPinnedImageOpacity,
+} from "./screenshot/pinned-image-window"
+import { ensureScreenshotSavePath } from "./screenshot/screenshot-store"
 import {
   consumeSearchWindowTrayOpenSuppression,
   ensureSearchWindow,
@@ -26,7 +62,7 @@ import {
   showSearchWindow,
   toggleSearchWindow,
 } from "./search-window"
-import { bindGlobalShortcut, unbindGlobalShortcut } from "./shortcut"
+import { bindNamedGlobalShortcut, unbindAllGlobalShortcuts } from "./shortcut"
 import { createTray, defaultTrayIcon, destroyTray, refreshTrayMenu } from "./tray"
 import { attachWindowSecurity } from "./window-security"
 
@@ -41,6 +77,8 @@ const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
 // to the filesystem root and 404 every asset.
 const APP_SCHEME = "app"
 const APP_ORIGIN = `${APP_SCHEME}://app`
+const LAUNCHER_SHORTCUT_ID = "launcher"
+const SCREENSHOT_SHORTCUT_ID = "screenshot"
 
 // Must be called *before* app is ready. Marking the scheme `standard` and
 // `secure` makes its origin behave like https for CORS, cookies, and CSP.
@@ -164,7 +202,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle("floating-ball:open-feature", (_event, feature: unknown) => {
-    if (feature === "appLauncher") {
+    if (feature === "appLauncher" || feature === "screenshot") {
       openFloatingBallFeature(feature)
     }
   })
@@ -186,14 +224,97 @@ function registerIpc(): void {
     const previous = launcher.getSettings()
     let next = await launcher.updateSettings(coercePatch(patch))
 
-    if (next.hotkey !== previous.hotkey && !rebindHotkey(next.hotkey)) {
-      next = await launcher.updateSettings({ hotkey: previous.hotkey })
+    if (
+      next.hotkeys.launcher !== previous.hotkeys.launcher &&
+      !rebindLauncherHotkey(next.hotkeys.launcher)
+    ) {
+      next = await launcher.updateSettings({
+        hotkeys: { ...next.hotkeys, launcher: previous.hotkeys.launcher },
+      })
+    }
+    if (
+      next.hotkeys.screenshot !== previous.hotkeys.screenshot &&
+      !rebindScreenshotHotkey(next.hotkeys.screenshot)
+    ) {
+      next = await launcher.updateSettings({
+        hotkeys: { ...next.hotkeys, screenshot: previous.hotkeys.screenshot },
+      })
     }
 
     refreshTrayMenu(trayActions())
     syncFloatingBallWindow(floatingBallDeps())
     broadcastSettingsChanged(next)
     return next
+  })
+
+  ipcMain.handle("screenshot:selection-complete", (event, payload: unknown) => {
+    if (!payload || typeof payload !== "object") return
+    const value = payload as Record<string, unknown>
+    const selection = value.selection
+    if (!selection || typeof selection !== "object") return
+    const s = selection as Record<string, unknown>
+    const action = value.action
+    if (action !== "copy" && action !== "save" && action !== "pin" && action !== "annotate") {
+      return
+    }
+    if (
+      typeof s.x !== "number" ||
+      typeof s.y !== "number" ||
+      typeof s.width !== "number" ||
+      typeof s.height !== "number"
+    ) {
+      return
+    }
+    completeScreenshotOverlay(
+      event.sender,
+      { x: s.x, y: s.y, width: s.width, height: s.height },
+      action
+    )
+  })
+
+  ipcMain.handle("screenshot:selection-cancel", (event) => {
+    cancelScreenshotOverlay(event.sender)
+  })
+
+  ipcMain.handle("screenshot:annotation-image", (event) => {
+    return getScreenshotAnnotatorImage(event.sender)
+  })
+
+  ipcMain.handle("screenshot:annotation-complete", (event, payload: unknown) => {
+    if (!payload || typeof payload !== "object") return
+    const value = payload as Record<string, unknown>
+    const action = value.action
+    if (action !== "copy" && action !== "save" && action !== "pin") return
+    if (typeof value.dataUrl !== "string" || !value.dataUrl.startsWith("data:image/png;base64,")) {
+      return
+    }
+    completeScreenshotAnnotation(event.sender, { action, dataUrl: value.dataUrl })
+  })
+
+  ipcMain.handle("screenshot:annotation-cancel", (event) => {
+    cancelScreenshotAnnotation(event.sender)
+  })
+
+  ipcMain.handle("pinned-image:data", (event) => {
+    return getPinnedImageDataUrl(event.sender)
+  })
+
+  ipcMain.handle("pinned-image:copy", (event) => {
+    const dataUrl = getPinnedImageDataUrl(event.sender)
+    if (dataUrl) clipboard.writeImage(nativeImage.createFromDataURL(dataUrl))
+  })
+
+  ipcMain.handle("pinned-image:save", async (event) => {
+    const dataUrl = getPinnedImageDataUrl(event.sender)
+    if (dataUrl) await handleScreenshotDataUrl(dataUrl, "save")
+  })
+
+  ipcMain.handle("pinned-image:set-opacity", (event, opacity: unknown) => {
+    if (typeof opacity === "number") setPinnedImageOpacity(event.sender, opacity)
+  })
+
+  ipcMain.handle("pinned-image:close", (event) => {
+    closePinnedImageWindow(event.sender)
   })
 
   registerPluginIpc(ipcMain, plugins, {
@@ -235,17 +356,22 @@ function broadcastSettingsChanged(settings: ReturnType<typeof launcher.getSettin
   }
 }
 
-function coercePatch(value: unknown): Partial<{
-  hotkey: string
-  themeMode: "light" | "dark" | "system"
-  accent: "neutral" | "blue" | "green" | "rose" | "violet"
-  floatingBallEnabled: boolean
-  floatingBallFeatures: "appLauncher"[]
-}> {
+function coercePatch(value: unknown): UserSettingsPatch {
   if (!value || typeof value !== "object") return {}
   const v = value as Record<string, unknown>
   const out: ReturnType<typeof coercePatch> = {}
-  if (typeof v.hotkey === "string") out.hotkey = v.hotkey
+  if (typeof v.hotkey === "string") {
+    out.hotkeys = { ...out.hotkeys, launcher: v.hotkey }
+  }
+  if (v.hotkeys && typeof v.hotkeys === "object" && !Array.isArray(v.hotkeys)) {
+    const hotkeys = v.hotkeys as Record<string, unknown>
+    if (typeof hotkeys.launcher === "string") {
+      out.hotkeys = { ...out.hotkeys, launcher: hotkeys.launcher }
+    }
+    if (typeof hotkeys.screenshot === "string") {
+      out.hotkeys = { ...out.hotkeys, screenshot: hotkeys.screenshot }
+    }
+  }
   if (v.themeMode === "light" || v.themeMode === "dark" || v.themeMode === "system") {
     out.themeMode = v.themeMode
   }
@@ -261,7 +387,8 @@ function coercePatch(value: unknown): Partial<{
   if (typeof v.floatingBallEnabled === "boolean") out.floatingBallEnabled = v.floatingBallEnabled
   if (Array.isArray(v.floatingBallFeatures)) {
     out.floatingBallFeatures = v.floatingBallFeatures.filter(
-      (feature): feature is "appLauncher" => feature === "appLauncher"
+      (feature): feature is "appLauncher" | "screenshot" =>
+        feature === "appLauncher" || feature === "screenshot"
     )
   }
   return out
@@ -272,10 +399,42 @@ function searchWindowDeps(): SearchWindowDeps {
 }
 
 function createPluginHost(): PluginHost {
+  const userDataDir = app.getPath("userData")
+  const adapters = createElectronPluginAdapters(userDataDir)
   return new PluginHost({
     fetch: (url) => net.fetch(url),
-    userDataDir: app.getPath("userData"),
+    userDataDir,
     resourcesDir: pluginResourcesDir(),
+    adapters: {
+      ...adapters,
+      system: {
+        ...adapters.system,
+        captureRegion: async () => {
+          const result = await captureRegion({
+            selectRegion: () =>
+              selectScreenshotRegion(
+                { rendererDevUrl, appOrigin: APP_ORIGIN },
+                { mode: "capture" }
+              ),
+            captureSelection: (selection) => captureSelectionBitmap(selection, { userDataDir }),
+          })
+          return result
+            ? {
+                imagePath: result.imagePath,
+                width: result.width,
+                height: result.height,
+                displayId: result.displayId,
+              }
+            : null
+        },
+        pinImage: async (imagePath) => {
+          createPinnedImageWindow(createPinnedImageState(`pin-${Date.now()}`, imagePath), {
+            rendererDevUrl,
+            appOrigin: APP_ORIGIN,
+          })
+        },
+      },
+    },
     runtime: () => {
       const settings = launcher.getSettings()
       return {
@@ -299,8 +458,9 @@ function floatingBallDeps() {
     appOrigin: APP_ORIGIN,
     getSettings: () => launcher.getSettings(),
     getLocale: () => app.getLocale(),
-    onOpenFeature: (feature: "appLauncher") => {
+    onOpenFeature: (feature: "appLauncher" | "screenshot") => {
       if (feature === "appLauncher") showSearchWindow(searchWindowDeps())
+      if (feature === "screenshot") void startScreenshotCapture()
     },
     onDisable: () => {
       void disableFloatingBall()
@@ -363,12 +523,93 @@ function showMainWindow(): void {
   mainWindow.focus()
 }
 
-function rebindHotkey(accelerator: string): boolean {
-  const ok = bindGlobalShortcut(accelerator, () => toggleSearchWindow(searchWindowDeps()))
+function rebindLauncherHotkey(accelerator: string): boolean {
+  const ok = bindNamedGlobalShortcut(LAUNCHER_SHORTCUT_ID, accelerator, () =>
+    toggleSearchWindow(searchWindowDeps())
+  )
   if (!ok) {
-    console.warn(`[deskit] failed to register global shortcut: ${accelerator}`)
+    console.warn(`[deskit] failed to register launcher shortcut: ${accelerator}`)
   }
   return ok
+}
+
+function rebindScreenshotHotkey(accelerator: string): boolean {
+  const ok = bindNamedGlobalShortcut(SCREENSHOT_SHORTCUT_ID, accelerator, () => {
+    void startScreenshotCapture()
+  })
+  if (!ok) {
+    console.warn(`[deskit] failed to register screenshot shortcut: ${accelerator}`)
+  }
+  return ok
+}
+
+async function startScreenshotCapture(): Promise<void> {
+  try {
+    const result = await captureRegion({
+      selectRegion: () => selectScreenshotRegion({ rendererDevUrl, appOrigin: APP_ORIGIN }),
+      captureSelection: (selection) =>
+        captureSelectionBitmap(selection, { userDataDir: app.getPath("userData") }),
+    })
+    if (!result) return
+
+    if (result.action === "copy") {
+      clipboard.writeImage(nativeImage.createFromPath(result.imagePath))
+      return
+    }
+    if (result.action === "save") {
+      const savePath = await ensureScreenshotSavePath(app.getPath("pictures"))
+      await fs.copyFile(result.imagePath, savePath)
+      shell.showItemInFolder(savePath)
+      return
+    }
+    if (result.action === "pin") {
+      createPinnedImageWindow(createPinnedImageState(`pin-${Date.now()}`, result.imagePath), {
+        rendererDevUrl,
+        appOrigin: APP_ORIGIN,
+      })
+      return
+    }
+    if (result.action === "annotate") {
+      const annotated = await openScreenshotAnnotator(
+        { rendererDevUrl, appOrigin: APP_ORIGIN },
+        result.imagePath
+      )
+      if (!annotated) return
+      await handleScreenshotDataUrl(annotated.dataUrl, annotated.action)
+    }
+  } catch (err) {
+    console.error("[deskit] screenshot capture failed", err)
+  }
+}
+
+async function handleScreenshotDataUrl(
+  dataUrl: string,
+  action: "copy" | "save" | "pin"
+): Promise<void> {
+  if (action === "copy") {
+    clipboard.writeImage(nativeImage.createFromDataURL(dataUrl))
+    return
+  }
+
+  const buffer = Buffer.from(dataUrl.replace(/^data:image\/png;base64,/, ""), "base64")
+  if (action === "save") {
+    const savePath = await ensureScreenshotSavePath(app.getPath("pictures"))
+    await fs.writeFile(savePath, buffer)
+    shell.showItemInFolder(savePath)
+    return
+  }
+
+  const tempPath = path.join(
+    app.getPath("userData"),
+    "screenshot-temp",
+    `annotated-${Date.now()}.png`
+  )
+  await fs.mkdir(path.dirname(tempPath), { recursive: true })
+  await fs.writeFile(tempPath, buffer)
+  createPinnedImageWindow(createPinnedImageState(`pin-${Date.now()}`, tempPath), {
+    rendererDevUrl,
+    appOrigin: APP_ORIGIN,
+  })
 }
 
 function trayActions() {
@@ -383,7 +624,7 @@ function trayActions() {
       setSearchWindowQuitting(true)
       app.quit()
     },
-    getHotkey: () => launcher.getSettings().hotkey,
+    getHotkey: () => launcher.getSettings().hotkeys.launcher,
     shouldIgnoreOpenSearch: consumeSearchWindowTrayOpenSuppression,
     getLocale: () => app.getLocale(),
   }
@@ -434,10 +675,11 @@ if (!gotLock) {
     void launcher.refreshApps()
 
     createTray(defaultTrayIcon(), trayActions())
-    rebindHotkey(settings.hotkey)
+    rebindLauncherHotkey(settings.hotkeys.launcher)
+    rebindScreenshotHotkey(settings.hotkeys.screenshot)
     syncFloatingBallWindow(floatingBallDeps())
     showStartupNotification({
-      hotkey: settings.hotkey,
+      hotkey: settings.hotkeys.launcher,
       locale: app.getLocale(),
       iconPath: defaultNotificationIcon(),
     })
@@ -453,7 +695,7 @@ if (!gotLock) {
   app.on("will-quit", () => {
     setSearchWindowQuitting(true)
     destroyFloatingBallWindow()
-    unbindGlobalShortcut()
+    unbindAllGlobalShortcuts()
     destroyTray()
   })
 

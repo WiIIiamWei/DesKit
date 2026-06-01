@@ -1,4 +1,4 @@
-import { CircleDot, Search } from "lucide-react"
+import { CircleDot, ScanLine, Search } from "lucide-react"
 import { useEffect, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -6,16 +6,20 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Switch } from "@/components/ui/switch"
 import { getSettings, isElectron, onSettingsChanged, updateSettings } from "@/lib/electron"
 
-const AVAILABLE_FLOATING_BALL_FEATURES: DeskitFloatingBallFeature[] = ["appLauncher"]
+const AVAILABLE_FLOATING_BALL_FEATURES: DeskitFloatingBallFeature[] = ["appLauncher", "screenshot"]
 
 const FEATURE_ICONS: Record<DeskitFloatingBallFeature, typeof Search> = {
   appLauncher: Search,
+  screenshot: ScanLine,
 }
 
 export function FloatingBallSettings() {
   const { t } = useTranslation()
   const [enabled, setEnabled] = useState(false)
-  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>(["appLauncher"])
+  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([
+    "appLauncher",
+    "screenshot",
+  ])
 
   useEffect(() => {
     if (!isElectron()) return
