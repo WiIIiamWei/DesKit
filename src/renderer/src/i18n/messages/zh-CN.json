@@ -141,6 +141,15 @@
       "installed": "已安装",
       "reinstall": "已安装"
     },
+    "details": {
+      "back": "返回应用市场",
+      "version": "版本",
+      "author": "作者",
+      "engine": "DesKit 引擎",
+      "homepage": "主页",
+      "categories": "分类",
+      "openHomepage": "打开主页"
+    },
     "category": {
       "all": "全部",
       "utilities": "工具",

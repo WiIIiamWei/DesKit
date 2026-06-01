@@ -141,6 +141,15 @@
       "installed": "Installed",
       "reinstall": "Installed"
     },
+    "details": {
+      "back": "Back to marketplace",
+      "version": "Version",
+      "author": "Author",
+      "engine": "DesKit engine",
+      "homepage": "Homepage",
+      "categories": "Categories",
+      "openHomepage": "Open homepage"
+    },
     "category": {
       "all": "All",
       "utilities": "Utilities",
