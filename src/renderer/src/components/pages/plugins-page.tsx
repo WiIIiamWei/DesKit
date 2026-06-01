@@ -389,7 +389,7 @@ function PluginPreferences({
         <h3 className="text-sm font-medium">{t("plugins.preferences.title")}</h3>
         <p className="text-xs text-muted-foreground">{t("plugins.preferences.body")}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="divide-y rounded-lg border">
         {preferences.map((preference) => (
           <PreferenceControl
             key={preference.id}
@@ -431,63 +431,69 @@ function PreferenceControl({
   const label = localize(preference.label, locale) || preference.id
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
-      <Label htmlFor={id}>{label}</Label>
-      {preference.type === "checkbox" ? (
-        <Switch
-          id={id}
-          checked={Boolean(value)}
-          disabled={pending}
-          onCheckedChange={(checked) => void onPreferenceChange(plugin, preference, checked)}
-        />
-      ) : preference.type === "select" ? (
-        <Select
-          value={typeof value === "string" ? value : (preference.options?.[0]?.value ?? "")}
-          disabled={pending || !preference.options?.length}
-          onValueChange={(nextValue) => void onPreferenceChange(plugin, preference, nextValue)}
-        >
-          <SelectTrigger id={id} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {preference.options?.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {localize(option.label, locale) || option.value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : preference.type === "number" ? (
-        <Input
-          id={id}
-          key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
-          type="number"
-          disabled={pending}
-          defaultValue={typeof value === "number" ? String(value) : ""}
-          onBlur={(event) => {
-            const raw = event.currentTarget.value.trim()
-            if (!raw) return
-            const nextValue = Number(raw)
-            if (!Number.isFinite(nextValue)) {
-              toast.error(t("plugins.preferences.invalidNumber"))
-              event.currentTarget.value = typeof value === "number" ? String(value) : ""
-              return
-            }
-            if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
-          }}
-        />
-      ) : (
-        <Input
-          id={id}
-          key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
-          disabled={pending}
-          defaultValue={typeof value === "string" ? value : ""}
-          onBlur={(event) => {
-            const nextValue = event.currentTarget.value
-            if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
-          }}
-        />
-      )}
+    <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <Label htmlFor={id} className="min-w-0 text-sm font-medium">
+        {label}
+      </Label>
+      <div className="w-full sm:w-64">
+        {preference.type === "checkbox" ? (
+          <div className="flex justify-start sm:justify-end">
+            <Switch
+              id={id}
+              checked={Boolean(value)}
+              disabled={pending}
+              onCheckedChange={(checked) => void onPreferenceChange(plugin, preference, checked)}
+            />
+          </div>
+        ) : preference.type === "select" ? (
+          <Select
+            value={typeof value === "string" ? value : (preference.options?.[0]?.value ?? "")}
+            disabled={pending || !preference.options?.length}
+            onValueChange={(nextValue) => void onPreferenceChange(plugin, preference, nextValue)}
+          >
+            <SelectTrigger id={id} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {preference.options?.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {localize(option.label, locale) || option.value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : preference.type === "number" ? (
+          <Input
+            id={id}
+            key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+            type="number"
+            disabled={pending}
+            defaultValue={typeof value === "number" ? String(value) : ""}
+            onBlur={(event) => {
+              const raw = event.currentTarget.value.trim()
+              if (!raw) return
+              const nextValue = Number(raw)
+              if (!Number.isFinite(nextValue)) {
+                toast.error(t("plugins.preferences.invalidNumber"))
+                event.currentTarget.value = typeof value === "number" ? String(value) : ""
+                return
+              }
+              if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
+            }}
+          />
+        ) : (
+          <Input
+            id={id}
+            key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+            disabled={pending}
+            defaultValue={typeof value === "string" ? value : ""}
+            onBlur={(event) => {
+              const nextValue = event.currentTarget.value
+              if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
+            }}
+          />
+        )}
+      </div>
     </div>
   )
 }
