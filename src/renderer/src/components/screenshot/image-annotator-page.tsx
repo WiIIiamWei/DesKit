@@ -1,5 +1,5 @@
 import type { PointerEvent, ReactNode } from "react"
-import { Copy, MousePointer2, Pin, Save, Slash, Undo2, X } from "lucide-react"
+import { Copy, Grid3x3, Pin, Save, Slash, Undo2, X } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import { Button } from "@/components/ui/button"
 import {
@@ -118,7 +118,7 @@ export function ImageAnnotatorPage() {
             <Slash className="size-4" aria-hidden />
           </ToolButton>
           <ToolButton active={tool === "mosaic"} title="Mosaic" onClick={() => setTool("mosaic")}>
-            <MousePointer2 className="size-4" aria-hidden />
+            <Grid3x3 className="size-4" aria-hidden />
           </ToolButton>
           <ToolButton
             title="Undo"
