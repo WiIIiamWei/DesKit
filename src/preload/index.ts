@@ -52,6 +52,8 @@ const electronAPI = {
   refreshApps: () => ipcRenderer.invoke("launcher:refresh"),
   hideLauncher: () => ipcRenderer.invoke("launcher:hide"),
   openExternalUrl: (url: string) => ipcRenderer.invoke("system:open-external", url),
+  writeClipboardContent: (content: unknown) =>
+    ipcRenderer.invoke("system:write-clipboard", content),
   notifyLauncherReady: () => ipcRenderer.send("launcher:ready"),
 
   // ---- Floating Ball ----

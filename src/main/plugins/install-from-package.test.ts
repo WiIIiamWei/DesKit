@@ -21,7 +21,7 @@ describe("install-from-package", () => {
       "resources",
       "mock-marketplace",
       "packages",
-      "timestamp-0.2.0.deskit"
+      "com.deskit.timestamp-0.3.0.deskit"
     )
     const destination = path.join(dir, "extracted")
 

@@ -10,7 +10,12 @@ import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { mergeLauncherResults } from "@/components/launcher-results"
 import { ViewRenderer } from "@/components/plugins/view-renderer"
-import { clipboardText, localize, showPluginToast } from "@/components/plugins/view-utils"
+import {
+  clipboardText,
+  localize,
+  normalizeClipboardContent,
+  showPluginToast,
+} from "@/components/plugins/view-utils"
 import {
   Command,
   CommandEmpty,
@@ -29,6 +34,7 @@ import {
   openExternalUrl,
   searchApps,
   searchPluginCommands,
+  writeClipboardContent,
 } from "@/lib/electron"
 
 interface ActiveCommand {
@@ -258,7 +264,12 @@ export function LauncherPanel() {
   const onPluginAction = useCallback(
     async (action: PluginAction, context: PluginActionContext) => {
       if (action.type === "copy" || action.type === "paste") {
-        await navigator.clipboard.writeText(clipboardText(action.value))
+        const content = normalizeClipboardContent(action.value)
+        const written = await writeClipboardContent(content).catch((err) => {
+          console.error("writeClipboardContent failed", err)
+          return false
+        })
+        if (!written) await navigator.clipboard.writeText(clipboardText(action.value))
         toast.success(action.type === "copy" ? "Copied" : "Copied for paste")
         if (action.type === "paste") void hideLauncher()
         return

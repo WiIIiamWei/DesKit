@@ -73,6 +73,7 @@ const manifestSchema = z
     main: relativePathSchema,
     contributes: z
       .object({
+        activationEvents: z.array(z.enum(["clipboard:change"])).optional(),
         commands: z.array(commandSchema).min(1),
         preferences: z.array(preferenceSchema).optional(),
       })
@@ -80,6 +81,18 @@ const manifestSchema = z
     permissions: z.array(z.string().min(1)).default([]),
   })
   .strict()
+  .superRefine((value, ctx) => {
+    if (
+      value.contributes.activationEvents?.includes("clipboard:change") &&
+      !value.permissions.includes("clipboard:read")
+    ) {
+      ctx.addIssue({
+        code: "custom",
+        message: "clipboard:change activation requires clipboard:read permission",
+        path: ["permissions"],
+      })
+    }
+  })
 
 export class ManifestValidationError extends Error {
   readonly issues: string[]

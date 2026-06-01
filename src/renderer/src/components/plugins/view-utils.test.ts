@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { clipboardText, localize } from "@/components/plugins/view-utils"
+import { clipboardText, localize, normalizeClipboardContent } from "@/components/plugins/view-utils"
 
 describe("plugin view utils", () => {
   describe("localize", () => {
@@ -41,6 +41,17 @@ describe("plugin view utils", () => {
       expect(clipboardText({ type: "file", paths: ["/tmp/a.txt", "/tmp/b.txt"] })).toBe(
         "/tmp/a.txt\n/tmp/b.txt"
       )
+    })
+  })
+
+  describe("normalizeClipboardContent", () => {
+    it("wraps string actions as text clipboard content", () => {
+      expect(normalizeClipboardContent("hello")).toEqual({ type: "text", text: "hello" })
+    })
+
+    it("preserves structured clipboard content", () => {
+      const content = { type: "file" as const, paths: ["/tmp/a.txt"] }
+      expect(normalizeClipboardContent(content)).toBe(content)
     })
   })
 })

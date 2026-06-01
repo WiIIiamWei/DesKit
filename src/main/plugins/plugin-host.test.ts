@@ -1,4 +1,5 @@
-import type { PluginCommandResult, PluginRegistryEntry } from "./types"
+import type { ClipboardContent } from "@deskit/plugin-sdk"
+import type { PluginCommandResult, PluginManifest, PluginRegistryEntry } from "./types"
 import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import * as os from "node:os"
@@ -31,6 +32,21 @@ const noopAdapters = {
   },
 }
 
+function makeHostWithClipboard(
+  read: () => Promise<ClipboardContent | undefined>,
+  clipboardPollMs = 10
+): PluginHost {
+  return new PluginHost({
+    userDataDir: dir,
+    resourcesDir: path.join(dir, "resources"),
+    clipboardPollMs,
+    adapters: {
+      ...noopAdapters,
+      clipboard: { read, write: async () => {} },
+    },
+  })
+}
+
 function makeHost(): PluginHost {
   return new PluginHost({
     userDataDir: dir,
@@ -46,6 +62,65 @@ function makeHostWithFetch(fetch: (url: string) => Promise<Response>): PluginHos
     adapters: noopAdapters,
     fetch,
   })
+}
+
+async function writeHostPlugin(
+  options: {
+    id?: string
+    code?: string
+    activationEvents?: PluginManifest["contributes"]["activationEvents"]
+    permissions?: string[]
+  } = {}
+): Promise<string> {
+  const pluginId = options.id ?? "com.deskit.clipboard"
+  const pluginDir = path.join(dir, "plugins", pluginId)
+  await fs.mkdir(path.join(pluginDir, "dist"), { recursive: true })
+  await fs.writeFile(
+    path.join(pluginDir, "deskit.json"),
+    `${JSON.stringify(
+      {
+        id: pluginId,
+        name: pluginId.split(".").at(-1) ?? "plugin",
+        displayName: "Clipboard Plugin",
+        description: "Test clipboard plugin",
+        version: "0.1.0",
+        author: "DesKit",
+        engines: { deskit: "^0.2.0" },
+        main: "dist/index.js",
+        contributes: {
+          activationEvents: options.activationEvents,
+          commands: [{ id: "clipboard.run", title: "Clipboard", mode: "view" }],
+        },
+        permissions: options.permissions ?? ["clipboard:read", "storage:plugin"],
+      },
+      null,
+      2
+    )}\n`,
+    "utf-8"
+  )
+  await fs.writeFile(
+    path.join(pluginDir, "dist", "index.js"),
+    options.code ??
+      `
+module.exports = {
+  commands: {
+    "clipboard.run": {
+      run() {
+        return { type: "toast", level: "info", message: "ok" }
+      }
+    }
+  },
+  events: {
+    async onClipboardChange(event, ctx) {
+      const entries = (await ctx.storage.get("entries")) ?? []
+      await ctx.storage.set("entries", entries.concat(event.content.text))
+    }
+  }
+}
+`,
+    "utf-8"
+  )
+  return pluginDir
 }
 
 const baseEntry: PluginRegistryEntry = {
@@ -97,10 +172,10 @@ function marketplaceEntry(
     description: "Convert timestamps.",
     author: "DesKit",
     homepage: "https://github.com/WiIIiamWei/DesKit",
-    version: "0.2.0",
+    version: "0.3.0",
     downloadUrl:
       overrides.downloadUrl ??
-      "https://github.com/WiIIiamWei/DesKit/releases/download/v0.2.0/timestamp-0.2.0.deskit",
+      "https://github.com/WiIIiamWei/deskit-plugin-timestamp/releases/download/v0.3.0/com.deskit.timestamp-0.3.0.deskit",
     sha256: overrides.sha256 ?? "0".repeat(64),
     deskitEngine: "^0.2.0",
     categories: ["utilities"],
@@ -241,7 +316,7 @@ describe("pluginHost package installation", () => {
       "resources",
       "mock-marketplace",
       "packages",
-      "timestamp-0.2.0.deskit"
+      "com.deskit.timestamp-0.3.0.deskit"
     )
 
     const entry = await host.installPackage(packagePath)
@@ -259,7 +334,7 @@ describe("pluginHost package installation", () => {
       "resources",
       "mock-marketplace",
       "packages",
-      "timestamp-0.2.0.deskit"
+      "com.deskit.timestamp-0.3.0.deskit"
     )
     const packageBuffer = await fs.readFile(packagePath)
     const sha256 = createHash("sha256").update(packageBuffer).digest("hex")
@@ -283,7 +358,7 @@ describe("pluginHost package installation", () => {
       "resources",
       "mock-marketplace",
       "packages",
-      "timestamp-0.2.0.deskit"
+      "com.deskit.timestamp-0.3.0.deskit"
     )
     const packageBuffer = await fs.readFile(packagePath)
     const host = makeHostWithFetch(async (url) => {
@@ -326,5 +401,50 @@ describe("pluginHost facade forwards to registry", () => {
       .mockReturnValue([] as PluginCommandResult[])
     host.searchCommands("ts", "zh-CN", 5)
     expect(spy).toHaveBeenCalledWith("ts", "zh-CN", 5)
+  })
+})
+
+describe("pluginHost clipboard watcher", () => {
+  it("dispatches clipboard changes through a real loaded plugin", async () => {
+    vi.useFakeTimers()
+    const read = vi.fn(async () => ({ type: "text", text: "hello" }) as ClipboardContent)
+    const host = makeHostWithClipboard(read)
+    await writeHostPlugin({ activationEvents: ["clipboard:change"] })
+
+    try {
+      await host.init()
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(read).toHaveBeenCalled()
+      const raw = await fs.readFile(
+        path.join(dir, "plugin-data", "com.deskit.clipboard.json"),
+        "utf-8"
+      )
+      expect(JSON.parse(raw)).toEqual({ entries: ["hello"] })
+    } finally {
+      host.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it("does not start when clipboard activation lacks read permission", async () => {
+    vi.useFakeTimers()
+    const read = vi.fn(async () => ({ type: "text", text: "hello" }) as ClipboardContent)
+    const host = makeHostWithClipboard(read)
+    await writeHostPlugin({
+      activationEvents: ["clipboard:change"],
+      permissions: ["storage:plugin"],
+    })
+
+    try {
+      await host.init()
+      await vi.advanceTimersByTimeAsync(20)
+
+      expect(host.get("invalid:user:com.deskit.clipboard")?.status).toBe("invalid")
+      expect(read).not.toHaveBeenCalled()
+    } finally {
+      host.dispose()
+      vi.useRealTimers()
+    }
   })
 })

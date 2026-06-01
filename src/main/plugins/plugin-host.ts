@@ -1,3 +1,4 @@
+import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { MarketplaceEntry } from "./marketplace-registry"
 import type { PluginBridgeAdapters, PluginRuntimeSnapshot } from "./plugin-bridge"
 import type { PreferenceFile } from "./plugin-preferences"
@@ -32,6 +33,7 @@ export interface PluginHostOptions {
   fetch?: (url: string) => Promise<Response>
   marketplaceRegistryUrl?: string
   runtime?: () => PluginRuntimeSnapshot
+  clipboardPollMs?: number
 }
 
 /**
@@ -80,6 +82,10 @@ export interface PluginPreferenceImportResult {
   skipped: Array<{ pluginId: string; key: string; reason: string }>
 }
 
+function clipboardSnapshot(content: ClipboardContent): string {
+  return JSON.stringify(content)
+}
+
 export class PluginHost {
   readonly bridge: PluginBridge
   readonly sandbox: PluginSandbox
@@ -88,6 +94,11 @@ export class PluginHost {
   private readonly builtinDir: string
   private readonly userDir: string
   private readonly devFilePath: string
+  private clipboardTimer?: ReturnType<typeof setInterval>
+  private lastClipboardSnapshot?: string
+  private readonly handleRegistryChanged = (): void => {
+    this.syncClipboardWatcher()
+  }
 
   constructor(private readonly options: PluginHostOptions) {
     this.builtinDir = path.join(options.resourcesDir, "builtin-plugins")
@@ -102,6 +113,7 @@ export class PluginHost {
     })
     this.sandbox = new PluginSandbox({ bridge: this.bridge })
     this.registry = new PluginRegistry({ sandbox: this.sandbox })
+    this.registry.on("changed", this.handleRegistryChanged)
   }
 
   async init(): Promise<void> {
@@ -275,6 +287,11 @@ export class PluginHost {
     await this.bridge.flushAll()
   }
 
+  dispose(): void {
+    this.registry.off("changed", this.handleRegistryChanged)
+    this.stopClipboardWatcher()
+  }
+
   private preferencesFor(pluginId: string, manifest: PluginManifest): Record<string, unknown> {
     const defaults: Record<string, unknown> = {}
     for (const preference of manifest.contributes.preferences ?? []) {
@@ -289,6 +306,51 @@ export class PluginHost {
       ...entry,
       preferences: this.preferencesFor(entry.pluginId, entry.manifest),
     }
+  }
+
+  private syncClipboardWatcher(): void {
+    if (this.hasClipboardChangeListeners()) {
+      this.startClipboardWatcher()
+    } else {
+      this.stopClipboardWatcher()
+    }
+  }
+
+  private hasClipboardChangeListeners(): boolean {
+    return this.registry.hasClipboardChangeListeners()
+  }
+
+  private startClipboardWatcher(): void {
+    if (this.clipboardTimer) return
+    const pollMs = this.options.clipboardPollMs ?? 500
+    this.clipboardTimer = setInterval(() => {
+      void this.readAndDispatchClipboard()
+    }, pollMs)
+    void this.readAndDispatchClipboard()
+  }
+
+  private stopClipboardWatcher(): void {
+    if (this.clipboardTimer) {
+      clearInterval(this.clipboardTimer)
+      this.clipboardTimer = undefined
+    }
+    this.lastClipboardSnapshot = undefined
+  }
+
+  private async readAndDispatchClipboard(): Promise<void> {
+    const content = await this.bridge.readClipboardForHost().catch((err) => {
+      console.warn("[plugin-host] Clipboard watch read failed", err)
+      return undefined
+    })
+    if (!content) return
+
+    const snapshot = clipboardSnapshot(content)
+    if (snapshot === this.lastClipboardSnapshot) return
+    this.lastClipboardSnapshot = snapshot
+
+    await this.registry.dispatchClipboardChange(content).catch((err) => {
+      console.warn("[plugin-host] Clipboard change dispatch failed", err)
+    })
   }
 
   private async downloadMarketplacePackage(entry: MarketplaceEntry): Promise<string> {
