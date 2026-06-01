@@ -18,6 +18,7 @@ import {
   session,
   shell,
 } from "electron"
+import { applyScreenshotColorProfileWorkaround } from "./chromium-color-profile"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -79,6 +80,8 @@ const APP_SCHEME = "app"
 const APP_ORIGIN = `${APP_SCHEME}://app`
 const LAUNCHER_SHORTCUT_ID = "launcher"
 const SCREENSHOT_SHORTCUT_ID = "screenshot"
+
+applyScreenshotColorProfileWorkaround()
 
 // Must be called *before* app is ready. Marking the scheme `standard` and
 // `secure` makes its origin behave like https for CORS, cookies, and CSP.

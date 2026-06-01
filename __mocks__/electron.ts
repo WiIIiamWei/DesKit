@@ -70,6 +70,9 @@ export const app = {
   quit: vi.fn(),
   requestSingleInstanceLock: vi.fn(() => true),
   getPath: vi.fn((name: string) => `/mock/${name}`),
+  commandLine: {
+    appendSwitch: vi.fn(),
+  },
 }
 export const BrowserWindow = Object.assign(vi.fn(createBrowserWindowMock), {
   getAllWindows: vi.fn(() => []),
