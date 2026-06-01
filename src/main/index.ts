@@ -16,6 +16,7 @@ import {
   session,
   shell,
 } from "electron"
+import { defaultAppIcon } from "./app-icon"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -367,6 +368,7 @@ function createMainWindow(): BrowserWindow {
     title: "DesKit",
     show: false, // launcher app stays in tray; window is shown on demand
     backgroundColor: "#0a0a0a",
+    icon: defaultAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,

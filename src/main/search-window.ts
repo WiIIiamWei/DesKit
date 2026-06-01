@@ -2,6 +2,7 @@ import type { WebContents } from "electron"
 import * as path from "node:path"
 import process from "node:process"
 import { BrowserWindow, screen } from "electron"
+import { defaultAppIcon } from "./app-icon"
 import { attachWindowSecurity } from "./window-security"
 
 const SEARCH_WIDTH = 720
@@ -52,6 +53,7 @@ export function ensureSearchWindow(deps: SearchWindowDeps): BrowserWindow {
     alwaysOnTop: true,
     title: "DesKit Launcher",
     backgroundColor: "#00000000",
+    icon: defaultAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
