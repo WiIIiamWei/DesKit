@@ -1,5 +1,6 @@
 import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { IpcMainInvokeEvent } from "electron"
+import type { PluginRegistryEntry } from "./plugins/types"
 import type { SearchWindowDeps } from "./search-window"
 import type { FloatingBallFeature } from "./settings/settings"
 import * as path from "node:path"
@@ -29,6 +30,8 @@ import {
 import { LauncherService } from "./ipc/launcher-service"
 import { registerPluginIpc } from "./ipc/plugins"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
+import { collectPluginShortcutBindings } from "./plugin-shortcuts"
+import { resolvePluginIconFile } from "./plugins/icon-paths"
 import { PluginHost } from "./plugins/plugin-host"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
 import {
@@ -41,7 +44,8 @@ import {
   showSearchWindowForPluginCommand,
   toggleSearchWindow,
 } from "./search-window"
-import { bindGlobalShortcut, unbindGlobalShortcut } from "./shortcut"
+import { bindGlobalShortcut, unbindAllGlobalShortcuts, unbindGlobalShortcut } from "./shortcut"
+import { pasteClipboardIntoActiveApp } from "./system-paste"
 import { createTray, defaultTrayIcon, destroyTray, refreshTrayMenu } from "./tray"
 import { attachWindowSecurity } from "./window-security"
 
@@ -56,6 +60,8 @@ const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
 // to the filesystem root and 404 every asset.
 const APP_SCHEME = "app"
 const APP_ORIGIN = `${APP_SCHEME}://app`
+const PLUGIN_ICON_PATH_PREFIX = "/plugin-icons/"
+const LAUNCHER_SHORTCUT_ID = "launcher"
 
 // Must be called *before* app is ready. Marking the scheme `standard` and
 // `secure` makes its origin behave like https for CORS, cookies, and CSP.
@@ -82,7 +88,7 @@ function devCsp(devOrigin: string): string {
     `default-src 'self' ${devOrigin} ${ws}; ` +
     `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${devOrigin}; ` +
     `style-src 'self' 'unsafe-inline' ${devOrigin}; ` +
-    `img-src 'self' data: blob: ${devOrigin}; ` +
+    `img-src 'self' data: blob: ${devOrigin} ${APP_ORIGIN}; ` +
     `font-src 'self' data: ${devOrigin}; ` +
     `connect-src 'self' ${devOrigin} ${ws}`
   )
@@ -100,6 +106,15 @@ function applyCsp(): void {
   })
 }
 
+const launcher = new LauncherService()
+let plugins: PluginHost
+let mainWindow: BrowserWindow | null = null
+let pluginShortcutIds = new Set<string>()
+// Tracks whether quit was explicitly requested through the tray menu, so
+// the main-window close handler can distinguish "user clicked X" (hide)
+// from "user picked Quit" (let the close go through).
+let quitRequested = false
+
 function registerStaticProtocol(): void {
   // electron-vite emits the renderer bundle to out/renderer/, which sits
   // next to out/main/index.js after build.
@@ -107,6 +122,10 @@ function registerStaticProtocol(): void {
 
   protocol.handle(APP_SCHEME, async (request) => {
     const url = new URL(request.url)
+    if (url.pathname.startsWith(PLUGIN_ICON_PATH_PREFIX)) {
+      return servePluginIcon(url)
+    }
+
     const resolved = resolveStaticPath(url.pathname, root)
 
     if (resolved.kind === "forbidden") {
@@ -131,13 +150,57 @@ function registerStaticProtocol(): void {
   })
 }
 
-const launcher = new LauncherService()
-let plugins: PluginHost
-let mainWindow: BrowserWindow | null = null
-// Tracks whether quit was explicitly requested through the tray menu, so
-// the main-window close handler can distinguish "user clicked X" (hide)
-// from "user picked Quit" (let the close go through).
-let quitRequested = false
+async function servePluginIcon(url: URL): Promise<Response> {
+  const pluginId = parsePluginIconRequestPluginId(url)
+  const iconPath = url.searchParams.get("path")
+  if (!pluginId || !iconPath) {
+    return new Response("Forbidden", { status: 403 })
+  }
+
+  const entry = plugins?.get(pluginId)
+  if (!entry?.manifest || !isDeclaredPluginIcon(entry, iconPath)) {
+    return new Response("Not Found", { status: 404 })
+  }
+
+  const filePath = resolvePluginIconFile(entry.rootDir, iconPath)
+  if (!filePath) {
+    return new Response("Forbidden", { status: 403 })
+  }
+
+  try {
+    const response = await net.fetch(pathToFileURL(filePath).toString(), {
+      bypassCustomProtocolHandlers: true,
+    })
+    if (!response.ok) return response
+    const headers = new Headers(response.headers)
+    headers.set("content-type", getContentType(filePath))
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  } catch {
+    return new Response("Not Found", { status: 404 })
+  }
+}
+
+function parsePluginIconRequestPluginId(url: URL): string | null {
+  const encoded = url.pathname.slice(PLUGIN_ICON_PATH_PREFIX.length)
+  if (!encoded || encoded.includes("/")) return null
+  let pluginId: string
+  try {
+    pluginId = decodeURIComponent(encoded)
+  } catch {
+    return null
+  }
+  if (!/^[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$/.test(pluginId)) return null
+  return pluginId
+}
+
+function isDeclaredPluginIcon(entry: PluginRegistryEntry, iconPath: string): boolean {
+  if (entry.manifest?.icon === iconPath) return true
+  return entry.manifest?.contributes.commands.some((command) => command.icon === iconPath) ?? false
+}
 
 function registerIpc(): void {
   ipcMain.handle("launcher:search", (_event, query: unknown) => {
@@ -174,6 +237,13 @@ function registerIpc(): void {
     if (!isTrustedIpcSender(event) || !isClipboardContent(content)) return false
     writeClipboardContent(content)
     return true
+  })
+
+  ipcMain.handle("system:paste-clipboard", async (event, content: unknown) => {
+    if (!isTrustedIpcSender(event) || !isClipboardContent(content)) return false
+    writeClipboardContent(content)
+    hideSearchWindow()
+    return pasteClipboardIntoActiveApp()
   })
 
   ipcMain.on("launcher:ready", (event) => {
@@ -219,7 +289,7 @@ function registerIpc(): void {
 
   registerPluginIpc(ipcMain, plugins, {
     isTrustedSender: isTrustedIpcSender,
-    onRegistryChanged: broadcastPluginRegistryChanged,
+    onRegistryChanged: handlePluginRegistryChanged,
   })
 }
 
@@ -260,6 +330,11 @@ function writeClipboardContent(content: ClipboardContent): void {
     return
   }
   clipboard.writeText(content.paths.join("\n"))
+}
+
+function handlePluginRegistryChanged(entries: unknown): void {
+  syncPluginShortcuts()
+  broadcastPluginRegistryChanged(entries)
 }
 
 function broadcastPluginRegistryChanged(entries: unknown): void {
@@ -436,11 +511,41 @@ function showMainWindow(): void {
 }
 
 function rebindHotkey(accelerator: string): boolean {
-  const ok = bindGlobalShortcut(accelerator, () => toggleSearchWindow(searchWindowDeps()))
+  const ok = bindGlobalShortcut(LAUNCHER_SHORTCUT_ID, accelerator, () =>
+    toggleSearchWindow(searchWindowDeps())
+  )
   if (!ok) {
     console.warn(`[deskit] failed to register global shortcut: ${accelerator}`)
   }
   return ok
+}
+
+function syncPluginShortcuts(): void {
+  if (!plugins) return
+
+  const bindings = collectPluginShortcutBindings(plugins.list())
+  const nextIds = new Set(bindings.map((binding) => binding.id))
+  for (const id of pluginShortcutIds) {
+    if (!nextIds.has(id)) unbindGlobalShortcut(id)
+  }
+
+  for (const binding of bindings) {
+    const ok = bindGlobalShortcut(binding.id, binding.accelerator, () => {
+      showSearchWindowForPluginCommand(searchWindowDeps(), {
+        pluginId: binding.pluginId,
+        commandId: binding.commandId,
+      })
+    })
+    if (!ok) {
+      console.warn(
+        `[deskit] failed to register plugin shortcut: ${binding.pluginId}.${binding.commandId} (${binding.accelerator})`
+      )
+      unbindGlobalShortcut(binding.id)
+      nextIds.delete(binding.id)
+    }
+  }
+
+  pluginShortcutIds = nextIds
 }
 
 function trayActions() {
@@ -497,6 +602,7 @@ if (!gotLock) {
     Menu.setApplicationMenu(null)
 
     const settings = await launcher.init()
+    rebindHotkey(settings.hotkey)
     await plugins.init()
 
     // Pre-warm both the main window (so the first show is instant) and the
@@ -506,7 +612,7 @@ if (!gotLock) {
     void launcher.refreshApps()
 
     createTray(defaultTrayIcon(), trayActions())
-    rebindHotkey(settings.hotkey)
+    syncPluginShortcuts()
     syncFloatingBallWindow(floatingBallDeps())
     showStartupNotification({
       hotkey: settings.hotkey,
@@ -525,7 +631,7 @@ if (!gotLock) {
   app.on("will-quit", () => {
     setSearchWindowQuitting(true)
     destroyFloatingBallWindow()
-    unbindGlobalShortcut()
+    unbindAllGlobalShortcuts()
     destroyTray()
     plugins?.dispose()
   })

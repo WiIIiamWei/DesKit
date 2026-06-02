@@ -25,6 +25,7 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     hideLauncher: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(true),
     writeClipboardContent: vi.fn().mockResolvedValue(true),
+    pasteClipboardContent: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
@@ -219,7 +220,7 @@ describe("launcher settings", () => {
     expect(input).toHaveValue("Control+Space")
   })
 
-  it("keeps meta as the Windows key accelerator off macOS", async () => {
+  it("captures the Windows key as the Electron Super accelerator off macOS", async () => {
     const user = userEvent.setup()
     render(<LauncherSettings />)
 
@@ -227,6 +228,6 @@ describe("launcher settings", () => {
     await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
-    expect(input).toHaveValue("Meta+K")
+    expect(input).toHaveValue("Super+K")
   })
 })

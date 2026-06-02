@@ -73,6 +73,10 @@ export async function writeClipboardContent(content: DeskitClipboardContent): Pr
   return api().writeClipboardContent(content)
 }
 
+export async function pasteClipboardContent(content: DeskitClipboardContent): Promise<boolean> {
+  return api().pasteClipboardContent(content)
+}
+
 export function notifyLauncherReady(): void {
   api().notifyLauncherReady()
 }

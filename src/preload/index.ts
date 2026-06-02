@@ -25,6 +25,8 @@ const electronAPI = {
   openExternalUrl: (url: string) => ipcRenderer.invoke("system:open-external", url),
   writeClipboardContent: (content: unknown) =>
     ipcRenderer.invoke("system:write-clipboard", content),
+  pasteClipboardContent: (content: unknown) =>
+    ipcRenderer.invoke("system:paste-clipboard", content),
   notifyLauncherReady: () => ipcRenderer.send("launcher:ready"),
 
   // ---- Floating Ball ----

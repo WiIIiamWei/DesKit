@@ -101,10 +101,11 @@ declare global {
       commands: DeskitManifestCommand[]
       preferences?: Array<{
         id: string
-        type: "text" | "number" | "checkbox" | "select"
+        type: "text" | "number" | "checkbox" | "select" | "shortcut"
         label: DeskitLocalizedString
         default?: unknown
         options?: Array<{ value: string; label: DeskitLocalizedString }>
+        command?: string
       }>
     }
     permissions: string[]
@@ -163,6 +164,7 @@ declare global {
       hideLauncher: () => Promise<void>
       openExternalUrl: (url: string) => Promise<boolean>
       writeClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
+      pasteClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
       notifyLauncherReady: () => void
       openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
       toggleFloatingBallMenu: () => Promise<void>

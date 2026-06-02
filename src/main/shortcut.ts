@@ -1,19 +1,26 @@
 import { globalShortcut } from "electron"
 
-let currentAccelerator: string | null = null
+interface ShortcutBinding {
+  accelerator: string
+  handler: () => void
+}
+
+const bindings = new Map<string, ShortcutBinding>()
 
 /**
- * Replace the current global shortcut binding. Returns true if the new
+ * Replace a named global shortcut binding. Returns true if the new
  * accelerator was registered successfully — false means it was rejected
  * by Electron or is already owned by another process, in which case the
- * previous binding remains active.
+ * previous binding for the same id remains active.
  */
-export function bindGlobalShortcut(accelerator: string, handler: () => void): boolean {
+export function bindGlobalShortcut(id: string, accelerator: string, handler: () => void): boolean {
   const trimmed = accelerator.trim()
   if (!trimmed) return false
-  if (currentAccelerator === trimmed && globalShortcut.isRegistered(trimmed)) return true
+  const current = bindings.get(id)
+  if (current?.accelerator === trimmed && globalShortcut.isRegistered(trimmed)) return true
+  if (isAcceleratorUsedByAnotherBinding(id, trimmed)) return false
 
-  if (currentAccelerator) globalShortcut.unregister(currentAccelerator)
+  if (current) globalShortcut.unregister(current.accelerator)
   let ok = false
   try {
     ok = globalShortcut.register(trimmed, handler)
@@ -21,25 +28,44 @@ export function bindGlobalShortcut(accelerator: string, handler: () => void): bo
     ok = false
   }
   if (ok) {
-    currentAccelerator = trimmed
+    bindings.set(id, { accelerator: trimmed, handler })
     return true
   }
-  if (currentAccelerator) {
+  if (current) {
     // Re-install the old binding so the user isn't left without a hotkey.
     try {
-      globalShortcut.register(currentAccelerator, handler)
+      if (globalShortcut.register(current.accelerator, current.handler)) {
+        bindings.set(id, current)
+      } else {
+        bindings.delete(id)
+      }
     } catch {
-      // ignore — nothing we can do
+      bindings.delete(id)
     }
   }
   return false
 }
 
-export function unbindGlobalShortcut(): void {
-  if (currentAccelerator) globalShortcut.unregister(currentAccelerator)
-  currentAccelerator = null
+export function unbindGlobalShortcut(id: string): void {
+  const current = bindings.get(id)
+  if (!current) return
+  globalShortcut.unregister(current.accelerator)
+  bindings.delete(id)
 }
 
-export function currentBinding(): string | null {
-  return currentAccelerator
+export function unbindAllGlobalShortcuts(): void {
+  for (const id of bindings.keys()) {
+    unbindGlobalShortcut(id)
+  }
+}
+
+export function currentBinding(id: string): string | null {
+  return bindings.get(id)?.accelerator ?? null
+}
+
+function isAcceleratorUsedByAnotherBinding(id: string, accelerator: string): boolean {
+  for (const [bindingId, binding] of bindings) {
+    if (bindingId !== id && binding.accelerator === accelerator) return true
+  }
+  return false
 }
