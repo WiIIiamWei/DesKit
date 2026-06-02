@@ -39,15 +39,18 @@ describe("marketplace registry", () => {
     ).toThrow(MarketplaceRegistryError)
   })
 
-  it("accepts lucide and packaged image icon references", () => {
+  it("accepts lucide marketplace icon references", () => {
     const entries = parseMarketplaceRegistry(
-      registryJson([
-        registryEntry({ id: "com.deskit.lucide", icon: "lucide:clock" }),
-        registryEntry({ id: "com.deskit.image", icon: "assets/icon.png" }),
-      ])
+      registryJson([registryEntry({ id: "com.deskit.lucide", icon: "lucide:clock" })])
     )
 
-    expect(entries.map((entry) => entry.icon)).toEqual(["lucide:clock", "assets/icon.png"])
+    expect(entries.map((entry) => entry.icon)).toEqual(["lucide:clock"])
+  })
+
+  it("rejects packaged image marketplace icon paths", () => {
+    expect(() =>
+      parseMarketplaceRegistry(registryJson([registryEntry({ icon: "assets/icon.png" })]))
+    ).toThrow(MarketplaceRegistryError)
   })
 
   it("rejects remote marketplace icon URLs", () => {

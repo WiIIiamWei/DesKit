@@ -294,7 +294,6 @@ function MarketplaceCard({
         <div className="flex items-start justify-between gap-3">
           <MarketplaceIcon
             icon={entry.icon}
-            pluginId={installed?.pluginId}
             className="size-10 rounded-md"
             iconClassName="size-4"
           />
@@ -382,7 +381,6 @@ function MarketplaceDetails({
             <div className="flex min-w-0 gap-3">
               <MarketplaceIcon
                 icon={entry.icon}
-                pluginId={installed?.pluginId}
                 className="size-12 rounded-lg"
                 iconClassName="size-5"
               />
@@ -468,12 +466,10 @@ function MarketplaceIcon({
   icon,
   className,
   iconClassName,
-  pluginId,
 }: {
   icon?: string
   className?: string
   iconClassName?: string
-  pluginId?: string
 }) {
   return (
     <span
@@ -482,9 +478,13 @@ function MarketplaceIcon({
         className
       )}
     >
-      <PluginIcon pluginId={pluginId} icon={icon} fallback={Store} className={iconClassName} />
+      <PluginIcon icon={marketplaceIcon(icon)} fallback={Store} className={iconClassName} />
     </span>
   )
+}
+
+function marketplaceIcon(icon?: string): string | undefined {
+  return icon?.startsWith("lucide:") ? icon : undefined
 }
 
 function MarketplaceDetailItem({ label, value }: { label: string; value: string }) {
