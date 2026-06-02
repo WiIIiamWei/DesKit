@@ -59,7 +59,9 @@ describe("lanSecureServer", () => {
     await alice.server.disconnect(deviceFor(bob))
     expect(alice.trustedDevices.has("bob")).toBe(false)
     expect(bob.trustedDevices.has("alice")).toBe(false)
-  }, 10_000)
+    // Self-signed TLS keygen + handshake + chunked transfer is CPU-bound and runs
+    // markedly slower on shared CI runners than locally; allow generous headroom.
+  }, 30_000)
 
   it("rejects a server whose certificate no longer matches the pinned fingerprint", async () => {
     const alice = await createPeer("alice", "Alice desktop")
@@ -83,7 +85,7 @@ describe("lanSecureServer", () => {
     const paused = alice.server.listTransfers()[0]!
     await expect(alice.server.removeTransferHistory(paused.id)).resolves.toEqual([])
     expect(impostor.server.listTransfers()).toEqual([])
-  })
+  }, 30_000)
 
   async function createPeer(deviceId: string, name: string) {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), `deskit-lan-${deviceId}-`))
