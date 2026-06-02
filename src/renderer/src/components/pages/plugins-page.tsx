@@ -1,9 +1,10 @@
-import type { ReactNode } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
 import type { PluginRegistryEntry } from "@/lib/electron"
-import { AlertCircle, ChevronDown, RefreshCw, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { AlertCircle, ChevronDown, Keyboard, RefreshCw, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -21,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { acceleratorFromKeyboardEvent, modifierKeys } from "@/lib/accelerators"
 import {
   ElectronIpcError,
   isElectron,
@@ -270,6 +272,11 @@ function PluginListItem({
             className="group flex min-w-0 flex-1 items-start gap-3 text-left outline-none"
           >
             <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            <PluginIcon
+              pluginId={plugin.pluginId}
+              icon={manifest?.icon}
+              className="mt-0.5 size-5 shrink-0 text-muted-foreground"
+            />
             <div className="min-w-0 flex-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="truncate text-sm font-medium">{title}</span>
@@ -445,6 +452,16 @@ function PreferenceControl({
               onCheckedChange={(checked) => void onPreferenceChange(plugin, preference, checked)}
             />
           </div>
+        ) : preference.type === "shortcut" ? (
+          <ShortcutPreferenceControl
+            id={id}
+            key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+            pending={pending}
+            plugin={plugin}
+            preference={preference}
+            value={value}
+            onPreferenceChange={onPreferenceChange}
+          />
         ) : preference.type === "select" ? (
           <Select
             value={typeof value === "string" ? value : (preference.options?.[0]?.value ?? "")}
@@ -494,6 +511,99 @@ function PreferenceControl({
           />
         )}
       </div>
+    </div>
+  )
+}
+
+function ShortcutPreferenceControl({
+  id,
+  onPreferenceChange,
+  pending,
+  plugin,
+  preference,
+  value,
+}: {
+  id: string
+  onPreferenceChange: (
+    plugin: PluginRegistryEntry,
+    preference: ManifestPreference,
+    value: unknown
+  ) => Promise<void>
+  pending: boolean
+  plugin: PluginRegistryEntry
+  preference: ManifestPreference
+  value: unknown
+}) {
+  const { t } = useTranslation()
+  const currentValue = typeof value === "string" ? value : ""
+  const [draft, setDraft] = useState(currentValue)
+  const [capturing, setCapturing] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function save(nextValue: string) {
+    if (nextValue === currentValue) return
+    await onPreferenceChange(plugin, preference, nextValue)
+  }
+
+  function onShortcutKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!capturing) return
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (event.key === "Escape") {
+      setCapturing(false)
+      setDraft(currentValue)
+      return
+    }
+
+    if (modifierKeys.has(event.key)) return
+
+    const nextValue = acceleratorFromKeyboardEvent(event)
+    if (!nextValue) return
+
+    setDraft(nextValue)
+    setCapturing(false)
+    void save(nextValue)
+  }
+
+  return (
+    <div className="flex gap-2">
+      <Input
+        ref={inputRef}
+        id={id}
+        value={draft}
+        disabled={pending}
+        readOnly={capturing}
+        spellCheck={false}
+        autoComplete="off"
+        placeholder={t("plugins.preferences.shortcutPlaceholder")}
+        className="font-mono text-sm"
+        onChange={(event) => {
+          if (!capturing) setDraft(event.target.value)
+        }}
+        onBlur={() => {
+          setCapturing(false)
+          void save(draft)
+        }}
+        onKeyDown={onShortcutKeyDown}
+        onPaste={(event) => {
+          if (capturing) event.preventDefault()
+        }}
+      />
+      <Button
+        type="button"
+        variant={capturing ? "secondary" : "outline"}
+        disabled={pending}
+        aria-pressed={capturing}
+        onClick={() => {
+          setCapturing(true)
+          inputRef.current?.focus()
+        }}
+      >
+        <Keyboard className="size-4" aria-hidden />
+        {capturing ? t("plugins.preferences.capturing") : t("plugins.preferences.capture")}
+      </Button>
     </div>
   )
 }

@@ -25,6 +25,7 @@ const DRAG_THRESHOLD = 4
 interface FloatingBallMenuItem {
   id: DeskitFloatingBallFeature
   icon?: string
+  pluginId?: string
   title: string
   kind: "builtin" | "plugin"
 }
@@ -193,7 +194,9 @@ export function FloatingBallPanel() {
 }
 
 function FeatureIcon({ item }: { item: FloatingBallMenuItem }) {
-  if (item.kind === "plugin") return <PluginIcon icon={item.icon} className="size-5" />
+  if (item.kind === "plugin") {
+    return <PluginIcon pluginId={item.pluginId} icon={item.icon} className="size-5" />
+  }
   return <Search className="size-5" aria-hidden />
 }
 
@@ -216,6 +219,7 @@ function menuItem(
   return {
     id: feature,
     icon: command?.icon ?? plugin?.manifest?.icon,
+    pluginId: plugin?.pluginId,
     title: command ? localize(command.title, locale) || parsed.commandId : parsed.commandId,
     kind: "plugin",
   }

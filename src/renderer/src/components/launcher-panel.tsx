@@ -9,6 +9,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
 import { mergeLauncherResults } from "@/components/launcher-results"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { ViewRenderer } from "@/components/plugins/view-renderer"
 import {
   clipboardText,
@@ -34,6 +35,7 @@ import {
   onLauncherFocus,
   onLauncherRunPluginCommand,
   openExternalUrl,
+  pasteClipboardContent,
   searchApps,
   searchPluginCommands,
   writeClipboardContent,
@@ -250,8 +252,9 @@ export function LauncherPanel() {
     async (pluginId: string, commandId: string) => {
       try {
         const plugin = await getPlugin(pluginId)
-        const command = plugin?.manifest?.contributes.commands.find((item) => item.id === commandId)
-        if (!command) {
+        const manifest = plugin?.manifest
+        const command = manifest?.contributes.commands.find((item) => item.id === commandId)
+        if (!manifest || !command) {
           toast.error("Command unavailable")
           return
         }
@@ -262,7 +265,7 @@ export function LauncherPanel() {
             commandId,
             title: command.title,
             subtitle: command.subtitle,
-            icon: command.icon,
+            icon: command.icon ?? manifest.icon,
             mode: command.mode,
             score: 0,
             matches: [],
@@ -304,13 +307,18 @@ export function LauncherPanel() {
     async (action: PluginAction, context: PluginActionContext) => {
       if (action.type === "copy" || action.type === "paste") {
         const content = normalizeClipboardContent(action.value)
-        const written = await writeClipboardContent(content).catch((err) => {
-          console.error("writeClipboardContent failed", err)
-          return false
-        })
+        const written =
+          action.type === "paste"
+            ? await pasteClipboardContent(content).catch((err) => {
+                console.error("pasteClipboardContent failed", err)
+                return false
+              })
+            : await writeClipboardContent(content).catch((err) => {
+                console.error("writeClipboardContent failed", err)
+                return false
+              })
         if (!written) await navigator.clipboard.writeText(clipboardText(action.value))
-        toast.success(action.type === "copy" ? "Copied" : "Copied for paste")
-        if (action.type === "paste") void hideLauncher()
+        toast.success(action.type === "copy" ? "Copied" : written ? "Pasted" : "Copied for paste")
         return
       }
       if (action.type === "open-url") {
@@ -472,6 +480,11 @@ function isPluginToastView(value: unknown): value is PluginToastView {
 function LauncherPluginItem({ item, locale }: { item: DeskitPluginCommandResult; locale: string }) {
   return (
     <>
+      <PluginIcon
+        pluginId={item.pluginId}
+        icon={item.icon}
+        className="size-4 shrink-0 text-muted-foreground"
+      />
       <div className="flex flex-1 flex-col">
         <span className="text-sm">{localize(item.title, locale)}</span>
         {item.subtitle && (

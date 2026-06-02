@@ -113,7 +113,10 @@
     "preferences": {
       "title": "偏好设置",
       "body": "修改会保存到插件偏好设置存储中。",
-      "invalidNumber": "请输入有效数字。"
+      "invalidNumber": "请输入有效数字。",
+      "capture": "捕获",
+      "capturing": "请按键...",
+      "shortcutPlaceholder": "Control+Super+C"
     },
     "toasts": {
       "enabled": "插件已启用。",

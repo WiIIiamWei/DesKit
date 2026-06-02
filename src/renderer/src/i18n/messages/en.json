@@ -113,7 +113,10 @@
     "preferences": {
       "title": "Preferences",
       "body": "Changes are saved to the plugin preference store.",
-      "invalidNumber": "Please enter a valid number."
+      "invalidNumber": "Please enter a valid number.",
+      "capture": "Capture",
+      "capturing": "Press keys...",
+      "shortcutPlaceholder": "Control+Super+C"
     },
     "toasts": {
       "enabled": "Plugin enabled.",

@@ -31,6 +31,7 @@ const APP_LAUNCHER_FEATURE = "appLauncher"
 interface FloatingBallOption {
   id: DeskitFloatingBallFeature
   icon?: string
+  pluginId?: string
   title: string
   subtitle: string
   kind: "builtin" | "plugin"
@@ -246,7 +247,13 @@ function FeatureIcon({ option }: { option: FloatingBallOption }) {
   if (option.kind === "builtin") {
     return <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
   }
-  return <PluginIcon icon={option.icon} className="size-4 shrink-0 text-muted-foreground" />
+  return (
+    <PluginIcon
+      pluginId={option.pluginId}
+      icon={option.icon}
+      className="size-4 shrink-0 text-muted-foreground"
+    />
+  )
 }
 
 function floatingBallOptions(
@@ -269,6 +276,7 @@ function floatingBallOptions(
     return plugin.manifest.contributes.commands.map((command) => ({
       id: pluginFeatureId(plugin.pluginId, command.id),
       icon: command.icon ?? plugin.manifest?.icon,
+      pluginId: plugin.pluginId,
       title: localize(command.title, locale) || command.id,
       subtitle: `${pluginName} · ${localize(command.subtitle, locale) || command.id}`,
       kind: "plugin" as const,

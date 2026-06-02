@@ -1,5 +1,4 @@
-import type { LucideProps } from "lucide-react"
-import type { ComponentType, ReactNode } from "react"
+import type { ReactNode } from "react"
 import type { MarketplaceEntry, PluginRegistryEntry } from "@/lib/electron"
 import {
   AlertCircle,
@@ -11,10 +10,10 @@ import {
   Send,
   Store,
 } from "lucide-react"
-import dynamicIconImports from "lucide-react/dynamicIconImports"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -295,6 +294,7 @@ function MarketplaceCard({
         <div className="flex items-start justify-between gap-3">
           <MarketplaceIcon
             icon={entry.icon}
+            pluginId={installed?.pluginId}
             className="size-10 rounded-md"
             iconClassName="size-4"
           />
@@ -382,6 +382,7 @@ function MarketplaceDetails({
             <div className="flex min-w-0 gap-3">
               <MarketplaceIcon
                 icon={entry.icon}
+                pluginId={installed?.pluginId}
                 className="size-12 rounded-lg"
                 iconClassName="size-5"
               />
@@ -467,37 +468,13 @@ function MarketplaceIcon({
   icon,
   className,
   iconClassName,
+  pluginId,
 }: {
   icon?: string
   className?: string
   iconClassName?: string
+  pluginId?: string
 }) {
-  const [loadedIcon, setLoadedIcon] = useState<{
-    icon?: string
-    component: LucideIconComponent
-  }>()
-
-  useEffect(() => {
-    let cancelled = false
-    const importer = getLucideIconImporter(icon)
-
-    if (!importer) return undefined
-
-    void importer()
-      .then((module) => {
-        if (!cancelled) setLoadedIcon({ icon, component: module.default })
-      })
-      .catch(() => {
-        if (!cancelled) setLoadedIcon(undefined)
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [icon])
-
-  const IconComponent = loadedIcon && loadedIcon.icon === icon ? loadedIcon.component : Store
-
   return (
     <span
       className={cn(
@@ -505,7 +482,7 @@ function MarketplaceIcon({
         className
       )}
     >
-      <IconComponent className={iconClassName} aria-hidden />
+      <PluginIcon pluginId={pluginId} icon={icon} fallback={Store} className={iconClassName} />
     </span>
   )
 }
@@ -521,18 +498,6 @@ function MarketplaceDetailItem({ label, value }: { label: string; value: string 
 
 function marketplaceEntryKey(entry: MarketplaceEntry): string {
   return `${entry.id}:${entry.version}`
-}
-
-type LucideIconComponent = ComponentType<LucideProps>
-type LucideIconImporter = () => Promise<{ default: LucideIconComponent }>
-
-function getLucideIconImporter(icon?: string): LucideIconImporter | undefined {
-  if (!icon?.startsWith("lucide:")) return undefined
-  const iconName = icon.slice("lucide:".length).trim()
-  if (!iconName) return undefined
-  return dynamicIconImports[iconName as keyof typeof dynamicIconImports] as
-    | LucideIconImporter
-    | undefined
 }
 
 function installedPluginMap(entries: PluginRegistryEntry[]): Map<string, PluginRegistryEntry> {
