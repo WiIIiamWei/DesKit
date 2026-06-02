@@ -39,6 +39,25 @@ describe("marketplace registry", () => {
     ).toThrow(MarketplaceRegistryError)
   })
 
+  it("accepts lucide and packaged image icon references", () => {
+    const entries = parseMarketplaceRegistry(
+      registryJson([
+        registryEntry({ id: "com.deskit.lucide", icon: "lucide:clock" }),
+        registryEntry({ id: "com.deskit.image", icon: "assets/icon.png" }),
+      ])
+    )
+
+    expect(entries.map((entry) => entry.icon)).toEqual(["lucide:clock", "assets/icon.png"])
+  })
+
+  it("rejects remote marketplace icon URLs", () => {
+    expect(() =>
+      parseMarketplaceRegistry(
+        registryJson([registryEntry({ icon: "https://example.com/icon.png" })])
+      )
+    ).toThrow(MarketplaceRegistryError)
+  })
+
   it("finds entries by id and optional version", () => {
     const entries = parseMarketplaceRegistry(
       registryJson([
@@ -128,6 +147,7 @@ function registryEntry(
     version: string
     downloadUrl: string
     deskitEngine: string
+    icon: string
   }> = {}
 ) {
   return {
@@ -143,6 +163,7 @@ function registryEntry(
       "https://github.com/WiIIiamWei/DesKit/releases/download/v0.3.0/test-0.3.0.deskit",
     sha256: "a".repeat(64),
     deskitEngine: overrides.deskitEngine ?? "^0.2.0",
+    icon: overrides.icon,
     categories: ["utilities"],
   }
 }

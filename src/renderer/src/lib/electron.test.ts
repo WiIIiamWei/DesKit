@@ -24,6 +24,7 @@ import {
   onSettingsChanged,
   openExternalUrl,
   openFloatingBallFeature,
+  pasteClipboardContent,
   refreshApps,
   reloadPlugin,
   searchApps,
@@ -48,6 +49,7 @@ function mockApi() {
     hideLauncher: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(true),
     writeClipboardContent: vi.fn().mockResolvedValue(true),
+    pasteClipboardContent: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
@@ -149,6 +151,13 @@ describe("lib/electron", () => {
       const content = { type: "text" as const, text: "hello" }
       await expect(writeClipboardContent(content)).resolves.toBe(true)
       expect(api.writeClipboardContent).toHaveBeenCalledWith(content)
+    })
+
+    it("pasteClipboardContent forwards structured clipboard payloads", async () => {
+      const api = mockApi()
+      const content = { type: "text" as const, text: "hello" }
+      await expect(pasteClipboardContent(content)).resolves.toBe(true)
+      expect(api.pasteClipboardContent).toHaveBeenCalledWith(content)
     })
 
     it("notifyLauncherReady calls notifyLauncherReady", () => {

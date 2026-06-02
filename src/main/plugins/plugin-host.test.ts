@@ -153,6 +153,13 @@ const baseEntry: PluginRegistryEntry = {
             { value: "s", label: "s" },
           ],
         },
+        {
+          id: "openShortcut",
+          type: "shortcut",
+          label: "Open shortcut",
+          default: "Super+Control+C",
+          command: "test.run",
+        },
       ],
     },
     permissions: [],
@@ -192,6 +199,9 @@ describe("pluginHost.setPreference value validation", () => {
     await expect(host.setPreference("com.deskit.test", "limit", 42)).resolves.toBeUndefined()
     await expect(host.setPreference("com.deskit.test", "enabled", false)).resolves.toBeUndefined()
     await expect(host.setPreference("com.deskit.test", "unit", "s")).resolves.toBeUndefined()
+    await expect(
+      host.setPreference("com.deskit.test", "openShortcut", "Alt+Space")
+    ).resolves.toBeUndefined()
   })
 
   it("rejects mistyped text values", async () => {
@@ -235,6 +245,16 @@ describe("pluginHost.setPreference value validation", () => {
     await expect(host.setPreference("com.deskit.test", "unit", "us")).rejects.toBeInstanceOf(
       PluginPreferenceTypeError
     )
+  })
+
+  it("rejects mistyped shortcut values", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
+    await expect(
+      host.setPreference("com.deskit.test", "openShortcut", false)
+    ).rejects.toBeInstanceOf(PluginPreferenceTypeError)
   })
 
   it("allows undefined to clear a preference back to its default", async () => {
@@ -359,6 +379,7 @@ describe("pluginHost facade forwards to registry", () => {
       limit: 10,
       enabled: true,
       unit: "ms",
+      openShortcut: "Super+Control+C",
     })
   })
 
