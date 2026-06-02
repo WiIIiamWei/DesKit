@@ -19,6 +19,7 @@ import {
   shell,
 } from "electron"
 import { defaultAppIcon } from "./app-icon"
+import { pruneUnavailableFloatingBallFeatures } from "./floating-ball-features"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -333,8 +334,41 @@ function writeClipboardContent(content: ClipboardContent): void {
 }
 
 function handlePluginRegistryChanged(entries: unknown): void {
+  if (isPluginRegistryEntries(entries)) {
+    void pruneFloatingBallFeaturesForPlugins(entries).catch((err) =>
+      console.error("[floating-ball] failed to prune unavailable plugin features", err)
+    )
+  }
   syncPluginShortcuts()
   broadcastPluginRegistryChanged(entries)
+}
+
+function isPluginRegistryEntries(entries: unknown): entries is PluginRegistryEntry[] {
+  return (
+    Array.isArray(entries) &&
+    entries.every(
+      (entry) =>
+        Boolean(entry) &&
+        typeof entry === "object" &&
+        typeof (entry as PluginRegistryEntry).pluginId === "string" &&
+        typeof (entry as PluginRegistryEntry).status === "string"
+    )
+  )
+}
+
+async function pruneFloatingBallFeaturesForPlugins(
+  entries: PluginRegistryEntry[]
+): Promise<void> {
+  const current = launcher.getSettings().floatingBallFeatures
+  const next = pruneUnavailableFloatingBallFeatures(current, entries)
+  if (next.length === current.length && next.every((feature, index) => feature === current[index])) {
+    return
+  }
+
+  const settings = await launcher.updateSettings({ floatingBallFeatures: next })
+  refreshTrayMenu(trayActions())
+  syncFloatingBallWindow(floatingBallDeps())
+  broadcastSettingsChanged(settings)
 }
 
 function broadcastPluginRegistryChanged(entries: unknown): void {
