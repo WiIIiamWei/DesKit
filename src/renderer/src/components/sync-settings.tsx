@@ -59,6 +59,7 @@ export function SyncSettings() {
   const [message, setMessage] = useState<string>("")
 
   const canSync = Boolean(status?.configured && status.loggedIn && status.hasSavedPassphrase)
+  const canManualPush = canSync && !status?.pendingConflict
 
   useEffect(() => {
     if (!isElectron()) return
@@ -395,7 +396,7 @@ export function SyncSettings() {
             type="button"
             variant="outline"
             onClick={manualPush}
-            disabled={!canSync || busy === "push"}
+            disabled={!canManualPush || busy === "push"}
           >
             <Upload className="size-4" aria-hidden />
             {t("sync.push")}

@@ -290,9 +290,12 @@ function registerIpc(): void {
     return syncStatus()
   })
 
-  ipcMain.handle("sync:push", async (_event, passphrase: unknown) =>
-    syncRunResult(await syncService.push(requireAccessToken(), requirePassphrase(passphrase)))
-  )
+  ipcMain.handle("sync:push", async (_event, passphrase: unknown) => {
+    if (pendingSyncConflict) throw new Error("Resolve the pending sync conflict before pushing")
+    return syncRunResult(
+      await syncService.push(requireAccessToken(), requirePassphrase(passphrase))
+    )
+  })
 
   ipcMain.handle("sync:pull", async (_event, passphrase: unknown) =>
     syncRunResult(await pullSyncWithPassphrase(requirePassphrase(passphrase)))
