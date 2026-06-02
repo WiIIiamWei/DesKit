@@ -4,6 +4,7 @@ import { FloatingBallSettings } from "./floating-ball-settings"
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
+    i18n: { language: "en" },
     t: (key: string) => key,
   }),
 }))
@@ -26,7 +27,9 @@ function installElectronApi(settings: DeskitUserSettings) {
   let settingsChangedHandler: SettingsChangedHandler | null = null
   const api = {
     getSettings: vi.fn().mockResolvedValue(settings),
+    listPlugins: vi.fn().mockResolvedValue({ ok: true, data: [] }),
     updateSettings: vi.fn().mockResolvedValue(settings),
+    onPluginRegistryChanged: vi.fn(() => () => undefined),
     onSettingsChanged: vi.fn((handler: SettingsChangedHandler) => {
       settingsChangedHandler = handler
       return () => {
@@ -66,8 +69,7 @@ describe("floating ball settings", () => {
     )
 
     expect(enabledSwitch).toBeChecked()
-    expect(
-      screen.getByRole("checkbox", { name: "floatingBall.features.appLauncher" })
-    ).toBeChecked()
+    expect(screen.getByText("floatingBall.features.appLauncher")).toBeVisible()
+    expect(screen.getByText("floatingBall.settings.builtinFeature")).toBeVisible()
   })
 })

@@ -53,9 +53,9 @@ describe("pruneUnavailableFloatingBallFeatures", () => {
       "plugin:com.deskit.timestamp:timestamp.convert",
     ]
 
-    expect(pruneUnavailableFloatingBallFeatures(features, [clipboardEntry, timestampEntry])).toEqual(
-      features
-    )
+    expect(
+      pruneUnavailableFloatingBallFeatures(features, [clipboardEntry, timestampEntry])
+    ).toEqual(features)
   })
 
   it("removes plugin commands when the plugin is disabled", () => {
@@ -65,9 +65,7 @@ describe("pruneUnavailableFloatingBallFeatures", () => {
     ]
 
     expect(
-      pruneUnavailableFloatingBallFeatures(features, [
-        { ...clipboardEntry, status: "disabled" },
-      ])
+      pruneUnavailableFloatingBallFeatures(features, [{ ...clipboardEntry, status: "disabled" }])
     ).toEqual(["appLauncher"])
   })
 

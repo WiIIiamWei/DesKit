@@ -29,9 +29,12 @@ export interface MarketplaceRegistryOptions {
 }
 
 const localizedStringSchema = z.union([z.string().min(1), z.record(z.string(), z.string().min(1))])
-const marketplaceIconSchema = z.string().min(1).regex(/^lucide:[a-z0-9][a-z0-9-]*$/, {
-  message: "Marketplace icon must be a lucide:<name> reference",
-})
+const marketplaceIconSchema = z
+  .string()
+  .min(1)
+  .regex(/^lucide:[a-z0-9][a-z0-9-]*$/, {
+    message: "Marketplace icon must be a lucide:<name> reference",
+  })
 
 const marketplaceEntrySchema = z
   .object({

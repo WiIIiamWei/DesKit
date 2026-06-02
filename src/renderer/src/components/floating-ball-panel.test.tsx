@@ -5,6 +5,7 @@ import { FloatingBallPanel } from "./floating-ball-panel"
 
 vi.mock("react-i18next", () => ({
   useTranslation: () => ({
+    i18n: { language: "en" },
     t: (key: string) => key,
   }),
 }))
@@ -36,6 +37,7 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
   let settingsChangedHandler: SettingsChangedHandler | null = null
   const api = {
     getSettings: vi.fn().mockResolvedValue(settings),
+    listPlugins: vi.fn().mockResolvedValue({ ok: true, data: [] }),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
@@ -51,6 +53,7 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
         featuresHandler = null
       }
     }),
+    onPluginRegistryChanged: vi.fn(() => () => undefined),
     onSettingsChanged: vi.fn((handler: SettingsChangedHandler) => {
       settingsChangedHandler = handler
       return () => {

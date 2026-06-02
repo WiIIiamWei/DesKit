@@ -19,7 +19,7 @@ export function acceleratorFromKeyboardEvent(event: AcceleratorKeyboardEvent): s
   if (event.ctrlKey) modifiers.push("Control")
   if (event.altKey) modifiers.push("Alt")
   if (event.shiftKey) modifiers.push("Shift")
-  if (event.metaKey) modifiers.push(isMacPlatform() ? "Command" : "Super")
+  if (event.metaKey) modifiers.push(isMacPlatform() ? "CommandOrControl" : "Super")
 
   if (modifiers.length === 0) return null
   return [...modifiers, key].join("+")
@@ -35,6 +35,7 @@ export function splitAccelerator(accelerator: string, isMac = isMacPlatform()): 
       switch (lower) {
         case "commandorcontrol":
         case "cmdorctrl":
+          return isMac ? "⌘" : "Ctrl"
         case "control":
         case "ctrl":
           return "Ctrl"
