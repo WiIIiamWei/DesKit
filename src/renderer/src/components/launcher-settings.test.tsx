@@ -25,6 +25,24 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
   const api = {
     getSettings: vi.fn().mockResolvedValue(settings),
     updateSettings: vi.fn().mockResolvedValue(settings),
+    getSyncStatus: vi.fn().mockResolvedValue({
+      configured: false,
+      enabled: false,
+      loggedIn: false,
+      deviceId: "device",
+      rememberPassphrase: true,
+      hasSavedPassphrase: false,
+    }),
+    saveSyncClientId: vi.fn(),
+    saveSyncGistId: vi.fn(),
+    startGitHubLogin: vi.fn(),
+    pollGitHubLogin: vi.fn(),
+    configureSyncPassphrase: vi.fn(),
+    pushSync: vi.fn(),
+    pullSync: vi.fn(),
+    applyRemoteSync: vi.fn(),
+    applyLocalSync: vi.fn(),
+    disconnectSync: vi.fn(),
     refreshApps: vi.fn().mockResolvedValue([]),
     searchApps: vi.fn().mockResolvedValue([]),
     launchApp: vi.fn().mockResolvedValue(true),
@@ -199,7 +217,7 @@ describe("launcher settings", () => {
     expect(input).toHaveValue("Control+Tab")
   })
 
-  it("captures the command key as an Electron macOS accelerator on macOS", async () => {
+  it("captures the command key as a portable accelerator on macOS", async () => {
     mockPlatform("MacIntel")
     const user = userEvent.setup()
     render(<LauncherSettings />)
@@ -208,7 +226,7 @@ describe("launcher settings", () => {
     await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
-    expect(input).toHaveValue("Command+K")
+    expect(input).toHaveValue("CommandOrControl+K")
   })
 
   it("cancels capture when the input loses focus", async () => {

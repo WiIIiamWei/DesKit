@@ -14,6 +14,37 @@ interface SettingsPatch {
 }
 type Settings = Required<SettingsPatch>
 
+interface SyncStatus {
+  configured: boolean
+  enabled: boolean
+  loggedIn: boolean
+  githubUserLogin?: string
+  gistId?: string
+  deviceId: string
+  lastSyncedAt?: string
+  lastRemoteUpdatedAt?: string
+  lastLocalUpdatedAt?: string
+  rememberPassphrase: boolean
+  hasSavedPassphrase: boolean
+  pendingConflict?: { updatedAt: string; deviceId: string }
+}
+
+interface GitHubDeviceAuthorization {
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  expiresIn: number
+  interval: number
+}
+
+type GitHubLoginPollResult =
+  | { status: "pending" | "slow_down" | "expired" | "denied" }
+  | { status: "authenticated"; login: string }
+
+type SyncRunResult =
+  | { status: "empty" | "created" | "updated" | "applied" }
+  | { status: "conflict"; conflict: { updatedAt: string; deviceId: string } }
+
 const electronAPI = {
   // ---- Launcher ----
   searchApps: (query: string) => ipcRenderer.invoke("launcher:search", query),
@@ -36,6 +67,25 @@ const electronAPI = {
   // ---- Settings ----
   getSettings: () => ipcRenderer.invoke("settings:get"),
   updateSettings: (patch: SettingsPatch) => ipcRenderer.invoke("settings:update", patch),
+  getSyncStatus: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:get-status"),
+  saveSyncClientId: (clientId: string): Promise<SyncStatus> =>
+    ipcRenderer.invoke("sync:save-client-id", clientId),
+  saveSyncGistId: (gistId: string): Promise<SyncStatus> =>
+    ipcRenderer.invoke("sync:save-gist-id", gistId),
+  startGitHubLogin: (): Promise<GitHubDeviceAuthorization> =>
+    ipcRenderer.invoke("sync:github-login-start"),
+  pollGitHubLogin: (deviceCode: string): Promise<GitHubLoginPollResult> =>
+    ipcRenderer.invoke("sync:github-login-poll", deviceCode),
+  configureSyncPassphrase: (passphrase: string, rememberPassphrase: boolean): Promise<SyncStatus> =>
+    ipcRenderer.invoke("sync:configure-passphrase", { passphrase, rememberPassphrase }),
+  pushSync: (passphrase?: string): Promise<SyncRunResult> =>
+    ipcRenderer.invoke("sync:push", passphrase),
+  pullSync: (passphrase?: string): Promise<SyncRunResult> =>
+    ipcRenderer.invoke("sync:pull", passphrase),
+  applyRemoteSync: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:use-remote"),
+  applyLocalSync: (passphrase?: string): Promise<SyncRunResult> =>
+    ipcRenderer.invoke("sync:use-local", passphrase),
+  disconnectSync: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:disconnect"),
 
   // ---- Plugins ----
   listPlugins: () => ipcRenderer.invoke("plugin:list"),
