@@ -26,7 +26,6 @@ export function clipboardText(value: unknown): string {
   if (!value || typeof value !== "object") return String(value ?? "")
   const record = value as Record<string, unknown>
   if (record.type === "text" && typeof record.text === "string") return record.text
-  if (record.type === "file" && Array.isArray(record.paths)) return record.paths.join("\n")
   if (record.type === "image" && typeof record.dataUrl === "string") return record.dataUrl
   return JSON.stringify(value)
 }

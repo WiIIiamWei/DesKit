@@ -55,12 +55,19 @@ describe("normalizeSettings", () => {
     expect(
       normalizeSettings({
         floatingBallEnabled: true,
-        floatingBallFeatures: ["appLauncher", "floatingBall", "appLauncher", 42],
+        floatingBallFeatures: [
+          "appLauncher",
+          "plugin:com.deskit.timestamp:timestamp.convert",
+          "floatingBall",
+          "appLauncher",
+          "plugin:bad",
+          42,
+        ],
       })
     ).toEqual({
       ...defaultSettings,
       floatingBallEnabled: true,
-      floatingBallFeatures: ["appLauncher"],
+      floatingBallFeatures: ["appLauncher", "plugin:com.deskit.timestamp:timestamp.convert"],
     })
   })
 

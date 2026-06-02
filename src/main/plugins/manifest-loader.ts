@@ -2,6 +2,7 @@ import type { PluginManifest } from "./types"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { z } from "zod"
+import { isSafePluginIcon, isSafeRelativePath } from "./icon-paths"
 import { PLUGIN_HOST_VERSION } from "./types"
 
 const idSchema = z
@@ -22,6 +23,10 @@ const relativePathSchema = z.string().min(1).refine(isSafeRelativePath, {
   message: "Path must be relative and stay inside the plugin directory",
 })
 
+const iconSchema = z.string().min(1).refine(isSafeIcon, {
+  message: "Icon must be a lucide:<name> reference or a packaged image path",
+})
+
 const commandSchema = z
   .object({
     id: commandIdSchema,
@@ -29,7 +34,7 @@ const commandSchema = z
     subtitle: localizedStringSchema.optional(),
     keywords: z.array(z.string().min(1)).optional(),
     mode: z.enum(["view", "no-view"]).default("view"),
-    icon: relativePathSchema.optional(),
+    icon: iconSchema.optional(),
   })
   .strict()
 
@@ -43,10 +48,11 @@ const preferenceOptionSchema = z
 const preferenceSchema = z
   .object({
     id: z.string().min(1),
-    type: z.enum(["text", "number", "checkbox", "select"]),
+    type: z.enum(["text", "number", "checkbox", "select", "shortcut"]),
     label: localizedStringSchema,
     default: z.unknown().optional(),
     options: z.array(preferenceOptionSchema).optional(),
+    command: commandIdSchema.optional(),
   })
   .strict()
   .superRefine((value, ctx) => {
@@ -56,6 +62,22 @@ const preferenceSchema = z
         message: "Select preferences must declare at least one option",
         path: ["options"],
       })
+    }
+    if (value.type === "shortcut") {
+      if (!value.command) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Shortcut preferences must declare the command they invoke",
+          path: ["command"],
+        })
+      }
+      if ("default" in value && typeof value.default !== "string") {
+        ctx.addIssue({
+          code: "custom",
+          message: "Shortcut preference defaults must be accelerator strings",
+          path: ["default"],
+        })
+      }
     }
   })
 
@@ -68,7 +90,7 @@ const manifestSchema = z
     description: localizedStringSchema,
     version: semverSchema,
     author: z.string().min(1),
-    icon: relativePathSchema.optional(),
+    icon: iconSchema.optional(),
     engines: z.object({ deskit: z.string().min(1) }).strict(),
     main: relativePathSchema,
     contributes: z
@@ -91,6 +113,20 @@ const manifestSchema = z
         message: "clipboard:change activation requires clipboard:read permission",
         path: ["permissions"],
       })
+    }
+    const commands = new Set(value.contributes.commands.map((command) => command.id))
+    for (const [index, preference] of (value.contributes.preferences ?? []).entries()) {
+      if (
+        preference.type === "shortcut" &&
+        preference.command &&
+        !commands.has(preference.command)
+      ) {
+        ctx.addIssue({
+          code: "custom",
+          message: "Shortcut preference command must reference a contributed command",
+          path: ["contributes", "preferences", index, "command"],
+        })
+      }
     }
   })
 
@@ -169,12 +205,8 @@ function formatZodIssues(error: z.ZodError): string[] {
   })
 }
 
-function isSafeRelativePath(value: string): boolean {
-  if (path.isAbsolute(value)) return false
-  const normalized = value.replace(/\\/g, "/")
-  if (normalized.split("/").includes("..")) return false
-  const posix = path.posix.normalize(normalized)
-  return posix !== ".." && !posix.startsWith("../") && !posix.includes("/../")
+function isSafeIcon(value: string): boolean {
+  return isSafePluginIcon(value)
 }
 
 interface Semver {

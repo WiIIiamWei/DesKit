@@ -24,10 +24,12 @@ import {
   onFloatingBallFeatures,
   onFloatingBallMenuState,
   onLauncherFocus,
+  onLauncherRunPluginCommand,
   onPluginRegistryChanged,
   onSettingsChanged,
   openExternalUrl,
   openFloatingBallFeature,
+  pasteClipboardContent,
   pollGitHubLogin,
   pullSync,
   pushSync,
@@ -58,6 +60,7 @@ function mockApi() {
     hideLauncher: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(true),
     writeClipboardContent: vi.fn().mockResolvedValue(true),
+    pasteClipboardContent: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
@@ -117,6 +120,7 @@ function mockApi() {
     onLauncherFocus: vi.fn().mockReturnValue(() => {}),
     onFloatingBallMenuState: vi.fn().mockReturnValue(() => {}),
     onFloatingBallFeatures: vi.fn().mockReturnValue(() => {}),
+    onLauncherRunPluginCommand: vi.fn().mockReturnValue(() => {}),
     onPluginRegistryChanged: vi.fn().mockReturnValue(() => {}),
     onSettingsChanged: vi.fn().mockReturnValue(() => {}),
   }
@@ -182,6 +186,13 @@ describe("lib/electron", () => {
       const content = { type: "text" as const, text: "hello" }
       await expect(writeClipboardContent(content)).resolves.toBe(true)
       expect(api.writeClipboardContent).toHaveBeenCalledWith(content)
+    })
+
+    it("pasteClipboardContent forwards structured clipboard payloads", async () => {
+      const api = mockApi()
+      const content = { type: "text" as const, text: "hello" }
+      await expect(pasteClipboardContent(content)).resolves.toBe(true)
+      expect(api.pasteClipboardContent).toHaveBeenCalledWith(content)
     })
 
     it("notifyLauncherReady calls notifyLauncherReady", () => {
@@ -372,6 +383,13 @@ describe("lib/electron", () => {
       const handler = vi.fn()
       onFloatingBallFeatures(handler)
       expect(api.onFloatingBallFeatures).toHaveBeenCalledWith(handler)
+    })
+
+    it("onLauncherRunPluginCommand forwards handler", () => {
+      const api = mockApi()
+      const handler = vi.fn()
+      onLauncherRunPluginCommand(handler)
+      expect(api.onLauncherRunPluginCommand).toHaveBeenCalledWith(handler)
     })
 
     it("onPluginRegistryChanged forwards handler", () => {

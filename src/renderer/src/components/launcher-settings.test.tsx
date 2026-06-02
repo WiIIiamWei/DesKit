@@ -49,6 +49,7 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
     hideLauncher: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(true),
     writeClipboardContent: vi.fn().mockResolvedValue(true),
+    pasteClipboardContent: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
@@ -70,6 +71,7 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
     onLauncherFocus: vi.fn(() => () => undefined),
     onFloatingBallMenuState: vi.fn(() => () => undefined),
     onFloatingBallFeatures: vi.fn(() => () => undefined),
+    onLauncherRunPluginCommand: vi.fn(() => () => undefined),
     onPluginRegistryChanged: vi.fn(() => () => undefined),
     onSettingsChanged: vi.fn((handler: SettingsChangedHandler) => {
       settingsChangedHandler = handler
@@ -250,7 +252,7 @@ describe("launcher settings", () => {
     expect(input).toHaveValue("Control+Space")
   })
 
-  it("keeps meta as the Windows key accelerator off macOS", async () => {
+  it("captures the Windows key as the Electron Super accelerator off macOS", async () => {
     const user = userEvent.setup()
     render(<LauncherSettings />)
 
@@ -258,7 +260,7 @@ describe("launcher settings", () => {
     await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
-    expect(input).toHaveValue("Meta+K")
+    expect(input).toHaveValue("Super+K")
   })
 
   it("syncs the hotkey input when a settings broadcast arrives without local edits", async () => {

@@ -1,3 +1,4 @@
+import type { KeyboardEvent } from "react"
 import type {
   LocalizedString,
   PluginAction,
@@ -10,7 +11,7 @@ import type {
   RenderablePluginView,
 } from "@/components/plugins/view-types"
 import { Check, Clipboard, ExternalLink, File, Hash, Play, Send, X } from "lucide-react"
-import { useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { localize } from "@/components/plugins/view-utils"
 import { Button } from "@/components/ui/button"
@@ -106,17 +107,74 @@ function ListPluginView({
   onSearchChange?: (text: string) => void
 }) {
   const [query, setQuery] = useState("")
+  const rootRef = useRef<HTMLDivElement>(null)
+  const searchInputRef = useRef<HTMLInputElement>(null)
   const sections = useMemo(() => {
     if (view.sections?.length) return view.sections
     return [{ items: view.items ?? [] }]
   }, [view.items, view.sections])
   const count = sections.reduce((sum, section) => sum + section.items.length, 0)
+  const selectableItems = useMemo(
+    () => sections.flatMap((section) => section.items).filter((item) => item.actions?.[0]),
+    [sections]
+  )
+  const [selectedId, setSelectedId] = useState<string | null>(() => selectableItems[0]?.id ?? null)
+  const effectiveSelectedId = selectableItems.some((item) => item.id === selectedId)
+    ? selectedId
+    : (selectableItems[0]?.id ?? null)
+
+  useEffect(() => {
+    if (onSearchChange) searchInputRef.current?.focus()
+    else rootRef.current?.focus()
+  }, [onSearchChange])
+
+  function moveSelection(delta: number) {
+    if (selectableItems.length === 0) return
+    const currentIndex = effectiveSelectedId
+      ? selectableItems.findIndex((item) => item.id === effectiveSelectedId)
+      : -1
+    const nextIndex =
+      currentIndex < 0
+        ? 0
+        : (currentIndex + delta + selectableItems.length) % selectableItems.length
+    setSelectedId(selectableItems[nextIndex]?.id ?? null)
+  }
+
+  function runSelectedAction() {
+    const selectedItem =
+      selectableItems.find((item) => item.id === effectiveSelectedId) ?? selectableItems[0]
+    const primary = selectedItem?.actions?.[0]
+    if (selectedItem && primary) onAction(primary, { item: selectedItem })
+  }
+
+  function onListKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault()
+      moveSelection(1)
+      return
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault()
+      moveSelection(-1)
+      return
+    }
+    if (event.key === "Enter") {
+      event.preventDefault()
+      runSelectedAction()
+    }
+  }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div
+      ref={rootRef}
+      tabIndex={0}
+      className="flex min-h-0 flex-1 flex-col outline-none"
+      onKeyDown={onListKeyDown}
+    >
       {onSearchChange && (
         <div className="border-b p-2">
           <Input
+            ref={searchInputRef}
             value={query}
             onChange={(event) => {
               const next = event.target.value
@@ -143,18 +201,27 @@ function ListPluginView({
             )}
             {section.items.map((item) => {
               const primary = item.actions?.[0]
+              const selected = item.id === effectiveSelectedId
               return (
                 <div
                   key={item.id}
                   role="button"
+                  aria-selected={selected}
                   tabIndex={0}
                   onClick={() => primary && onAction(primary, { item })}
+                  onMouseMove={() => {
+                    if (primary) setSelectedId(item.id)
+                  }}
                   onKeyDown={(event) => {
                     if (!primary || (event.key !== "Enter" && event.key !== " ")) return
                     event.preventDefault()
+                    event.stopPropagation()
                     onAction(primary, { item })
                   }}
-                  className="flex w-full items-center gap-3 rounded-md px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:bg-accent"
+                  className={cn(
+                    "flex w-full items-center gap-3 rounded-md px-2 py-2 text-left outline-none transition-colors hover:bg-accent focus-visible:bg-accent",
+                    selected && "bg-accent"
+                  )}
                 >
                   <PluginItemIcon icon={item.icon} />
                   <span className="min-w-0 flex-1">

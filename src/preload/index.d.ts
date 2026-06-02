@@ -6,7 +6,7 @@ export {}
 
 declare global {
   type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
-  type DeskitFloatingBallFeature = "appLauncher"
+  type DeskitFloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
 
   interface LauncherAppEntry {
     id: string
@@ -82,7 +82,6 @@ declare global {
         height?: number
         name?: string
       }
-    | { type: "file"; paths: string[] }
   type DeskitPluginSourceKind = "builtin" | "user" | "dev"
   type DeskitPluginRuntimeStatus = "active" | "disabled" | "invalid" | "crashed" | "shadowed"
   type DeskitPluginCommandMode = "view" | "no-view"
@@ -137,10 +136,11 @@ declare global {
       commands: DeskitManifestCommand[]
       preferences?: Array<{
         id: string
-        type: "text" | "number" | "checkbox" | "select"
+        type: "text" | "number" | "checkbox" | "select" | "shortcut"
         label: DeskitLocalizedString
         default?: unknown
         options?: Array<{ value: string; label: DeskitLocalizedString }>
+        command?: string
       }>
     }
     permissions: string[]
@@ -199,6 +199,7 @@ declare global {
       hideLauncher: () => Promise<void>
       openExternalUrl: (url: string) => Promise<boolean>
       writeClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
+      pasteClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
       notifyLauncherReady: () => void
       openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
       toggleFloatingBallMenu: () => Promise<void>
@@ -267,6 +268,9 @@ declare global {
       onFloatingBallMenuState: (handler: (expanded: boolean) => void) => () => void
       onFloatingBallFeatures: (
         handler: (features: DeskitFloatingBallFeature[]) => void
+      ) => () => void
+      onLauncherRunPluginCommand: (
+        handler: (command: { pluginId: string; commandId: string }) => void
       ) => () => void
       onPluginRegistryChanged: (
         handler: (plugins: DeskitPluginRegistryEntry[]) => void

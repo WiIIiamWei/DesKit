@@ -135,7 +135,13 @@
       "enable": "显示桌面悬浮球",
       "enableHint": "启动时默认关闭，需要在这里手动开启。",
       "menuFeatures": "圆形菜单工具",
-      "menuFeaturesHint": "最多选择 6 个工具。桌面悬浮球本身不会作为菜单工具。"
+      "menuFeaturesHint": "最多选择 6 个工具或插件命令。桌面悬浮球本身不会作为菜单工具。",
+      "addFeature": "添加工具或插件命令",
+      "searchPlaceholder": "搜索工具和插件命令…",
+      "emptyOptions": "没有匹配的工具或插件命令。",
+      "builtinFeature": "内置工具",
+      "unavailableFeature": "不可用的插件命令",
+      "removeFeature": "移除 {{name}}"
     }
   },
   "plugins": {
@@ -163,6 +169,7 @@
       "dev": "开发插件"
     },
     "meta": {
+      "id": "插件 ID",
       "version": "版本",
       "author": "作者",
       "commands": "命令",
@@ -178,7 +185,10 @@
     "preferences": {
       "title": "偏好设置",
       "body": "修改会保存到插件偏好设置存储中。",
-      "invalidNumber": "请输入有效数字。"
+      "invalidNumber": "请输入有效数字。",
+      "capture": "捕获",
+      "capturing": "请按键...",
+      "shortcutPlaceholder": "Control+Super+C"
     },
     "toasts": {
       "enabled": "插件已启用。",
@@ -212,6 +222,15 @@
       "install": "可安装",
       "installed": "已安装",
       "reinstall": "已安装"
+    },
+    "details": {
+      "back": "返回应用市场",
+      "version": "版本",
+      "author": "作者",
+      "engine": "DesKit 引擎",
+      "homepage": "主页",
+      "categories": "分类",
+      "openHomepage": "打开主页"
     },
     "category": {
       "all": "全部",

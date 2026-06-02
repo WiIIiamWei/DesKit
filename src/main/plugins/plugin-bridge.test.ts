@@ -67,10 +67,18 @@ describe("pluginBridge", () => {
     )
 
     await expect(pluginCtx.clipboard.readText()).resolves.toBe("hello")
-    await pluginCtx.clipboard.write({ type: "file", paths: ["C:/tmp/a.txt"] })
+    await pluginCtx.clipboard.write({
+      type: "image",
+      dataUrl: "data:image/png;base64,a",
+      mimeType: "image/png",
+    })
 
     expect(read).toHaveBeenCalledTimes(1)
-    expect(write).toHaveBeenCalledWith({ type: "file", paths: ["C:/tmp/a.txt"] })
+    expect(write).toHaveBeenCalledWith({
+      type: "image",
+      dataUrl: "data:image/png;base64,a",
+      mimeType: "image/png",
+    })
   })
 
   it("keeps clipboard watchers alive when adapter reads fail", async () => {
