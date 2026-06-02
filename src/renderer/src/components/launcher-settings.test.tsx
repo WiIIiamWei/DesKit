@@ -24,6 +24,7 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     launchApp: vi.fn().mockResolvedValue(true),
     hideLauncher: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(true),
+    writeClipboardContent: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),

@@ -99,9 +99,21 @@ declare global {
   }
 
   type DeskitLocalizedString = string | Record<string, string>
+  type DeskitClipboardContent =
+    | { type: "text"; text: string }
+    | {
+        type: "image"
+        dataUrl: string
+        mimeType: string
+        width?: number
+        height?: number
+        name?: string
+      }
+    | { type: "file"; paths: string[] }
   type DeskitPluginSourceKind = "builtin" | "user" | "dev"
   type DeskitPluginRuntimeStatus = "active" | "disabled" | "invalid" | "crashed" | "shadowed"
   type DeskitPluginCommandMode = "view" | "no-view"
+  type DeskitPluginActivationEvent = "clipboard:change"
   type DeskitPluginInvokePhase = "run" | "onSearchChange" | "onAction"
   type DeskitPluginIpcErrorCode =
     | "IPC_FORBIDDEN"
@@ -148,6 +160,7 @@ declare global {
     engines: { deskit: string }
     main: string
     contributes: {
+      activationEvents?: DeskitPluginActivationEvent[]
       commands: DeskitManifestCommand[]
       preferences?: Array<{
         id: string
@@ -212,6 +225,7 @@ declare global {
       refreshApps: () => Promise<LauncherAppEntry[]>
       hideLauncher: () => Promise<void>
       openExternalUrl: (url: string) => Promise<boolean>
+      writeClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
       notifyLauncherReady: () => void
       openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
       toggleFloatingBallMenu: () => Promise<void>

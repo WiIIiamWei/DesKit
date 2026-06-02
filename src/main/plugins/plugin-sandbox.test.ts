@@ -129,6 +129,38 @@ module.exports = {
 
     await expect(sandbox.loadPlugin(entry)).rejects.toThrow("timed out")
   })
+
+  it("dispatches clipboard change events to plugin handlers", async () => {
+    const entry = await writePlugin(`
+module.exports = {
+  commands: {
+    "test.run": {
+      run() {
+        return { type: "toast", level: "info", message: "ok" }
+      }
+    }
+  },
+  events: {
+    async onClipboardChange(event, ctx) {
+      const entries = (await ctx.storage.get("entries")) ?? []
+      await ctx.storage.set("entries", entries.concat(event.content.text))
+    }
+  }
+}
+`)
+    entry.manifest!.permissions = ["storage:plugin"]
+    const sandbox = sandboxForTest()
+    await sandbox.loadPlugin(entry)
+    await sandbox.dispatchEvent({
+      pluginId: entry.pluginId,
+      event: "clipboard:change",
+      payload: { content: { type: "text", text: "hello" } },
+    })
+
+    const raw = await fs.readFile(path.join(dir, "plugin-data", "com.deskit.test.json"), "utf-8")
+    const stored = JSON.parse(raw) as unknown
+    expect(stored).toEqual({ entries: ["hello"] })
+  })
 })
 
 function sandboxForTest(invokeTimeoutMs = 100, loadTimeoutMs = 100): PluginSandbox {

@@ -28,7 +28,13 @@ export type {
   ClipboardTextContent,
 } from "./clipboard"
 
-export type { CommandHandler, CommandInvocation, PluginModule } from "./commands"
+export type {
+  ClipboardChangeEvent,
+  CommandHandler,
+  CommandInvocation,
+  PluginEventHandlers,
+  PluginModule,
+} from "./commands"
 
 export type { ClipboardAPI, NotificationAPI, PluginContext, StorageAPI, SystemAPI } from "./context"
 

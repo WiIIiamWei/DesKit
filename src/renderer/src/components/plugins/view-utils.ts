@@ -1,3 +1,4 @@
+import type { ClipboardActionValue, ClipboardContent } from "@deskit/plugin-sdk"
 import type { LocalizedString, PluginToastView } from "@/components/plugins/view-types"
 import { toast } from "sonner"
 
@@ -28,4 +29,9 @@ export function clipboardText(value: unknown): string {
   if (record.type === "file" && Array.isArray(record.paths)) return record.paths.join("\n")
   if (record.type === "image" && typeof record.dataUrl === "string") return record.dataUrl
   return JSON.stringify(value)
+}
+
+export function normalizeClipboardContent(value: ClipboardActionValue): ClipboardContent {
+  if (typeof value === "string") return { type: "text", text: value }
+  return value
 }

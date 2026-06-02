@@ -7,7 +7,7 @@ function manifest(overrides: Record<string, unknown> = {}): Record<string, unkno
     name: "Test",
     displayName: { en: "Test", "zh-CN": "测试" },
     description: "A test plugin",
-    version: "0.2.0",
+    version: "0.3.0",
     author: "DesKit",
     engines: { deskit: "^0.2.0" },
     main: "dist/index.js",
@@ -30,6 +30,46 @@ describe("parsePluginManifest", () => {
     const parsed = parsePluginManifest(manifest())
     expect(parsed.id).toBe("com.deskit.test")
     expect(parsed.contributes.commands[0]?.mode).toBe("view")
+  })
+
+  it("accepts clipboard activation events", () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        contributes: {
+          activationEvents: ["clipboard:change"],
+          commands: [{ id: "test.run", title: "Run", mode: "view" }],
+        },
+        permissions: ["clipboard:read"],
+      })
+    )
+    expect(parsed.contributes.activationEvents).toEqual(["clipboard:change"])
+  })
+
+  it("rejects clipboard activation events without clipboard read permission", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          contributes: {
+            activationEvents: ["clipboard:change"],
+            commands: [{ id: "test.run", title: "Run", mode: "view" }],
+          },
+          permissions: [],
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
+  it("rejects unknown activation events", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          contributes: {
+            activationEvents: ["window:focus"],
+            commands: [{ id: "test.run", title: "Run", mode: "view" }],
+          },
+        })
+      )
+    ).toThrow(ManifestValidationError)
   })
 
   it("rejects missing required fields", () => {

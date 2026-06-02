@@ -1,3 +1,4 @@
+import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { IpcMainInvokeEvent } from "electron"
 import type { LanDevice, LanPairing, LanStatus, LanTransfer } from "./lan/types"
 import type { SearchWindowDeps } from "./search-window"
@@ -8,9 +9,11 @@ import { pathToFileURL } from "node:url"
 import {
   app,
   BrowserWindow,
+  clipboard,
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   net,
   protocol,
   safeStorage,
@@ -172,6 +175,12 @@ function registerIpc(): void {
     return true
   })
 
+  ipcMain.handle("system:write-clipboard", async (event, content: unknown) => {
+    if (!isTrustedIpcSender(event) || !isClipboardContent(content)) return false
+    writeClipboardContent(content)
+    return true
+  })
+
   ipcMain.on("launcher:ready", (event) => {
     markSearchWindowReady(event.sender)
   })
@@ -249,6 +258,31 @@ function isTrustedIpcSender(event: IpcMainInvokeEvent): boolean {
   if (target.origin === APP_ORIGIN) return true
   if (rendererDevUrl && target.origin === new URL(rendererDevUrl).origin) return true
   return false
+}
+
+function isClipboardContent(value: unknown): value is ClipboardContent {
+  if (!value || typeof value !== "object") return false
+  const record = value as Record<string, unknown>
+  if (record.type === "text") return typeof record.text === "string"
+  if (record.type === "image") {
+    return typeof record.dataUrl === "string" && typeof record.mimeType === "string"
+  }
+  if (record.type === "file") {
+    return Array.isArray(record.paths) && record.paths.every((item) => typeof item === "string")
+  }
+  return false
+}
+
+function writeClipboardContent(content: ClipboardContent): void {
+  if (content.type === "text") {
+    clipboard.writeText(content.text)
+    return
+  }
+  if (content.type === "image") {
+    clipboard.writeImage(nativeImage.createFromDataURL(content.dataUrl))
+    return
+  }
+  clipboard.writeText(content.paths.join("\n"))
 }
 
 function broadcastPluginRegistryChanged(entries: unknown): void {
@@ -553,6 +587,7 @@ if (!gotLock) {
     void lan?.stop().catch((err) => console.error("[deskit] failed to stop LAN discovery", err))
     unbindGlobalShortcut()
     destroyTray()
+    plugins?.dispose()
   })
 
   // Plugin storage uses a 250ms throttled tmp+rename flush. Without this
