@@ -16,7 +16,13 @@ import { Input } from "@/components/ui/input"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
 import { acceleratorFromKeyboardEvent, modifierKeys, splitAccelerator } from "@/lib/accelerators"
-import { getSettings, isElectron, refreshApps, updateSettings } from "@/lib/electron"
+import {
+  getSettings,
+  isElectron,
+  onSettingsChanged,
+  refreshApps,
+  updateSettings,
+} from "@/lib/electron"
 
 /**
  * Render an Electron accelerator string ("Control+Shift+P") as a row of
@@ -62,13 +68,39 @@ export function LauncherSettings() {
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [capturingHotkey, setCapturingHotkey] = useState(false)
+  const hotkeyRef = useRef("")
+  const savedHotkeyRef = useRef("")
   const hotkeyInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    hotkeyRef.current = hotkey
+  }, [hotkey])
+
+  useEffect(() => {
+    savedHotkeyRef.current = savedHotkey
+  }, [savedHotkey])
 
   useEffect(() => {
     if (!isElectron()) return
     void getSettings().then((settings) => {
+      hotkeyRef.current = settings.hotkey
+      savedHotkeyRef.current = settings.hotkey
       setHotkey(settings.hotkey)
       setSavedHotkey(settings.hotkey)
+    })
+    return onSettingsChanged((settings) => {
+      const currentHotkey = hotkeyInputRef.current?.value ?? hotkeyRef.current
+      const currentSavedHotkey = savedHotkeyRef.current
+      if (settings.hotkey === currentSavedHotkey) return
+
+      savedHotkeyRef.current = settings.hotkey
+      setSavedHotkey(settings.hotkey)
+      setStatus(null)
+
+      if (currentHotkey === currentSavedHotkey || currentHotkey === settings.hotkey) {
+        hotkeyRef.current = settings.hotkey
+        setHotkey(settings.hotkey)
+      }
     })
   }, [])
 
@@ -95,6 +127,7 @@ export function LauncherSettings() {
     if (!next) return
 
     setStatus(null)
+    hotkeyRef.current = next
     setHotkey(next)
     setCapturingHotkey(false)
   }
@@ -109,11 +142,13 @@ export function LauncherSettings() {
     setStatus(null)
     try {
       const next = await updateSettings({ hotkey })
+      savedHotkeyRef.current = next.hotkey
       setSavedHotkey(next.hotkey)
       // Main process keeps the previous hotkey if the new accelerator
       // can't be registered (returns the still-active value). Detect
       // that mismatch and surface it to the user.
       if (next.hotkey !== hotkey) {
+        hotkeyRef.current = next.hotkey
         setHotkey(next.hotkey)
         setStatus({ kind: "error", text: t("launcher.settings.invalid") })
       } else {
@@ -159,7 +194,10 @@ export function LauncherSettings() {
               id="hotkey-input"
               value={hotkey}
               onChange={(e) => {
-                if (!capturingHotkey) setHotkey(e.target.value)
+                if (!capturingHotkey) {
+                  hotkeyRef.current = e.target.value
+                  setHotkey(e.target.value)
+                }
               }}
               onBlur={() => setCapturingHotkey(false)}
               onKeyDown={onHotkeyKeyDown}

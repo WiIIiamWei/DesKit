@@ -37,9 +37,9 @@ describe("plugin view utils", () => {
       expect(clipboardText({ type: "text", text: "hello" })).toBe("hello")
     })
 
-    it("joins file clipboard paths", () => {
-      expect(clipboardText({ type: "file", paths: ["/tmp/a.txt", "/tmp/b.txt"] })).toBe(
-        "/tmp/a.txt\n/tmp/b.txt"
+    it("extracts image clipboard data URLs", () => {
+      expect(clipboardText({ type: "image", dataUrl: "data:image/png;base64,a" })).toBe(
+        "data:image/png;base64,a"
       )
     })
   })
@@ -50,7 +50,11 @@ describe("plugin view utils", () => {
     })
 
     it("preserves structured clipboard content", () => {
-      const content = { type: "file" as const, paths: ["/tmp/a.txt"] }
+      const content = {
+        type: "image" as const,
+        dataUrl: "data:image/png;base64,a",
+        mimeType: "image/png",
+      }
       expect(normalizeClipboardContent(content)).toBe(content)
     })
   })

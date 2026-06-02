@@ -1,0 +1,73 @@
+import { act, cleanup, render, screen } from "@testing-library/react"
+import { afterEach, describe, expect, it, vi } from "vitest"
+import { FloatingBallSettings } from "./floating-ball-settings"
+
+vi.mock("react-i18next", () => ({
+  useTranslation: () => ({
+    t: (key: string) => key,
+  }),
+}))
+
+type TestElectronApi = NonNullable<Window["electronAPI"]>
+type SettingsChangedHandler = (settings: DeskitUserSettings) => void
+
+function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSettings {
+  return {
+    hotkey: "Control+Space",
+    themeMode: "system",
+    accent: "neutral",
+    floatingBallEnabled: false,
+    floatingBallFeatures: [],
+    ...overrides,
+  }
+}
+
+function installElectronApi(settings: DeskitUserSettings) {
+  let settingsChangedHandler: SettingsChangedHandler | null = null
+  const api = {
+    getSettings: vi.fn().mockResolvedValue(settings),
+    updateSettings: vi.fn().mockResolvedValue(settings),
+    onSettingsChanged: vi.fn((handler: SettingsChangedHandler) => {
+      settingsChangedHandler = handler
+      return () => {
+        settingsChangedHandler = null
+      }
+    }),
+  } satisfies Partial<TestElectronApi>
+
+  window.electronAPI = api as unknown as TestElectronApi
+  return {
+    emitSettingsChanged: (nextSettings: DeskitUserSettings) => {
+      act(() => settingsChangedHandler?.(nextSettings))
+    },
+  }
+}
+
+describe("floating ball settings", () => {
+  afterEach(() => {
+    cleanup()
+    delete window.electronAPI
+  })
+
+  it("syncs enabled state and menu features from settings broadcasts", async () => {
+    const api = installElectronApi(baseSettings())
+    render(<FloatingBallSettings />)
+
+    const enabledSwitch = await screen.findByRole("switch", {
+      name: "floatingBall.settings.enable",
+    })
+    expect(enabledSwitch).not.toBeChecked()
+
+    api.emitSettingsChanged(
+      baseSettings({
+        floatingBallEnabled: true,
+        floatingBallFeatures: ["appLauncher"],
+      })
+    )
+
+    expect(enabledSwitch).toBeChecked()
+    expect(
+      screen.getByRole("checkbox", { name: "floatingBall.features.appLauncher" })
+    ).toBeChecked()
+  })
+})

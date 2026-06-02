@@ -23,7 +23,6 @@ export type {
 export type {
   ClipboardActionValue,
   ClipboardContent,
-  ClipboardFileContent,
   ClipboardImageContent,
   ClipboardTextContent,
 } from "./clipboard"

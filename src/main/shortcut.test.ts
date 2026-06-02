@@ -62,6 +62,18 @@ describe("global shortcut bindings", () => {
     expect(currentBinding("launcher")).toBe("Control+Space")
   })
 
+  it("updates the handler when rebinding the same accelerator", () => {
+    const oldHandler = vi.fn()
+    const newHandler = vi.fn()
+    expect(bindGlobalShortcut("launcher", "Control+Space", oldHandler)).toBe(true)
+
+    expect(bindGlobalShortcut("launcher", "Control+Space", newHandler)).toBe(true)
+    electronMock.callbacks.get("Control+Space")?.()
+
+    expect(oldHandler).not.toHaveBeenCalled()
+    expect(newHandler).toHaveBeenCalledOnce()
+  })
+
   it("unbinds only the requested binding", () => {
     expect(bindGlobalShortcut("launcher", "Control+Space", () => {})).toBe(true)
     expect(bindGlobalShortcut("plugin:clipboard", "Super+Control+C", () => {})).toBe(true)

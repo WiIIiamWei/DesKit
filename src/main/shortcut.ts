@@ -17,7 +17,6 @@ export function bindGlobalShortcut(id: string, accelerator: string, handler: () 
   const trimmed = accelerator.trim()
   if (!trimmed) return false
   const current = bindings.get(id)
-  if (current?.accelerator === trimmed && globalShortcut.isRegistered(trimmed)) return true
   if (isAcceleratorUsedByAnotherBinding(id, trimmed)) return false
 
   if (current) globalShortcut.unregister(current.accelerator)

@@ -13,6 +13,7 @@ import {
   onFloatingBallFeatures,
   onFloatingBallMenuState,
   onPluginRegistryChanged,
+  onSettingsChanged,
   openFloatingBallFeature,
   toggleFloatingBallMenu,
 } from "@/lib/electron"
@@ -74,7 +75,8 @@ export function FloatingBallPanel() {
     return mergeCleanups(
       onFloatingBallMenuState(setExpanded),
       onFloatingBallFeatures(setFeatures),
-      onPluginRegistryChanged(setPlugins)
+      onPluginRegistryChanged(setPlugins),
+      onSettingsChanged((settings) => setFeatures(settings.floatingBallFeatures))
     )
   }, [])
 

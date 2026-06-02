@@ -1,0 +1,1 @@
+export const DEFAULT_GITHUB_OAUTH_CLIENT_ID = "Ov23li5TIVwwlrjuQ0UQ"
