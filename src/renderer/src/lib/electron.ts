@@ -27,6 +27,7 @@ export type SyncStatus = DeskitSyncStatus
 export type GitHubDeviceAuthorization = DeskitGitHubDeviceAuthorization
 export type GitHubLoginPollResult = DeskitGitHubLoginPollResult
 export type SyncRunResult = DeskitSyncRunResult
+export type ScreenshotOcrState = DeskitScreenshotOcrState
 export type PluginIpcError = DeskitPluginIpcError
 export type PluginIpcErrorCode = DeskitPluginIpcErrorCode
 type PluginIpcResult<T> = DeskitPluginIpcResult<T>
@@ -200,6 +201,18 @@ export async function setPinnedImageOpacity(opacity: number): Promise<void> {
 
 export async function closePinnedImage(): Promise<void> {
   api().closePinnedImage()
+}
+
+export async function getScreenshotOcrState(): Promise<ScreenshotOcrState | null> {
+  return api().getScreenshotOcrState()
+}
+
+export async function closeScreenshotOcrWindow(): Promise<void> {
+  api().closeScreenshotOcrWindow()
+}
+
+export async function recaptureScreenshotOcr(): Promise<boolean> {
+  return api().recaptureScreenshotOcr()
 }
 
 export async function listPlugins(): Promise<PluginRegistryEntry[]> {

@@ -1,5 +1,5 @@
 import type { CSSProperties, PointerEvent, ReactNode } from "react"
-import { Check, Copy, PenLine, Pin, RotateCcw, Save, X } from "lucide-react"
+import { Check, Copy, PenLine, Pin, RotateCcw, Save, ScanText, X } from "lucide-react"
 import { useCallback, useLayoutEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
@@ -149,6 +149,12 @@ export function ScreenshotOverlayPage() {
                   >
                     <PenLine className="size-4" aria-hidden />
                   </ToolbarButton>
+                  <ToolbarButton
+                    title={t("screenshot.actions.ocr")}
+                    onClick={() => void finish("ocr")}
+                  >
+                    <ScanText className="size-4" aria-hidden />
+                  </ToolbarButton>
                 </>
               )}
               <ToolbarButton
@@ -250,7 +256,7 @@ function sizeLabelStyle(rect: Rect): CSSProperties {
 
 function toolbarStyle(rect: Rect): CSSProperties {
   return {
-    left: Math.min(window.innerWidth - 220, Math.max(8, rect.x + rect.width - 188)),
+    left: Math.min(window.innerWidth - 260, Math.max(8, rect.x + rect.width - 228)),
     top: Math.min(window.innerHeight - 48, rect.y + rect.height + 8),
   }
 }
