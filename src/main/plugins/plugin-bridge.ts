@@ -338,7 +338,8 @@ function normalizeNetworkHeaders(headers: unknown): Record<string, string> {
 }
 
 function normalizeTimeoutMs(timeoutMs: unknown): number | undefined {
-  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return undefined
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0)
+    return undefined
   return Math.min(timeoutMs, 60_000)
 }
 
