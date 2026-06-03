@@ -5,6 +5,8 @@ import type {
   NetworkRequestOptions,
   NotificationAPI,
   PluginContext,
+  PluginSyncAPI,
+  PluginSyncStatus,
   StorageAPI,
   SystemAPI,
 } from "@deskit/plugin-sdk"
@@ -44,6 +46,13 @@ export interface SystemAdapter {
   pinImage: (imagePath: string) => Promise<void>
 }
 
+export interface PluginSyncBridge {
+  status: () => PluginSyncStatus
+  get: (pluginId: string, key: string) => unknown | undefined
+  set: (pluginId: string, key: string, value: unknown) => Promise<void>
+  delete: (pluginId: string, key: string) => Promise<void>
+}
+
 export interface PluginBridgeAdapters {
   clipboard: ClipboardAdapter
   notifications: NotificationAdapter
@@ -56,6 +65,7 @@ export interface PluginBridgeOptions {
   adapters: PluginBridgeAdapters
   runtime?: () => PluginRuntimeSnapshot
   preferences?: (pluginId: string, manifest: PluginManifest) => Record<string, unknown>
+  sync?: PluginSyncBridge
   storageFlushMs?: number
   clipboardPollMs?: number
 }
@@ -106,6 +116,7 @@ export class PluginBridge {
         ...(this.options.preferences?.(pluginId, manifest) ?? {}),
       },
       storage: this.createStorageAPI(pluginId, gate),
+      sync: this.createSyncAPI(pluginId, gate),
       clipboard: {
         read: async () => {
           gate.check("clipboard:read")
@@ -229,6 +240,32 @@ export class PluginBridge {
         gate.check("storage:plugin")
         const state = await this.loadStorage(pluginId)
         return Object.keys(state.data)
+      },
+    }
+  }
+
+  private createSyncAPI(
+    pluginId: string,
+    gate: { check: (permission: string) => void }
+  ): PluginSyncAPI {
+    return {
+      status: async () => {
+        gate.check("sync:plugin")
+        return this.options.sync?.status() ?? { enabled: false, available: false }
+      },
+      get: async <T = unknown>(key: string) => {
+        gate.check("sync:plugin")
+        return this.options.sync?.get(pluginId, key) as T | undefined
+      },
+      set: async <T = unknown>(key: string, value: T) => {
+        gate.check("sync:plugin")
+        if (!this.options.sync) throw new Error("Plugin sync is not available")
+        await this.options.sync.set(pluginId, key, value)
+      },
+      delete: async (key: string) => {
+        gate.check("sync:plugin")
+        if (!this.options.sync) throw new Error("Plugin sync is not available")
+        await this.options.sync.delete(pluginId, key)
       },
     }
   }

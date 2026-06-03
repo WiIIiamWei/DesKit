@@ -26,6 +26,14 @@ import { discoverPlugins } from "./plugin-discovery"
 import { pluginPreferenceFilePath, PluginPreferenceStore } from "./plugin-preferences"
 import { PluginRegistry } from "./plugin-registry"
 import { PluginSandbox } from "./plugin-sandbox"
+import {
+  clonePluginSyncValue,
+  isPluginSyncPreferenceKey,
+  normalizePluginSyncPreferenceKey,
+  pluginSyncPreferenceKey,
+  validatePluginSyncPreferenceValue,
+  visiblePluginPreferences,
+} from "./plugin-sync-data"
 
 export interface PluginHostOptions {
   userDataDir: string
@@ -34,6 +42,14 @@ export interface PluginHostOptions {
   fetch?: (url: string) => Promise<Response>
   marketplaceRegistryUrl?: string
   runtime?: () => PluginRuntimeSnapshot
+  syncStatus?: () => {
+    enabled: boolean
+    available: boolean
+    lastSyncedAt?: string
+    lastRemoteUpdatedAt?: string
+    lastLocalUpdatedAt?: string
+  }
+  onSyncDataChanged?: () => void
   clipboardPollMs?: number
 }
 
@@ -111,6 +127,12 @@ export class PluginHost {
       adapters: options.adapters ?? createElectronPluginAdapters(options.userDataDir),
       runtime: options.runtime,
       preferences: (pluginId, manifest) => this.preferencesFor(pluginId, manifest),
+      sync: {
+        status: () => options.syncStatus?.() ?? { enabled: false, available: false },
+        get: (pluginId, key) => this.getSyncData(pluginId, key),
+        set: (pluginId, key, value) => this.setSyncData(pluginId, key, value),
+        delete: (pluginId, key) => this.deleteSyncData(pluginId, key),
+      },
     })
     this.sandbox = new PluginSandbox({ bridge: this.bridge })
     this.registry = new PluginRegistry({ sandbox: this.sandbox })
@@ -179,6 +201,28 @@ export class PluginHost {
     return this.preferences.exportAll()
   }
 
+  getSyncData(pluginId: string, key: string): unknown | undefined {
+    const stored = this.preferences.get(pluginId)[pluginSyncPreferenceKey(key)]
+    return stored === undefined ? undefined : clonePluginSyncValue(stored)
+  }
+
+  async setSyncData(pluginId: string, key: string, value: unknown): Promise<void> {
+    const entry = this.registry.get(pluginId)
+    if (!entry?.manifest) throw new Error(`Plugin not found: ${pluginId}`)
+    validatePluginSyncPreferenceValue(value)
+    await this.preferences.set(pluginId, pluginSyncPreferenceKey(key), clonePluginSyncValue(value))
+    this.registry.emit("changed", this.registry.list())
+    this.options.onSyncDataChanged?.()
+  }
+
+  async deleteSyncData(pluginId: string, key: string): Promise<void> {
+    const entry = this.registry.get(pluginId)
+    if (!entry?.manifest) throw new Error(`Plugin not found: ${pluginId}`)
+    await this.preferences.set(pluginId, pluginSyncPreferenceKey(key), undefined)
+    this.registry.emit("changed", this.registry.list())
+    this.options.onSyncDataChanged?.()
+  }
+
   async importSyncedPreferences(
     preferences: PreferenceFile
   ): Promise<PluginPreferenceImportResult> {
@@ -198,6 +242,22 @@ export class PluginHost {
       const declared = entry.manifest.contributes.preferences ?? []
       const valid: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(pluginPreferences)) {
+        if (isPluginSyncPreferenceKey(key)) {
+          try {
+            const syncPreferenceKey = normalizePluginSyncPreferenceKey(key)
+            validatePluginSyncPreferenceValue(value)
+            valid[syncPreferenceKey] = clonePluginSyncValue(value)
+            applied += 1
+          } catch (err) {
+            skipped.push({
+              pluginId,
+              key,
+              reason: err instanceof Error ? err.message : "invalid sync data",
+            })
+          }
+          continue
+        }
+
         const preference = declared.find((item) => item.id === key)
         if (!preference) {
           skipped.push({ pluginId, key, reason: "unknown preference" })
@@ -299,7 +359,7 @@ export class PluginHost {
     for (const preference of manifest.contributes.preferences ?? []) {
       if ("default" in preference) defaults[preference.id] = preference.default
     }
-    return { ...defaults, ...this.preferences.get(pluginId) }
+    return { ...defaults, ...visiblePluginPreferences(this.preferences.get(pluginId)) }
   }
 
   private withPreferences(entry: PluginRegistryEntry): PluginRegistryEntry {

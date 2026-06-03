@@ -43,6 +43,8 @@ export type {
   NetworkResponse,
   NotificationAPI,
   PluginContext,
+  PluginSyncAPI,
+  PluginSyncStatus,
   StorageAPI,
   SystemAPI,
 } from "./context"

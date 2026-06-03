@@ -51,6 +51,55 @@ describe("pluginBridge", () => {
     expect(JSON.parse(raw)).toEqual({ name: "DesKit", count: 2 })
   })
 
+  it("routes plugin sync through permission-checked sync bridge", async () => {
+    const sync = {
+      status: vi.fn(() => ({ enabled: true, available: true })),
+      get: vi.fn(() => ({ value: "remote" })),
+      set: vi.fn(async () => {}),
+      delete: vi.fn(async () => {}),
+    }
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters(),
+      sync,
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["sync:plugin"] })
+    )
+
+    await expect(pluginCtx.sync.status()).resolves.toEqual({ enabled: true, available: true })
+    await expect(pluginCtx.sync.get("history")).resolves.toEqual({ value: "remote" })
+    await pluginCtx.sync.set("history", { value: "local" })
+    await pluginCtx.sync.delete("history")
+
+    expect(sync.get).toHaveBeenCalledWith("com.deskit.test", "history")
+    expect(sync.set).toHaveBeenCalledWith("com.deskit.test", "history", { value: "local" })
+    expect(sync.delete).toHaveBeenCalledWith("com.deskit.test", "history")
+  })
+
+  it("denies plugin sync without permission", async () => {
+    const sync = {
+      status: vi.fn(() => ({ enabled: true, available: true })),
+      get: vi.fn(),
+      set: vi.fn(),
+      delete: vi.fn(),
+    }
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters(),
+      sync,
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext("com.deskit.test", manifest({ permissions: [] }))
+
+    await expect(pluginCtx.sync.status()).rejects.toBeInstanceOf(PermissionDenied)
+    await expect(pluginCtx.sync.set("history", [])).rejects.toBeInstanceOf(PermissionDenied)
+    expect(sync.status).not.toHaveBeenCalled()
+    expect(sync.set).not.toHaveBeenCalled()
+  })
+
   it("routes clipboard helpers through the adapter", async () => {
     const read = vi.fn<() => Promise<ClipboardContent | undefined>>(() =>
       Promise.resolve({ type: "text", text: "hello" })

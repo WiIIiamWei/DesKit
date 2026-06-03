@@ -829,6 +829,18 @@ function syncStatus() {
   }
 }
 
+function pluginSyncStatus() {
+  if (typeof syncState === "undefined") return { enabled: false, available: false }
+  const state = syncState.get()
+  return {
+    enabled: state.enabled,
+    available: Boolean(state.enabled && state.encryptedAccessToken),
+    lastSyncedAt: state.lastSyncedAt,
+    lastRemoteUpdatedAt: state.lastRemoteUpdatedAt,
+    lastLocalUpdatedAt: state.lastLocalUpdatedAt,
+  }
+}
+
 function requireAccessToken(): string {
   const state = syncState.get()
   if (!state.encryptedAccessToken) throw new Error("GitHub is not connected")
@@ -894,6 +906,8 @@ function createPluginHost(): PluginHost {
     fetch: (url) => fetchWithNet(url),
     userDataDir,
     resourcesDir: pluginResourcesDir(),
+    syncStatus: pluginSyncStatus,
+    onSyncDataChanged: markSyncLocalChanged,
     adapters: {
       ...adapters,
       system: {

@@ -289,6 +289,45 @@ describe("pluginHost.setPreference value validation", () => {
     )
   })
 
+  it("stores plugin sync data as hidden synchronized preferences", async () => {
+    const onSyncDataChanged = vi.fn()
+    const hostWithCallback = new PluginHost({
+      userDataDir: dir,
+      resourcesDir: path.join(dir, "resources"),
+      adapters: noopAdapters,
+      onSyncDataChanged,
+    })
+    await hostWithCallback.preferences.load()
+    vi.spyOn(hostWithCallback.registry, "get").mockReturnValue(baseEntry)
+
+    await hostWithCallback.setSyncData("com.deskit.test", "history", {
+      items: [{ text: "hello" }],
+    })
+
+    expect(hostWithCallback.exportPreferences()).toEqual({
+      "com.deskit.test": {
+        "__sync.history": { items: [{ text: "hello" }] },
+      },
+    })
+    expect(hostWithCallback.getSyncData("com.deskit.test", "history")).toEqual({
+      items: [{ text: "hello" }],
+    })
+    expect(hostWithCallback.get("com.deskit.test")?.preferences).not.toHaveProperty(
+      "__sync.history"
+    )
+    expect(onSyncDataChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects oversized plugin sync values", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
+    await expect(
+      host.setSyncData("com.deskit.test", "history", "x".repeat(512 * 1024 + 1))
+    ).rejects.toThrow("exceeds 512 KiB")
+  })
+
   it("imports synced preferences and leaves uninstalled plugin preferences pending", async () => {
     const host = makeHost()
     await host.preferences.load()
@@ -301,13 +340,14 @@ describe("pluginHost.setPreference value validation", () => {
         "com.deskit.test": {
           label: "remote",
           unit: "s",
+          "__sync.history": [{ text: "hello" }],
           missing: true,
           limit: "large",
         },
         "com.deskit.pending": { token: "encrypted upstream" },
       })
     ).resolves.toMatchObject({
-      applied: 2,
+      applied: 3,
       pending: 1,
       skipped: [
         { pluginId: "com.deskit.test", key: "missing" },
@@ -316,8 +356,41 @@ describe("pluginHost.setPreference value validation", () => {
     })
 
     expect(host.exportPreferences()).toEqual({
-      "com.deskit.test": { label: "remote", unit: "s" },
+      "com.deskit.test": {
+        label: "remote",
+        unit: "s",
+        "__sync.history": [{ text: "hello" }],
+      },
       "com.deskit.pending": { token: "encrypted upstream" },
+    })
+  })
+
+  it("rejects invalid plugin sync preference keys during import", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
+    await expect(
+      host.importSyncedPreferences({
+        "com.deskit.test": {
+          "__sync.history": [{ text: "hello" }],
+          "__sync.": [{ text: "empty" }],
+          "__sync.__sync.history": [{ text: "reserved" }],
+        },
+      })
+    ).resolves.toMatchObject({
+      applied: 1,
+      pending: 0,
+      skipped: [
+        { pluginId: "com.deskit.test", key: "__sync." },
+        { pluginId: "com.deskit.test", key: "__sync.__sync.history" },
+      ],
+    })
+
+    expect(host.exportPreferences()).toEqual({
+      "com.deskit.test": {
+        "__sync.history": [{ text: "hello" }],
+      },
     })
   })
 })
