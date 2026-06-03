@@ -11,6 +11,7 @@ import {
   moveFloatingBallDrag,
   startFloatingBallDrag,
 } from "./floating-ball-window"
+import { defaultSettings } from "./settings/settings"
 
 type MockBrowserWindow = ElectronBrowserWindow & {
   getBounds: Mock
@@ -23,9 +24,7 @@ const deps: FloatingBallWindowDeps = {
   rendererDevUrl: undefined,
   appOrigin: "app://app",
   getSettings: () => ({
-    hotkey: "Alt+Space",
-    themeMode: "system",
-    accent: "neutral",
+    ...defaultSettings,
     floatingBallEnabled: true,
     floatingBallFeatures: ["appLauncher"],
   }),
