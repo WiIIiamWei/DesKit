@@ -1,5 +1,5 @@
 import type { PointerEvent } from "react"
-import { Search } from "lucide-react"
+import { ScanLine, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import logoUrl from "@/assets/logo.svg"
@@ -20,6 +20,7 @@ import {
 import { cn } from "@/lib/utils"
 
 const APP_LAUNCHER_FEATURE = "appLauncher"
+const SCREENSHOT_FEATURE = "screenshot"
 const MENU_SLOT_ANGLES = [30, 90, 150, 210, 270, 330] as const
 const DRAG_THRESHOLD = 4
 
@@ -34,7 +35,10 @@ interface FloatingBallMenuItem {
 export function FloatingBallPanel() {
   const { t, i18n } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([APP_LAUNCHER_FEATURE])
+  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([
+    APP_LAUNCHER_FEATURE,
+    SCREENSHOT_FEATURE,
+  ])
   const [plugins, setPlugins] = useState<DeskitPluginRegistryEntry[]>([])
   const dragRef = useRef<{
     pointerId: number
@@ -199,6 +203,7 @@ function FeatureIcon({ item }: { item: FloatingBallMenuItem }) {
   if (item.kind === "plugin") {
     return <PluginIcon pluginId={item.pluginId} icon={item.icon} className="size-5" />
   }
+  if (item.id === SCREENSHOT_FEATURE) return <ScanLine className="size-5" aria-hidden />
   return <Search className="size-5" aria-hidden />
 }
 
@@ -210,6 +215,9 @@ function menuItem(
 ): FloatingBallMenuItem {
   if (feature === APP_LAUNCHER_FEATURE) {
     return { id: feature, title: t("floatingBall.features.appLauncher"), kind: "builtin" }
+  }
+  if (feature === SCREENSHOT_FEATURE) {
+    return { id: feature, title: t("floatingBall.features.screenshot"), kind: "builtin" }
   }
   const parsed = parsePluginFeatureId(feature)
   if (!parsed) return { id: feature, title: feature, kind: "plugin" }

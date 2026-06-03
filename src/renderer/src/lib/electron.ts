@@ -156,6 +156,52 @@ export async function disconnectSync(): Promise<SyncStatus> {
   return api().disconnectSync()
 }
 
+export async function completeScreenshotSelection(
+  selection: { x: number; y: number; width: number; height: number },
+  action: DeskitScreenshotAction
+): Promise<void> {
+  api().completeScreenshotSelection(selection, action)
+}
+
+export async function cancelScreenshotSelection(): Promise<void> {
+  api().cancelScreenshotSelection()
+}
+
+export async function getScreenshotAnnotationImage(): Promise<string | null> {
+  return api().getScreenshotAnnotationImage()
+}
+
+export async function completeScreenshotAnnotation(
+  dataUrl: string,
+  action: Exclude<DeskitScreenshotAction, "annotate">
+): Promise<void> {
+  api().completeScreenshotAnnotation(dataUrl, action)
+}
+
+export async function cancelScreenshotAnnotation(): Promise<void> {
+  api().cancelScreenshotAnnotation()
+}
+
+export async function getPinnedImageData(): Promise<string | null> {
+  return api().getPinnedImageData()
+}
+
+export async function copyPinnedImage(): Promise<void> {
+  await api().copyPinnedImage()
+}
+
+export async function savePinnedImage(): Promise<void> {
+  await api().savePinnedImage()
+}
+
+export async function setPinnedImageOpacity(opacity: number): Promise<void> {
+  await api().setPinnedImageOpacity(opacity)
+}
+
+export async function closePinnedImage(): Promise<void> {
+  api().closePinnedImage()
+}
+
 export async function listPlugins(): Promise<PluginRegistryEntry[]> {
   return unwrapIpcResult(await api().listPlugins())
 }

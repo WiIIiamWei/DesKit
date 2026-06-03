@@ -1,5 +1,7 @@
 import { globalShortcut } from "electron"
 
+const DEFAULT_SHORTCUT_ID = "default"
+
 interface ShortcutBinding {
   accelerator: string
   handler: () => void
@@ -14,10 +16,11 @@ const bindings = new Map<string, ShortcutBinding>()
  * previous binding for the same id remains active.
  */
 export function bindGlobalShortcut(id: string, accelerator: string, handler: () => void): boolean {
+  const key = id.trim()
   const trimmed = accelerator.trim()
-  if (!trimmed) return false
-  const current = bindings.get(id)
-  if (isAcceleratorUsedByAnotherBinding(id, trimmed)) return false
+  if (!key || !trimmed) return false
+  const current = bindings.get(key)
+  if (isAcceleratorUsedByAnotherBinding(key, trimmed)) return false
 
   if (current) globalShortcut.unregister(current.accelerator)
   let ok = false
@@ -27,22 +30,34 @@ export function bindGlobalShortcut(id: string, accelerator: string, handler: () 
     ok = false
   }
   if (ok) {
-    bindings.set(id, { accelerator: trimmed, handler })
+    bindings.set(key, { accelerator: trimmed, handler })
     return true
   }
   if (current) {
     // Re-install the old binding so the user isn't left without a hotkey.
     try {
       if (globalShortcut.register(current.accelerator, current.handler)) {
-        bindings.set(id, current)
+        bindings.set(key, current)
       } else {
-        bindings.delete(id)
+        bindings.delete(key)
       }
     } catch {
-      bindings.delete(id)
+      bindings.delete(key)
     }
   }
   return false
+}
+
+export function bindNamedGlobalShortcut(
+  id: string,
+  accelerator: string,
+  handler: () => void
+): boolean {
+  return bindGlobalShortcut(id, accelerator, handler)
+}
+
+export function bindDefaultGlobalShortcut(accelerator: string, handler: () => void): boolean {
+  return bindGlobalShortcut(DEFAULT_SHORTCUT_ID, accelerator, handler)
 }
 
 export function unbindGlobalShortcut(id: string): void {
@@ -52,14 +67,26 @@ export function unbindGlobalShortcut(id: string): void {
   bindings.delete(id)
 }
 
+export function unbindNamedGlobalShortcut(id: string): void {
+  unbindGlobalShortcut(id)
+}
+
+export function unbindDefaultGlobalShortcut(): void {
+  unbindGlobalShortcut(DEFAULT_SHORTCUT_ID)
+}
+
 export function unbindAllGlobalShortcuts(): void {
-  for (const id of bindings.keys()) {
+  for (const id of [...bindings.keys()]) {
     unbindGlobalShortcut(id)
   }
 }
 
-export function currentBinding(id: string): string | null {
+export function currentBinding(id = DEFAULT_SHORTCUT_ID): string | null {
   return bindings.get(id)?.accelerator ?? null
+}
+
+export function currentBindings(): Record<string, string> {
+  return Object.fromEntries([...bindings].map(([id, binding]) => [id, binding.accelerator]))
 }
 
 function isAcceleratorUsedByAnotherBinding(id: string, accelerator: string): boolean {

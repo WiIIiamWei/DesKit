@@ -5,16 +5,33 @@ import { contextBridge, ipcRenderer } from "electron"
 // The global declared in index.d.ts is only loaded into the renderer's
 // compilation; the preload tsconfig doesn't pick up that .d.ts, so we
 // keep a structurally identical type here for type-only use.
-type FloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
+type FloatingBallFeature = "appLauncher" | "screenshot" | `plugin:${string}:${string}`
 
 interface SettingsPatch {
   hotkey?: string
+  hotkeys?: {
+    launcher?: string
+    screenshot?: string
+  }
   themeMode?: "light" | "dark" | "system"
   accent?: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled?: boolean
   floatingBallFeatures?: FloatingBallFeature[]
 }
-type Settings = Required<SettingsPatch>
+
+interface Settings {
+  hotkey: string
+  hotkeys: {
+    launcher: string
+    screenshot: string
+  }
+  themeMode: "light" | "dark" | "system"
+  accent: "neutral" | "blue" | "green" | "rose" | "violet"
+  floatingBallEnabled: boolean
+  floatingBallFeatures: FloatingBallFeature[]
+}
+
+type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
 
 interface SyncStatus {
   configured: boolean
@@ -90,6 +107,23 @@ const electronAPI = {
   applyLocalSync: (passphrase?: string): Promise<SyncRunResult> =>
     ipcRenderer.invoke("sync:use-local", passphrase),
   disconnectSync: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:disconnect"),
+
+  // ---- Screenshot ----
+  completeScreenshotSelection: (
+    selection: { x: number; y: number; width: number; height: number },
+    action: ScreenshotAction
+  ) => ipcRenderer.send("screenshot:selection-complete", { selection, action }),
+  cancelScreenshotSelection: () => ipcRenderer.send("screenshot:selection-cancel"),
+  getScreenshotAnnotationImage: () => ipcRenderer.invoke("screenshot:annotation-image"),
+  completeScreenshotAnnotation: (dataUrl: string, action: Exclude<ScreenshotAction, "annotate">) =>
+    ipcRenderer.send("screenshot:annotation-complete", { dataUrl, action }),
+  cancelScreenshotAnnotation: () => ipcRenderer.send("screenshot:annotation-cancel"),
+  getPinnedImageData: () => ipcRenderer.invoke("pinned-image:data"),
+  copyPinnedImage: () => ipcRenderer.invoke("pinned-image:copy"),
+  savePinnedImage: () => ipcRenderer.invoke("pinned-image:save"),
+  setPinnedImageOpacity: (opacity: number) =>
+    ipcRenderer.invoke("pinned-image:set-opacity", opacity),
+  closePinnedImage: () => ipcRenderer.send("pinned-image:close"),
 
   // ---- Plugins ----
   listPlugins: () => ipcRenderer.invoke("plugin:list"),

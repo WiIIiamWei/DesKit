@@ -24,6 +24,10 @@ interface FloatingBallHarness {
 function baseSettings(features: DeskitFloatingBallFeature[] = []): DeskitUserSettings {
   return {
     hotkey: "Control+Space",
+    hotkeys: {
+      launcher: "Control+Space",
+      screenshot: "Control+Shift+A",
+    },
     themeMode: "system",
     accent: "neutral",
     floatingBallEnabled: true,

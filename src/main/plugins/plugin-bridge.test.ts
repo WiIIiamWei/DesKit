@@ -112,6 +112,52 @@ describe("pluginBridge", () => {
 
     expect(listener).toHaveBeenCalledWith({ type: "text", text: "hello" })
   })
+
+  it("routes region capture and image pinning through permission-checked system adapters", async () => {
+    const captureRegion = vi.fn().mockResolvedValue({
+      imagePath: "/tmp/capture.png",
+      width: 100,
+      height: 80,
+      displayId: "1",
+    })
+    const pinImage = vi.fn().mockResolvedValue(undefined)
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters({ system: { ...adapters().system, captureRegion, pinImage } }),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["system:capture-screen", "system:pin-image"] })
+    )
+
+    await expect(pluginCtx.system.captureRegion()).resolves.toEqual({
+      imagePath: "/tmp/capture.png",
+      width: 100,
+      height: 80,
+      displayId: "1",
+    })
+    await pluginCtx.system.pinImage("/tmp/capture.png")
+
+    expect(captureRegion).toHaveBeenCalledTimes(1)
+    expect(pinImage).toHaveBeenCalledWith("/tmp/capture.png")
+  })
+
+  it("denies image pinning without system:pin-image", async () => {
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters(),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["system:capture-screen"] })
+    )
+
+    await expect(pluginCtx.system.pinImage("/tmp/capture.png")).rejects.toMatchObject({
+      permission: "system:pin-image",
+    })
+  })
 })
 
 function manifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
@@ -141,6 +187,8 @@ function adapters(overrides: Partial<PluginBridgeAdapters> = {}): PluginBridgeAd
       openUrl: async () => {},
       openPath: async () => {},
       captureScreen: async () => ({ path: "capture.png" }),
+      captureRegion: async () => null,
+      pinImage: async () => {},
     },
     ...overrides,
   }

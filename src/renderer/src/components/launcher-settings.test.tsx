@@ -20,6 +20,22 @@ function ok<T>(data: T): DeskitPluginIpcResult<T> {
   return { ok: true, data }
 }
 
+function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSettings {
+  const hotkeys = overrides.hotkeys ?? {
+    launcher: overrides.hotkey ?? "Control+Space",
+    screenshot: "Control+Shift+A",
+  }
+  return {
+    hotkey: overrides.hotkey ?? hotkeys.launcher,
+    hotkeys,
+    themeMode: "system",
+    accent: "neutral",
+    floatingBallEnabled: false,
+    floatingBallFeatures: [],
+    ...overrides,
+  }
+}
+
 function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarness {
   let settingsChangedHandler: SettingsChangedHandler | null = null
   const api = {
@@ -55,6 +71,16 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
+    completeScreenshotSelection: vi.fn().mockResolvedValue(undefined),
+    cancelScreenshotSelection: vi.fn().mockResolvedValue(undefined),
+    getScreenshotAnnotationImage: vi.fn().mockResolvedValue(null),
+    completeScreenshotAnnotation: vi.fn().mockResolvedValue(undefined),
+    cancelScreenshotAnnotation: vi.fn().mockResolvedValue(undefined),
+    getPinnedImageData: vi.fn().mockResolvedValue(null),
+    copyPinnedImage: vi.fn().mockResolvedValue(undefined),
+    savePinnedImage: vi.fn().mockResolvedValue(undefined),
+    setPinnedImageOpacity: vi.fn().mockResolvedValue(undefined),
+    closePinnedImage: vi.fn().mockResolvedValue(undefined),
     listPlugins: vi.fn().mockResolvedValue(ok([])),
     getPlugin: vi.fn().mockResolvedValue(ok(null)),
     setPluginEnabled: vi.fn().mockResolvedValue(ok(null)),
@@ -101,13 +127,7 @@ describe("launcher settings", () => {
 
   beforeEach(() => {
     mockPlatform("Win32")
-    installElectronApi({
-      hotkey: "Control+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    installElectronApi(baseSettings())
   })
 
   afterEach(() => {
@@ -134,7 +154,7 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
     const defaultAllowed = fireEvent.keyDown(input, { altKey: true, code: "Space", key: " " })
 
     expect(defaultAllowed).toBe(false)
@@ -146,7 +166,7 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
     const defaultAllowed = fireEvent.keyDown(input, {
       altKey: true,
       code: "Space",
@@ -162,7 +182,7 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
     const defaultAllowed = fireEvent.keyDown(input, {
       ctrlKey: true,
       shiftKey: true,
@@ -179,10 +199,10 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
 
     const captureButton = screen.getByRole("button", {
-      name: "launcher.settings.capturing",
+      name: "launcher.settings.launcherCapturingLabel",
     })
     expect(captureButton).toHaveAttribute("aria-pressed", "true")
 
@@ -190,10 +210,9 @@ describe("launcher settings", () => {
 
     expect(defaultAllowed).toBe(false)
     expect(input).toHaveValue("Control+Space")
-    expect(screen.getByRole("button", { name: "launcher.settings.capture" })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    )
+    expect(
+      screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" })
+    ).toHaveAttribute("aria-pressed", "false")
   })
 
   it("prevents browser input side effects after capturing a printable shortcut", async () => {
@@ -201,7 +220,7 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
     const defaultAllowed = fireEvent.keyDown(input, { ctrlKey: true, code: "KeyV", key: "v" })
 
     expect(defaultAllowed).toBe(false)
@@ -213,7 +232,7 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
     const defaultAllowed = fireEvent.keyDown(input, { ctrlKey: true, code: "Tab", key: "Tab" })
 
     expect(defaultAllowed).toBe(false)
@@ -226,7 +245,7 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
     expect(input).toHaveValue("CommandOrControl+K")
@@ -237,19 +256,17 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
 
-    expect(screen.getByRole("button", { name: "launcher.settings.capturing" })).toHaveAttribute(
-      "aria-pressed",
-      "true"
-    )
+    expect(
+      screen.getByRole("button", { name: "launcher.settings.launcherCapturingLabel" })
+    ).toHaveAttribute("aria-pressed", "true")
 
     fireEvent.blur(input)
 
-    expect(screen.getByRole("button", { name: "launcher.settings.capture" })).toHaveAttribute(
-      "aria-pressed",
-      "false"
-    )
+    expect(
+      screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" })
+    ).toHaveAttribute("aria-pressed", "false")
     expect(input).toHaveValue("Control+Space")
   })
 
@@ -258,30 +275,26 @@ describe("launcher settings", () => {
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
+    await user.click(screen.getByRole("button", { name: "launcher.settings.launcherCaptureLabel" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
     expect(input).toHaveValue("Super+K")
   })
 
   it("syncs the hotkey input when a settings broadcast arrives without local edits", async () => {
-    const api = installElectronApi({
-      hotkey: "Control+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    const api = installElectronApi(
+      baseSettings({
+        hotkey: "Control+Space",
+      })
+    )
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
-    api.emitSettingsChanged({
-      hotkey: "Alt+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    api.emitSettingsChanged(
+      baseSettings({
+        hotkey: "Alt+Space",
+      })
+    )
 
     expect(input).toHaveValue("Alt+Space")
     expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeDisabled()
@@ -289,49 +302,41 @@ describe("launcher settings", () => {
 
   it("keeps a dirty hotkey draft when another settings broadcast changes the saved baseline", async () => {
     const user = userEvent.setup()
-    const api = installElectronApi({
-      hotkey: "Control+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    const api = installElectronApi(
+      baseSettings({
+        hotkey: "Control+Space",
+      })
+    )
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
     await user.clear(input)
     await user.type(input, "Alt+Space")
-    api.emitSettingsChanged({
-      hotkey: "Shift+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    api.emitSettingsChanged(
+      baseSettings({
+        hotkey: "Shift+Space",
+      })
+    )
 
     expect(input).toHaveValue("Alt+Space")
     expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeEnabled()
   })
 
   it("uses the visible hotkey input value when reconciling settings broadcasts", async () => {
-    const api = installElectronApi({
-      hotkey: "Control+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    const api = installElectronApi(
+      baseSettings({
+        hotkey: "Control+Space",
+      })
+    )
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
     fireEvent.change(input, { target: { value: "Alt+Space" } })
-    api.emitSettingsChanged({
-      hotkey: "Shift+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    api.emitSettingsChanged(
+      baseSettings({
+        hotkey: "Shift+Space",
+      })
+    )
 
     expect(input).toHaveValue("Alt+Space")
     expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeEnabled()
@@ -339,25 +344,21 @@ describe("launcher settings", () => {
 
   it("marks a dirty hotkey draft clean when a settings broadcast matches it", async () => {
     const user = userEvent.setup()
-    const api = installElectronApi({
-      hotkey: "Control+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    const api = installElectronApi(
+      baseSettings({
+        hotkey: "Control+Space",
+      })
+    )
     render(<LauncherSettings />)
 
     const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
     await user.clear(input)
     await user.type(input, "Alt+Space")
-    api.emitSettingsChanged({
-      hotkey: "Alt+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    api.emitSettingsChanged(
+      baseSettings({
+        hotkey: "Alt+Space",
+      })
+    )
 
     expect(input).toHaveValue("Alt+Space")
     expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeDisabled()
@@ -365,20 +366,16 @@ describe("launcher settings", () => {
 
   it("clears the save status when a settings broadcast changes the saved hotkey", async () => {
     const user = userEvent.setup()
-    const api = installElectronApi({
-      hotkey: "Control+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
-    api.updateSettings = vi.fn().mockResolvedValue({
-      hotkey: "Alt+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    const api = installElectronApi(
+      baseSettings({
+        hotkey: "Control+Space",
+      })
+    )
+    api.updateSettings = vi.fn().mockResolvedValue(
+      baseSettings({
+        hotkey: "Alt+Space",
+      })
+    )
     window.electronAPI = api
     render(<LauncherSettings />)
 
@@ -388,14 +385,34 @@ describe("launcher settings", () => {
     await user.click(screen.getByRole("button", { name: "launcher.settings.save" }))
     expect(await screen.findByRole("status")).toHaveTextContent("launcher.settings.saved")
 
-    api.emitSettingsChanged({
-      hotkey: "Shift+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-    })
+    api.emitSettingsChanged(
+      baseSettings({
+        hotkey: "Shift+Space",
+      })
+    )
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument()
+  })
+
+  it("captures the screenshot shortcut independently", async () => {
+    const user = userEvent.setup()
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.screenshotHotkeyLabel")
+    await user.click(
+      screen.getByRole("button", { name: "launcher.settings.screenshotCaptureLabel" })
+    )
+    const defaultAllowed = fireEvent.keyDown(input, {
+      ctrlKey: true,
+      shiftKey: true,
+      code: "KeyS",
+      key: "s",
+    })
+
+    expect(defaultAllowed).toBe(false)
+    expect(input).toHaveValue("Control+Shift+S")
+    expect(await screen.findByLabelText("launcher.settings.hotkeyLabel")).toHaveValue(
+      "Control+Space"
+    )
   })
 })

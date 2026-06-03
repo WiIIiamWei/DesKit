@@ -120,7 +120,8 @@
   "floatingBall": {
     "title": "DesKit 桌面悬浮球",
     "features": {
-      "appLauncher": "应用启动器"
+      "appLauncher": "应用启动器",
+      "screenshot": "截图"
     },
     "feature": {
       "title": "桌面悬浮球",
@@ -262,18 +263,48 @@
     "settings": {
       "title": "启动器",
       "subtitle": "设置一个全局快捷键，在任意位置唤出命令面板。",
-      "hotkeyLabel": "全局快捷键",
+      "hotkeyLabel": "启动器快捷键",
       "hotkeyHint": "可手动输入 Electron 快捷键语法，也可点击捕获后按下组合键。已被占用的快捷键组合可能无法捕获，请换用未占用组合或手动输入。",
+      "screenshotHotkeyLabel": "截图快捷键",
+      "screenshotHotkeyHint": "启动区域截图。截图流程由主程序提供，因此不需要先打开插件界面。",
       "capture": "捕获",
       "capturing": "请按键...",
+      "launcherCaptureLabel": "捕获启动器快捷键",
+      "launcherCapturingLabel": "正在捕获启动器快捷键",
+      "screenshotCaptureLabel": "捕获截图快捷键",
+      "screenshotCapturingLabel": "正在捕获截图快捷键",
       "save": "保存",
-      "examples": "示例：Control+Space · Alt+Space · CommandOrControl+Shift+P",
-      "active": "当前快捷键",
+      "examples": "示例：Control+Space · Control+Shift+A · CommandOrControl+Shift+P",
+      "activeLauncher": "当前启动器快捷键",
+      "activeScreenshot": "当前截图快捷键",
       "rescan": "重新扫描应用",
       "rescanning": "扫描中…",
       "rescanned": "应用列表已刷新。",
       "saved": "快捷键已更新。",
       "invalid": "无法注册该组合，仍使用上一次的快捷键。"
     }
+  },
+  "screenshot": {
+    "actions": {
+      "annotate": "标注",
+      "cancel": "取消",
+      "capture": "截图",
+      "close": "关闭",
+      "copy": "复制",
+      "pin": "贴图",
+      "reselect": "重选",
+      "save": "保存",
+      "undo": "撤销"
+    },
+    "tools": {
+      "arrow": "箭头",
+      "ellipse": "椭圆",
+      "mosaic": "马赛克",
+      "pen": "画笔",
+      "rectangle": "矩形"
+    },
+    "colorLabel": "颜色 {{color}}",
+    "opacity": "不透明度",
+    "strokeWidth": "线宽"
   }
 }
