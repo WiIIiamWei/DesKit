@@ -111,6 +111,32 @@ describe("plugin ipc handlers", () => {
     expect(host.installPackage).toHaveBeenCalledWith("C:/tmp/plugin.deskit")
   })
 
+  it("installs a selected package from the native dialog", async () => {
+    const host = fakeHost()
+    const selectPackageFile = vi.fn(async () => "C:/tmp/plugin.deskit")
+    const handlers = createPluginIpcHandlers(host, { selectPackageFile })
+    const event = fakeEvent("app://app/index.html")
+
+    await expect(handlers.installPackageFromDialog(event)).resolves.toEqual({
+      pluginId: "com.deskit.package",
+      zipPath: "C:/tmp/plugin.deskit",
+    })
+    expect(selectPackageFile).toHaveBeenCalledWith(event)
+    expect(host.installPackage).toHaveBeenCalledWith("C:/tmp/plugin.deskit")
+  })
+
+  it("skips package installation when the native dialog is canceled", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host, {
+      selectPackageFile: vi.fn(async () => null),
+    })
+
+    await expect(
+      handlers.installPackageFromDialog(fakeEvent("app://app/index.html"))
+    ).resolves.toBe(null)
+    expect(host.installPackage).not.toHaveBeenCalled()
+  })
+
   it("validates and forwards marketplace install payloads", async () => {
     const host = fakeHost()
     const handlers = createPluginIpcHandlers(host)

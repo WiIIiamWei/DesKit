@@ -180,6 +180,7 @@
       "disable": "停用",
       "reload": "重载",
       "uninstall": "卸载",
+      "installPackage": "安装 .deskit",
       "refresh": "刷新"
     },
     "preferences": {
@@ -195,6 +196,7 @@
       "disabled": "插件已停用。",
       "reloaded": "插件已重载。",
       "uninstalled": "插件已卸载。",
+      "installed": "插件已安装。",
       "preferenceSaved": "偏好设置已保存。"
     }
   },

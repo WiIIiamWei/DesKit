@@ -101,6 +101,7 @@ const electronAPI = {
   installPluginFolder: (folderPath: string) =>
     ipcRenderer.invoke("plugin:install-folder", folderPath),
   installPluginPackage: (zipPath: string) => ipcRenderer.invoke("plugin:install-package", zipPath),
+  installPluginPackageFromDialog: () => ipcRenderer.invoke("plugin:install-package-from-dialog"),
   uninstallPlugin: (pluginId: string) => ipcRenderer.invoke("plugin:uninstall", pluginId),
   reloadPlugin: (pluginId?: string) => ipcRenderer.invoke("plugin:reload", pluginId),
   searchPluginCommands: (query: string, locale?: string, limit?: number) =>

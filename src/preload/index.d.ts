@@ -240,6 +240,9 @@ declare global {
       installPluginPackage: (
         zipPath: string
       ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry>>
+      installPluginPackageFromDialog: () => Promise<
+        DeskitPluginIpcResult<DeskitPluginRegistryEntry | null>
+      >
       uninstallPlugin: (pluginId: string) => Promise<DeskitPluginIpcResult<void>>
       reloadPlugin: (
         pluginId?: string
