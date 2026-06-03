@@ -1,6 +1,8 @@
 import type {
   CaptureRegionResult,
   ClipboardContent,
+  NetworkAPI,
+  NetworkRequestOptions,
   NotificationAPI,
   PluginContext,
   StorageAPI,
@@ -30,6 +32,10 @@ export interface NotificationAdapter {
   show: NotificationAPI["show"]
 }
 
+export interface NetworkAdapter {
+  request: NetworkAPI["request"]
+}
+
 export interface SystemAdapter {
   openUrl: SystemAPI["openUrl"]
   openPath: SystemAPI["openPath"]
@@ -41,6 +47,7 @@ export interface SystemAdapter {
 export interface PluginBridgeAdapters {
   clipboard: ClipboardAdapter
   notifications: NotificationAdapter
+  network: NetworkAdapter
   system: SystemAdapter
 }
 
@@ -53,6 +60,10 @@ export interface PluginBridgeOptions {
   clipboardPollMs?: number
 }
 
+export interface PluginContextOptions {
+  networkTimeoutMs?: number
+}
+
 interface StorageState {
   loaded: boolean
   data: Record<string, unknown>
@@ -63,6 +74,9 @@ const defaultRuntime: PluginRuntimeSnapshot = {
   locale: "en",
   theme: { mode: "light", accent: "neutral" },
 }
+const DEFAULT_NETWORK_TIMEOUT_MS = 5_000
+const MAX_NETWORK_TIMEOUT_MS = 60_000
+const MAX_NETWORK_REQUEST_BODY_BYTES = 1024 * 1024
 
 export class PluginBridge {
   private readonly storage = new Map<string, StorageState>()
@@ -75,7 +89,11 @@ export class PluginBridge {
     this.clipboardPollMs = options.clipboardPollMs ?? 500
   }
 
-  createContext(pluginId: string, manifest: PluginManifest): PluginContext {
+  createContext(
+    pluginId: string,
+    manifest: PluginManifest,
+    contextOptions: PluginContextOptions = {}
+  ): PluginContext {
     const gate = createPermissionGate(manifest)
     const runtime = this.options.runtime?.() ?? defaultRuntime
 
@@ -115,6 +133,15 @@ export class PluginBridge {
         show: async (options) => {
           gate.check("notification")
           await this.options.adapters.notifications.show(options)
+        },
+      },
+      network: {
+        request: async (url, options) => {
+          gate.check("network:http")
+          return this.options.adapters.network.request(
+            normalizeHttpUrl(url),
+            normalizeNetworkRequestOptions(options, contextOptions.networkTimeoutMs)
+          )
         },
       },
       system: {
@@ -300,6 +327,58 @@ function preferencesFromManifest(manifest: PluginManifest): Record<string, unkno
 
 function safePluginFileName(pluginId: string): string {
   return pluginId.replace(/[^\w.-]/g, "_")
+}
+
+function normalizeHttpUrl(url: string): string {
+  const parsed = new URL(url)
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only http(s) URLs can be requested by plugins")
+  }
+  return parsed.toString()
+}
+
+function normalizeNetworkRequestOptions(
+  options?: NetworkRequestOptions,
+  maxTimeoutMs = MAX_NETWORK_TIMEOUT_MS
+): NetworkRequestOptions {
+  const method = typeof options?.method === "string" ? options.method.toUpperCase() : "GET"
+  const headers = normalizeNetworkHeaders(options?.headers)
+  const body = normalizeNetworkRequestBody(options?.body)
+  const timeoutMs = normalizeTimeoutMs(options?.timeoutMs, maxTimeoutMs)
+  return {
+    method,
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    ...(body !== undefined ? { body } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  }
+}
+
+function normalizeNetworkHeaders(headers: unknown): Record<string, string> {
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return {}
+  const normalized: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === "string") normalized[key] = value
+  }
+  return normalized
+}
+
+function normalizeNetworkRequestBody(body: unknown): string | undefined {
+  if (typeof body !== "string") return undefined
+  if (new TextEncoder().encode(body).byteLength > MAX_NETWORK_REQUEST_BODY_BYTES) {
+    throw new Error("Plugin network request body exceeds 1 MiB")
+  }
+  return body
+}
+
+function normalizeTimeoutMs(timeoutMs: unknown, maxTimeoutMs: number): number | undefined {
+  const cappedMaxTimeoutMs =
+    Number.isFinite(maxTimeoutMs) && maxTimeoutMs > 0
+      ? Math.min(maxTimeoutMs, MAX_NETWORK_TIMEOUT_MS)
+      : MAX_NETWORK_TIMEOUT_MS
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) {
+    return Math.min(DEFAULT_NETWORK_TIMEOUT_MS, cappedMaxTimeoutMs)
+  }
+  return Math.min(timeoutMs, cappedMaxTimeoutMs)
 }
 
 function isFileNotFound(err: unknown): boolean {

@@ -38,6 +38,9 @@ export type {
 export type {
   CaptureRegionResult,
   ClipboardAPI,
+  NetworkAPI,
+  NetworkRequestOptions,
+  NetworkResponse,
   NotificationAPI,
   PluginContext,
   StorageAPI,

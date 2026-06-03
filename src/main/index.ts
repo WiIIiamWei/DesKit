@@ -872,9 +872,11 @@ function searchWindowDeps(): SearchWindowDeps {
 
 function createPluginHost(): PluginHost {
   const userDataDir = app.getPath("userData")
-  const adapters = createElectronPluginAdapters(userDataDir)
+  const fetchWithNet: typeof fetch = (input, init) =>
+    net.fetch(input instanceof URL ? input.toString() : input, init)
+  const adapters = createElectronPluginAdapters(userDataDir, { fetch: fetchWithNet })
   return new PluginHost({
-    fetch: (url) => net.fetch(url),
+    fetch: (url) => fetchWithNet(url),
     userDataDir,
     resourcesDir: pluginResourcesDir(),
     adapters: {

@@ -46,6 +46,31 @@ export interface NotificationAPI {
   show: (options: { title: string; body?: string; silent?: boolean }) => Promise<void>
 }
 
+export interface NetworkRequestOptions {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+  timeoutMs?: number
+}
+
+export interface NetworkResponse {
+  url: string
+  status: number
+  statusText: string
+  ok: boolean
+  headers: Record<string, string>
+  body: string
+}
+
+/**
+ * HTTP(S) client for plugin-managed integrations. Requires `network:http`.
+ * The host returns a text body instead of exposing streaming Response objects
+ * across the sandbox boundary.
+ */
+export interface NetworkAPI {
+  request: (url: string, options?: NetworkRequestOptions) => Promise<NetworkResponse>
+}
+
 export interface SystemAPI {
   /** Opens the URL in the user's default browser. Only `http(s)` is honoured. */
   openUrl: (url: string) => Promise<void>
@@ -89,6 +114,7 @@ export interface PluginContext {
 
   storage: StorageAPI
   clipboard: ClipboardAPI
+  network: NetworkAPI
   notifications: NotificationAPI
   system: SystemAPI
 
