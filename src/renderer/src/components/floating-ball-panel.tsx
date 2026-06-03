@@ -7,14 +7,16 @@ import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
+  finishFloatingBallDrag,
   getSettings,
   listPlugins,
-  moveFloatingBallBy,
+  moveFloatingBallDrag,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
   onPluginRegistryChanged,
   onSettingsChanged,
   openFloatingBallFeature,
+  startFloatingBallDrag,
   toggleFloatingBallMenu,
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
@@ -105,6 +107,7 @@ export function FloatingBallPanel() {
     if (event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
+    void startFloatingBallDrag()
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.screenX,
@@ -129,15 +132,19 @@ export function FloatingBallPanel() {
       Math.abs(event.screenY - drag.startY) >= DRAG_THRESHOLD
     drag.lastX = event.screenX
     drag.lastY = event.screenY
-    void moveFloatingBallBy(delta)
+    void moveFloatingBallDrag()
   }
 
   function onPointerUp(event: PointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
-    event.currentTarget.releasePointerCapture(event.pointerId)
-    suppressNextClickRef.current = drag.moved
+    const moved = drag.moved
     dragRef.current = null
+    suppressNextClickRef.current = moved
+    void finishFloatingBallDrag()
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   function onBallClick() {
@@ -189,6 +196,7 @@ export function FloatingBallPanel() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onLostPointerCapture={onPointerUp}
         title={t("floatingBall.title")}
         className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white shadow-xl transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-popover"
       >

@@ -210,6 +210,9 @@ declare global {
       notifyLauncherReady: () => void
       openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
       toggleFloatingBallMenu: () => Promise<void>
+      startFloatingBallDrag: () => Promise<void>
+      moveFloatingBallDrag: () => Promise<void>
+      finishFloatingBallDrag: () => Promise<void>
       moveFloatingBallBy: (delta: { x: number; y: number }) => Promise<void>
       hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
