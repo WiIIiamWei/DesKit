@@ -2,7 +2,7 @@ import type { DiscoveredPlugin, PluginManifest } from "./types"
 import { promises as fs } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
-import { afterEach, beforeEach, describe, expect, it } from "vitest"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { PluginBridge } from "./plugin-bridge"
 import { PluginSandbox, PluginSandboxError } from "./plugin-sandbox"
 
@@ -103,6 +103,40 @@ module.exports = {
     ).rejects.toBeInstanceOf(PluginSandboxError)
   })
 
+  it("passes the sandbox invoke timeout to plugin network requests", async () => {
+    const request = vi.fn(async () => ({
+      url: "https://example.test/sync.json",
+      status: 200,
+      statusText: "OK",
+      ok: true,
+      headers: {},
+      body: "{}",
+    }))
+    const entry = await writePlugin(`
+module.exports = {
+  commands: {
+    "test.run": {
+      run(_input, ctx) {
+        return ctx.network.request("https://example.test/sync.json", { timeoutMs: 120000 })
+      }
+    }
+  }
+}
+`)
+    entry.manifest!.permissions = ["network:http"]
+    const sandbox = sandboxForTest(25, 100, {
+      request,
+    })
+    await sandbox.loadPlugin(entry)
+
+    await sandbox.invokeCommand({ pluginId: entry.pluginId, commandId: "test.run", phase: "run" })
+
+    expect(request).toHaveBeenCalledWith("https://example.test/sync.json", {
+      method: "GET",
+      timeoutMs: 25,
+    })
+  })
+
   it("times out synchronous command loops", async () => {
     const entry = await writePlugin(`
 module.exports = {
@@ -163,13 +197,29 @@ module.exports = {
   })
 })
 
-function sandboxForTest(invokeTimeoutMs = 100, loadTimeoutMs = 100): PluginSandbox {
+function sandboxForTest(
+  invokeTimeoutMs = 100,
+  loadTimeoutMs = 100,
+  network?: {
+    request: (
+      url: string,
+      options?: { timeoutMs?: number }
+    ) => Promise<{
+      url: string
+      status: number
+      statusText: string
+      ok: boolean
+      headers: Record<string, string>
+      body: string
+    }>
+  }
+): PluginSandbox {
   const bridge = new PluginBridge({
     userDataDir: dir,
     adapters: {
       clipboard: { read: async () => undefined, write: async () => {} },
       notifications: { show: async () => {} },
-      network: {
+      network: network ?? {
         request: async (url) => ({
           url,
           status: 200,

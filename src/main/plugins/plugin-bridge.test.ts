@@ -149,6 +149,54 @@ describe("pluginBridge", () => {
     })
   })
 
+  it("uses a default network timeout when plugins omit one", async () => {
+    const request = vi.fn(async () => ({
+      url: "https://example.test/sync.json",
+      status: 200,
+      statusText: "OK",
+      ok: true,
+      headers: {},
+      body: "",
+    }))
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters({ network: { request } }),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["network:http"] })
+    )
+
+    await pluginCtx.network.request("https://example.test/sync.json")
+
+    expect(request).toHaveBeenCalledWith("https://example.test/sync.json", {
+      method: "GET",
+      timeoutMs: 5_000,
+    })
+  })
+
+  it("rejects oversized plugin network request bodies", async () => {
+    const request = vi.fn()
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters({ network: { request } }),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["network:http"] })
+    )
+
+    await expect(
+      pluginCtx.network.request("https://example.test/sync.json", {
+        method: "PUT",
+        body: "x".repeat(1024 * 1024 + 1),
+      })
+    ).rejects.toThrow("request body exceeds 1 MiB")
+    expect(request).not.toHaveBeenCalled()
+  })
+
   it("denies plugin network requests without permission", async () => {
     const request = vi.fn()
     const bridge = new PluginBridge({

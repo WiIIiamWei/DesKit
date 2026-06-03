@@ -39,7 +39,7 @@ handlers, declarative views, actions, and host-provided runtime APIs. Runtime
 APIs (storage, clipboard, network, notifications, system, runtime) are provided by the
 host through a bridge that conforms to the same interfaces.
 
-Clipboard APIs support text, image, and file-list payloads through
+Clipboard APIs support text and image payloads through
 `ClipboardContent`. The text-only helpers (`readText` / `writeText`) remain for
 simple commands, while clipboard-history plugins should use `read` / `write` /
 `watch` so P0 can cover all required clipboard entry types.

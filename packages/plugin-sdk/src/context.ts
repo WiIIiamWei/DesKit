@@ -27,7 +27,7 @@ export interface StorageAPI {
 export interface ClipboardAPI {
   /**
    * Reads the richest clipboard payload the host can currently represent.
-   * P0 supports text, image, and file-list clipboard entries.
+   * P0 currently supports text and image clipboard entries.
    */
   read: () => Promise<ClipboardContent | undefined>
   write: (content: ClipboardContent) => Promise<void>

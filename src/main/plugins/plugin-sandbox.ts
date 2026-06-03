@@ -175,7 +175,9 @@ export class PluginSandbox {
       throw new PluginSandboxError(`Plugin command is not exported: ${request.commandId}`)
     }
 
-    const pluginCtx = this.options.bridge.createContext(request.pluginId, plugin.manifest)
+    const pluginCtx = this.options.bridge.createContext(request.pluginId, plugin.manifest, {
+      networkTimeoutMs: this.invokeTimeoutMs,
+    })
     if (request.phase === "run") {
       return this.withTimeout(
         this.runHookInContext(
@@ -223,7 +225,9 @@ export class PluginSandbox {
     const plugin = this.loaded.get(pluginId)
     const handler = plugin?.module.commands[commandId]
     if (!plugin || !handler?.dispose) return
-    const pluginCtx = this.options.bridge.createContext(pluginId, plugin.manifest)
+    const pluginCtx = this.options.bridge.createContext(pluginId, plugin.manifest, {
+      networkTimeoutMs: this.invokeTimeoutMs,
+    })
     await this.withTimeout(
       this.runHookInContext(plugin, { commandId, phase: "dispose" }, pluginCtx)
     )
@@ -234,7 +238,9 @@ export class PluginSandbox {
     if (!plugin) throw new PluginSandboxError(`Plugin is not loaded: ${request.pluginId}`)
     if (request.event === "clipboard:change" && !plugin.module.events?.onClipboardChange) return
 
-    const pluginCtx = this.options.bridge.createContext(request.pluginId, plugin.manifest)
+    const pluginCtx = this.options.bridge.createContext(request.pluginId, plugin.manifest, {
+      networkTimeoutMs: this.invokeTimeoutMs,
+    })
     await this.withTimeout(
       this.runEventHookInContext(
         plugin,
