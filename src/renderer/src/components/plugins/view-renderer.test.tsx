@@ -1,7 +1,7 @@
 import type { RenderablePluginView } from "@/components/plugins/view-types"
-import { render, screen } from "@testing-library/react"
+import { cleanup, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
-import { describe, expect, it, vi } from "vitest"
+import { afterEach, describe, expect, it, vi } from "vitest"
 import { ViewRenderer } from "@/components/plugins/view-renderer"
 
 vi.mock("react-i18next", () => ({
@@ -11,6 +11,10 @@ vi.mock("react-i18next", () => ({
 }))
 
 describe("viewRenderer", () => {
+  afterEach(() => {
+    cleanup()
+  })
+
   it("renders list items and sends the selected item with row actions", async () => {
     const user = userEvent.setup()
     const onAction = vi.fn()
@@ -33,6 +37,43 @@ describe("viewRenderer", () => {
     expect(onAction).toHaveBeenCalledWith(view.items?.[0].actions?.[0], {
       item: view.items?.[0],
     })
+  })
+
+  it("renders custom action icons only for the selected list item", async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    const view: RenderablePluginView = {
+      type: "list",
+      items: [
+        {
+          id: "first",
+          title: "First item",
+          actions: [
+            { type: "custom", id: "copy-item", label: "Copy", icon: "lucide:copy" },
+            {
+              type: "custom",
+              id: "toggle-favorite",
+              label: "Star",
+              icon: "lucide:star",
+              active: true,
+            },
+          ],
+        },
+        {
+          id: "second",
+          title: "Second item",
+          actions: [{ type: "custom", id: "copy-item", label: "Copy", icon: "lucide:copy" }],
+        },
+      ],
+    }
+
+    render(<ViewRenderer view={view} onAction={onAction} />)
+
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "Star" })).toBeInTheDocument()
+    await user.hover(screen.getByRole("button", { name: /second item/i }))
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Star" })).not.toBeInTheDocument()
   })
 
   it("submits form values through the submit action", async () => {
