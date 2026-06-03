@@ -20,12 +20,14 @@ import type { LanDevice, LanPairing, LanTransfer, StoredLanIdentity } from "./ty
 import { Buffer } from "node:buffer"
 import { EventEmitter } from "node:events"
 import { createServer, request } from "node:https"
+import { isIP } from "node:net"
 import { certificateFingerprint } from "./credential-store"
 import { SasPairingManager } from "./sas-pairing"
 import { readChunk, sha256Buffer } from "./transfer-store"
 
 const JSON_LIMIT = 64 * 1024
 const CHUNK_LIMIT = 2 * 1024 * 1024
+const DEFAULT_REQUEST_TIMEOUT_MS = 30_000
 
 export interface LanSecureServerOptions {
   identity: StoredLanIdentity
@@ -33,6 +35,7 @@ export interface LanSecureServerOptions {
   trustedDevices: TrustedDeviceStore
   incomingTransfers: IncomingTransferStore
   outgoingTransfers: OutgoingTransferStore
+  requestTimeoutMs?: number
   resolveDevice: (deviceId: string) => LanDevice | null
 }
 
@@ -116,8 +119,8 @@ export class LanSecureServer extends EventEmitter {
   }
 
   async confirmPairing(id: string, sas: string): Promise<LanPairing[]> {
-    const trusted = this.pairing.prepareOutgoingConfirmation(id, sas)
-    const device = this.options.resolveDevice(trusted.deviceId)
+    const pendingTrusted = this.pairing.prepareLocalConfirmation(id, sas)
+    const device = this.options.resolveDevice(pendingTrusted.deviceId)
     if (!device?.online) throw new Error("Target device is offline.")
     await this.requestJson(
       device,
@@ -125,12 +128,14 @@ export class LanSecureServer extends EventEmitter {
       `/v1/pairing/requests/${id}/confirm`,
       {},
       {
-        expectedFingerprint: trusted.certificateFingerprint,
+        expectedFingerprint: pendingTrusted.certificateFingerprint,
       }
     )
-    await this.options.trustedDevices.trust(trusted)
-    this.pairing.markConfirmed(id, "outgoing")
-    this.emitTrustedDevicesChanged()
+    const trusted = this.pairing.markLocalConfirmed(id)
+    if (trusted) {
+      await this.options.trustedDevices.trust(trusted)
+      this.emitTrustedDevicesChanged()
+    }
     this.emitPairingsChanged()
     return this.listPairings()
   }
@@ -309,9 +314,11 @@ export class LanSecureServer extends EventEmitter {
       const id = confirmMatch[1]
       assertFingerprint(peerFingerprint(req), this.pairing.peerFingerprint(id))
       await readJson(req)
-      await this.options.trustedDevices.trust(this.pairing.prepareIncomingConfirmation(id))
-      this.pairing.markConfirmed(id, "incoming")
-      this.emitTrustedDevicesChanged()
+      const trusted = this.pairing.markPeerConfirmed(id)
+      if (trusted) {
+        await this.options.trustedDevices.trust(trusted)
+        this.emitTrustedDevicesChanged()
+      }
       this.emitPairingsChanged()
       sendJson(res, 200, {})
       return
@@ -424,12 +431,50 @@ export class LanSecureServer extends EventEmitter {
     body: Buffer,
     headers: Record<string, string | undefined> & { expectedFingerprint?: string }
   ): Promise<{ body: Buffer; peerFingerprint: string }> {
+    return this.requestCandidates(
+      candidateHosts(device),
+      device.port,
+      method,
+      requestPath,
+      body,
+      headers
+    )
+  }
+
+  private async requestCandidates(
+    hosts: string[],
+    port: number,
+    method: string,
+    requestPath: string,
+    body: Buffer,
+    headers: Record<string, string | undefined> & { expectedFingerprint?: string }
+  ): Promise<{ body: Buffer; peerFingerprint: string }> {
+    let lastNetworkError: unknown
+    for (const hostname of hosts) {
+      try {
+        return await this.requestHost(hostname, port, method, requestPath, body, headers)
+      } catch (err) {
+        if (!isRetryableNetworkError(err)) throw err
+        lastNetworkError = err
+      }
+    }
+    throw asError(lastNetworkError ?? new Error("No LAN device address is available."))
+  }
+
+  private requestHost(
+    hostname: string,
+    port: number,
+    method: string,
+    requestPath: string,
+    body: Buffer,
+    headers: Record<string, string | undefined> & { expectedFingerprint?: string }
+  ): Promise<{ body: Buffer; peerFingerprint: string }> {
     const { expectedFingerprint, ...requestHeaders } = headers
     return new Promise((resolve, reject) => {
       const client = request(
         {
-          hostname: device.addresses.find((address) => !address.includes(":")) ?? device.host,
-          port: device.port,
+          hostname,
+          port,
           path: requestPath,
           method,
           key: this.options.credential.privateKeyPem,
@@ -458,6 +503,9 @@ export class LanSecureServer extends EventEmitter {
           }
         }
       )
+      client.setTimeout(this.options.requestTimeoutMs ?? DEFAULT_REQUEST_TIMEOUT_MS, () => {
+        client.destroy(networkError("LAN request timed out.", "ETIMEDOUT"))
+      })
       client.once("error", reject)
       if (expectedFingerprint) {
         client.once("socket", (socket) => {
@@ -557,6 +605,47 @@ function requiredHeader(headers: IncomingHttpHeaders, name: string): string {
   const value = headers[name]
   if (typeof value !== "string" || !value.trim()) throw new Error(`Missing ${name} header.`)
   return value
+}
+
+export function candidateHosts(device: LanDevice): string[] {
+  const hosts = new Set<string>()
+  for (const host of [...device.addresses, device.host]) {
+    const normalized = host.trim()
+    if (normalized) hosts.add(normalized)
+  }
+  return [...hosts].sort((left, right) => addressPriority(left) - addressPriority(right))
+}
+
+function addressPriority(host: string): number {
+  if (isIP(host) === 4) {
+    const [first, second] = host.split(".").map(Number)
+    if (first === 127) return 0
+    if (first === 192 && second === 168) return 10
+    if (first === 10) return 20
+    if (first === 172 && second >= 16 && second <= 31) return 40
+    if (first === 169 && second === 254) return 90
+    return 30
+  }
+  if (isIP(host) === 6) return host.toLowerCase().startsWith("fe80:") ? 100 : 80
+  return 30
+}
+
+function isRetryableNetworkError(err: unknown): boolean {
+  if (!err || typeof err !== "object") return false
+  const code = (err as { code?: unknown }).code
+  return (
+    code === "ECONNREFUSED" ||
+    code === "ETIMEDOUT" ||
+    code === "EHOSTUNREACH" ||
+    code === "ENETUNREACH" ||
+    code === "EADDRNOTAVAIL"
+  )
+}
+
+function networkError(message: string, code: string): Error {
+  const err = new Error(message) as Error & { code?: string }
+  err.code = code
+  return err
 }
 
 function sendJson(res: ServerResponse, statusCode: number, body: unknown): void {

@@ -204,11 +204,15 @@
     },
     "pairings": {
       "title": "确认新设备",
-      "subtitle": "被连接的设备会显示一个六位验证码，在此输入即可建立连接。",
+      "subtitle": "连接前，请确认两台设备显示的六位验证码一致。",
       "sas": "安全验证码",
       "showCodeHint": "请在发起连接的设备上输入此验证码。",
+      "confirmCodeHint": "请确认两台设备显示的验证码一致后再连接。",
+      "enterPeerCodeHint": "请输入对方设备上显示的验证码来确认。",
+      "peerConfirmedHint": "对方已确认，请输入对方设备上的验证码以完成连接。",
+      "waitingForPeer": "正在等待对方设备确认。",
       "enterCodeTitle": "输入安全验证码",
-      "enterCodeBody": "请输入 {{name}} 上显示的六位验证码以建立连接。",
+      "enterCodeBody": "请把本机验证码告知 {{name}}，并输入对方设备上显示的六位验证码。",
       "invalidCode": "验证码不正确，请核对对方设备后重试。",
       "incoming": "对方希望与你建立连接",
       "outgoing": "正在与该设备建立连接"

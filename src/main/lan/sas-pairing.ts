@@ -38,7 +38,10 @@ export interface PairingReveal {
 }
 
 interface PairingSession extends LanPairing {
+  expectedSas: string
+  localConfirmed: boolean
   peerIdentity: PairingIdentity
+  peerConfirmed: boolean
 }
 
 interface PendingIncoming {
@@ -75,7 +78,7 @@ export class SasPairingManager {
         commitment: pairingCommitment(initiatorPublicKey, initiatorNonce),
       },
       complete: (challenge) => {
-        const sas = deriveSas({
+        const codes = deriveSasCodes({
           initiatorPublicKey,
           initiatorNonce,
           responderPublicKey: challenge.responderPublicKey,
@@ -87,7 +90,13 @@ export class SasPairingManager {
             publicKey: importPublicKey(challenge.responderPublicKey),
           }),
         })
-        const pairing = this.saveSession(challenge.id, "outgoing", challenge.responderIdentity, sas)
+        const pairing = this.saveSession(
+          challenge.id,
+          "outgoing",
+          challenge.responderIdentity,
+          codes.initiatorCode,
+          codes.responderCode
+        )
         return {
           pairing,
           reveal: { initiatorPublicKey, initiatorNonce },
@@ -127,21 +136,23 @@ export class SasPairingManager {
     ) {
       throw new Error("Pairing commitment does not match reveal.")
     }
+    const codes = deriveSasCodes({
+      ...reveal,
+      responderPublicKey: pending.responderPublicKey,
+      responderNonce: pending.responderNonce,
+      initiatorFingerprint: pending.peerIdentity.certificateFingerprint,
+      responderFingerprint: this.localIdentity.certificateFingerprint,
+      sharedSecret: diffieHellman({
+        privateKey: pending.responderKey,
+        publicKey: importPublicKey(reveal.initiatorPublicKey),
+      }),
+    })
     const pairing = this.saveSession(
       pending.id,
       "incoming",
       pending.peerIdentity,
-      deriveSas({
-        ...reveal,
-        responderPublicKey: pending.responderPublicKey,
-        responderNonce: pending.responderNonce,
-        initiatorFingerprint: pending.peerIdentity.certificateFingerprint,
-        responderFingerprint: this.localIdentity.certificateFingerprint,
-        sharedSecret: diffieHellman({
-          privateKey: pending.responderKey,
-          publicKey: importPublicKey(reveal.initiatorPublicKey),
-        }),
-      })
+      codes.responderCode,
+      codes.initiatorCode
     )
     this.incoming.delete(id)
     return pairing
@@ -161,18 +172,22 @@ export class SasPairingManager {
     return this.requireAwaiting(id).peerIdentity.certificateFingerprint
   }
 
-  prepareOutgoingConfirmation(id: string, sas: string): TrustedLanDevice {
-    const session = this.requireAwaiting(id, "outgoing")
-    if (session.sas !== sas) throw new Error("Security code is incorrect.")
+  prepareLocalConfirmation(id: string, sas: string): TrustedLanDevice {
+    const session = this.requireAwaiting(id)
+    if (session.expectedSas !== sas) throw new Error("Security code is incorrect.")
     return this.toTrustedDevice(session)
   }
 
-  prepareIncomingConfirmation(id: string): TrustedLanDevice {
-    return this.toTrustedDevice(this.requireAwaiting(id, "incoming"))
+  markLocalConfirmed(id: string): TrustedLanDevice | null {
+    const session = this.requireAwaiting(id)
+    session.localConfirmed = true
+    return this.completeIfBothConfirmed(session)
   }
 
-  markConfirmed(id: string, direction: LanPairingDirection): void {
-    this.requireAwaiting(id, direction).state = "confirmed"
+  markPeerConfirmed(id: string): TrustedLanDevice | null {
+    const session = this.requireAwaiting(id)
+    session.peerConfirmed = true
+    return this.completeIfBothConfirmed(session)
   }
 
   reject(id: string): void {
@@ -185,16 +200,20 @@ export class SasPairingManager {
     id: string,
     direction: LanPairingDirection,
     peerIdentity: PairingIdentity,
-    sas: string
+    sas: string,
+    expectedSas: string
   ): LanPairing {
     const session: PairingSession = {
       id,
       direction,
       deviceId: peerIdentity.deviceId,
       deviceName: peerIdentity.name,
+      expectedSas,
       peerIdentity,
       sas,
       state: "awaiting-confirmation",
+      localConfirmed: false,
+      peerConfirmed: false,
       createdAt: this.now(),
     }
     this.sessions.set(id, session)
@@ -218,6 +237,12 @@ export class SasPairingManager {
       ...session.peerIdentity,
       pairedAt: this.now(),
     }
+  }
+
+  private completeIfBothConfirmed(session: PairingSession): TrustedLanDevice | null {
+    if (!session.localConfirmed || !session.peerConfirmed) return null
+    session.state = "confirmed"
+    return this.toTrustedDevice(session)
   }
 
   private prune(): void {
@@ -245,7 +270,7 @@ interface SasInput extends PairingReveal {
   sharedSecret: Buffer
 }
 
-export function deriveSas(input: SasInput): string {
+export function deriveSasCodes(input: SasInput): { initiatorCode: string; responderCode: string } {
   const transcript = [
     "deskit-lan-pairing-v1",
     input.initiatorPublicKey,
@@ -255,8 +280,22 @@ export function deriveSas(input: SasInput): string {
     input.initiatorFingerprint,
     input.responderFingerprint,
   ].join("\n")
-  const value = createHmac("sha256", input.sharedSecret).update(transcript).digest().readUInt32BE(0)
+  const initiatorCode = deriveDisplayCode(input.sharedSecret, transcript, "initiator-display")
+  let responderCode = deriveDisplayCode(input.sharedSecret, transcript, "responder-display")
+  if (responderCode === initiatorCode) responderCode = nextDisplayCode(responderCode)
+  return { initiatorCode, responderCode }
+}
+
+function deriveDisplayCode(sharedSecret: Buffer, transcript: string, label: string): string {
+  const value = createHmac("sha256", sharedSecret)
+    .update(`${label}\n${transcript}`)
+    .digest()
+    .readUInt32BE(0)
   return String(value % 1_000_000).padStart(6, "0")
+}
+
+function nextDisplayCode(code: string): string {
+  return String((Number(code) + 1) % 1_000_000).padStart(6, "0")
 }
 
 function generateX25519KeyPair(): { privateKey: KeyObject; publicKey: KeyObject } {
@@ -279,6 +318,8 @@ function toPublicPairing(session: PairingSession): LanPairing {
     deviceName: session.deviceName,
     sas: session.sas,
     state: session.state,
+    localConfirmed: session.localConfirmed,
+    peerConfirmed: session.peerConfirmed,
     createdAt: session.createdAt,
   }
 }

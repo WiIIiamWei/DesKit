@@ -145,6 +145,11 @@ export function LanTransferPage() {
     }
   }
 
+  async function confirmPairingAndRefresh(pairingId: string, sas: string) {
+    const nextPairings = await confirmLanPairing(pairingId, sas)
+    setPairings(nextPairings)
+  }
+
   const awaitingPairings = pairings.filter((pairing) => pairing.state === "awaiting-confirmation")
   const incomingPairings = awaitingPairings.filter((pairing) => pairing.direction === "incoming")
   const outgoingPairings = awaitingPairings.filter((pairing) => pairing.direction === "outgoing")
@@ -259,6 +264,7 @@ export function LanTransferPage() {
                 key={pairing.id}
                 pairing={pairing}
                 disabled={pending}
+                onConfirm={(sas) => confirmPairingAndRefresh(pairing.id, sas)}
                 onReject={() => mutate(() => rejectLanPairing(pairing.id))}
               />
             ))}
@@ -271,7 +277,7 @@ export function LanTransferPage() {
           key={pairing.id}
           pairing={pairing}
           disabled={pending}
-          onConfirm={(sas) => confirmLanPairing(pairing.id, sas)}
+          onConfirm={(sas) => confirmPairingAndRefresh(pairing.id, sas)}
           onCancel={() => mutate(() => rejectLanPairing(pairing.id))}
         />
       ))}
@@ -541,13 +547,34 @@ function DeviceCard({
 function IncomingPairingCard({
   pairing,
   disabled,
+  onConfirm,
   onReject,
 }: {
   pairing: LanPairing
   disabled: boolean
+  onConfirm: (sas: string) => Promise<unknown>
   onReject: () => void
 }) {
   const { t } = useTranslation()
+  const [code, setCode] = useState("")
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
+  const waitingForPeer = pairing.localConfirmed && !pairing.peerConfirmed
+
+  async function submit() {
+    if (code.length < 6 || submitting || disabled || pairing.localConfirmed) return
+    setSubmitting(true)
+    setError(null)
+    try {
+      await onConfirm(code)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : String(err))
+      setCode("")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
   return (
     <Card>
       <CardHeader>
@@ -559,8 +586,47 @@ function IncomingPairingCard({
           <p className="text-xs text-muted-foreground">{t("lan.pairings.sas")}</p>
           <p className="mt-1 font-mono text-3xl font-semibold tracking-[0.3em]">{pairing.sas}</p>
         </div>
-        <p className="text-xs text-muted-foreground">{t("lan.pairings.showCodeHint")}</p>
-        <div className="flex">
+        <p className="text-xs text-muted-foreground">
+          {t(
+            pairing.peerConfirmed
+              ? "lan.pairings.peerConfirmedHint"
+              : "lan.pairings.enterPeerCodeHint"
+          )}
+        </p>
+        <InputOTP
+          maxLength={6}
+          pattern={REGEXP_ONLY_DIGITS}
+          inputMode="numeric"
+          value={code}
+          disabled={submitting || disabled || pairing.localConfirmed}
+          onChange={setCode}
+          onComplete={() => void submit()}
+          containerClassName="justify-center"
+        >
+          <InputOTPGroup>
+            {[0, 1, 2, 3, 4, 5].map((index) => (
+              <InputOTPSlot
+                key={index}
+                index={index}
+                className="h-10 w-9 text-base"
+                aria-invalid={Boolean(error)}
+              />
+            ))}
+          </InputOTPGroup>
+        </InputOTP>
+        {error && <p className="text-sm text-destructive">{error}</p>}
+        {waitingForPeer && (
+          <p className="text-xs text-muted-foreground">{t("lan.pairings.waitingForPeer")}</p>
+        )}
+        <div className="flex gap-2">
+          <Button
+            size="sm"
+            disabled={code.length < 6 || submitting || disabled || pairing.localConfirmed}
+            onClick={() => void submit()}
+          >
+            <Check className="size-4" aria-hidden />
+            {t("lan.actions.confirm")}
+          </Button>
           <Button size="sm" variant="outline" disabled={disabled} onClick={onReject}>
             <X className="size-4" aria-hidden />
             {t("lan.actions.reject")}
@@ -586,9 +652,10 @@ function OutgoingPairingDialog({
   const [code, setCode] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
+  const waitingForPeer = pairing.localConfirmed && !pairing.peerConfirmed
 
   async function submit() {
-    if (code.length < 6 || submitting || disabled) return
+    if (code.length < 6 || submitting || disabled || pairing.localConfirmed) return
     setSubmitting(true)
     setError(null)
     try {
@@ -616,13 +683,17 @@ function OutgoingPairingDialog({
           </DialogDescription>
         </DialogHeader>
         <div className="flex flex-col items-center gap-3 py-2">
+          <div className="w-full rounded-md bg-muted px-4 py-3 text-center">
+            <p className="text-xs text-muted-foreground">{t("lan.pairings.sas")}</p>
+            <p className="mt-1 font-mono text-3xl font-semibold tracking-[0.3em]">{pairing.sas}</p>
+          </div>
           <InputOTP
             autoFocus
             maxLength={6}
             pattern={REGEXP_ONLY_DIGITS}
             inputMode="numeric"
             value={code}
-            disabled={submitting || disabled}
+            disabled={submitting || disabled || pairing.localConfirmed}
             onChange={setCode}
             onComplete={() => void submit()}
             containerClassName="justify-center"
@@ -639,6 +710,9 @@ function OutgoingPairingDialog({
             </InputOTPGroup>
           </InputOTP>
           {error && <p className="text-sm text-destructive">{error}</p>}
+          {waitingForPeer && (
+            <p className="text-sm text-muted-foreground">{t("lan.pairings.waitingForPeer")}</p>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" disabled={submitting} onClick={onCancel}>
@@ -646,7 +720,7 @@ function OutgoingPairingDialog({
             {t("lan.actions.reject")}
           </Button>
           <Button
-            disabled={code.length < 6 || submitting || disabled}
+            disabled={code.length < 6 || submitting || disabled || pairing.localConfirmed}
             onClick={() => void submit()}
           >
             <Check className="size-4" aria-hidden />

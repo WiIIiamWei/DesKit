@@ -69,6 +69,8 @@ declare global {
     deviceName: string
     sas: string
     state: DeskitLanPairingState
+    localConfirmed: boolean
+    peerConfirmed: boolean
     createdAt: number
   }
 

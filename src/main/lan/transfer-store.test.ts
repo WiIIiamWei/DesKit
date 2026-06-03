@@ -7,6 +7,7 @@ import { IncomingTransferStore, OutgoingTransferStore, sha256Buffer } from "./tr
 
 describe("incomingTransferStore", () => {
   let dir: string
+  const transferId = "9d5f9b48-9f21-4d01-b1a5-9f77b45dd81b"
 
   beforeEach(async () => {
     dir = await fs.mkdtemp(path.join(os.tmpdir(), "deskit-lan-transfer-"))
@@ -22,7 +23,7 @@ describe("incomingTransferStore", () => {
     const chunks = [Buffer.from("abc"), Buffer.from("def"), Buffer.from("ghi")]
     const file = Buffer.concat(chunks)
     const request = {
-      id: "transfer",
+      id: transferId,
       deviceId: "sender",
       deviceName: "Sender",
       fileName: "../safe.txt",
@@ -31,23 +32,64 @@ describe("incomingTransferStore", () => {
       chunkSize: 3,
     }
     await store.create(request)
-    await store.putChunk("transfer", 0, chunks[0], sha256Buffer(chunks[0]))
-    await store.putChunk("transfer", 2, chunks[2], sha256Buffer(chunks[2]))
+    await store.putChunk(transferId, 0, chunks[0], sha256Buffer(chunks[0]))
+    await store.putChunk(transferId, 2, chunks[2], sha256Buffer(chunks[2]))
 
     await expect(store.create(request)).resolves.toMatchObject({ missingChunks: [1] })
-    await store.putChunk("transfer", 1, chunks[1], sha256Buffer(chunks[1]))
-    await expect(store.complete("transfer")).resolves.toMatchObject({
+    await store.putChunk(transferId, 1, chunks[1], sha256Buffer(chunks[1]))
+    await expect(store.complete(transferId)).resolves.toMatchObject({
       fileName: "safe.txt",
       state: "awaiting-confirmation",
     })
 
     const destination = path.join(dir, "received.txt")
-    await store.accept("transfer", destination)
+    await store.accept(transferId, destination)
     await expect(fs.readFile(destination, "utf-8")).resolves.toBe("abcdefghi")
 
-    await store.remove("transfer")
+    await store.remove(transferId)
     expect(store.list()).toEqual([])
     await expect(fs.readFile(destination, "utf-8")).resolves.toBe("abcdefghi")
+  })
+
+  it("rejects transfer ids that could escape the incoming root", async () => {
+    const store = new IncomingTransferStore(path.join(dir, "incoming"))
+    await store.init()
+    const outside = path.join(dir, "escape")
+
+    await expect(
+      store.create({
+        id: "../escape",
+        deviceId: "sender",
+        deviceName: "Sender",
+        fileName: "payload.txt",
+        size: 7,
+        sha256: sha256Buffer(Buffer.from("payload")),
+        chunkSize: 7,
+      })
+    ).rejects.toThrow("Transfer id is invalid.")
+    await expect(fs.stat(outside)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  it("rejects invalid transfer size and chunk metadata", async () => {
+    const store = new IncomingTransferStore(dir)
+    await store.init()
+    const base = {
+      id: "df83fb3a-e3f0-41f8-81c0-e51af7dc5a0a",
+      deviceId: "sender",
+      deviceName: "Sender",
+      fileName: "payload.txt",
+      size: 7,
+      sha256: sha256Buffer(Buffer.from("payload")),
+      chunkSize: 7,
+    }
+
+    await expect(store.create({ ...base, size: -1 })).rejects.toThrow("Transfer size is invalid.")
+    await expect(store.create({ ...base, chunkSize: 0 })).rejects.toThrow(
+      "Transfer chunk size is invalid."
+    )
+    await expect(store.create({ ...base, sha256: "not-a-sha" })).rejects.toThrow(
+      "Transfer SHA-256 is invalid."
+    )
   })
 
   it("persists removed outgoing transfer history", async () => {

@@ -40,6 +40,8 @@ export interface LanPairing {
   deviceName: string
   sas: string
   state: LanPairingState
+  localConfirmed: boolean
+  peerConfirmed: boolean
   createdAt: number
 }
 

@@ -7,6 +7,12 @@ import * as path from "node:path"
 import { readJsonFile, writeJsonFile } from "./atomic-json-store"
 
 export const LAN_CHUNK_SIZE = 1024 * 1024
+const MAX_LAN_CHUNK_SIZE = 2 * 1024 * 1024
+const MAX_LAN_FILE_SIZE = 100 * 1024 * 1024 * 1024
+const MAX_LAN_TOTAL_CHUNKS = 100_000
+const TRANSFER_ID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+const SHA256_PATTERN = /^[0-9a-f]{64}$/i
 
 interface IncomingTransferMetadata extends LanTransfer {
   receivedChunks: number[]
@@ -39,24 +45,25 @@ export class IncomingTransferStore {
   async init(): Promise<void> {
     await fs.mkdir(this.rootDir, { recursive: true })
     for (const name of await fs.readdir(this.rootDir)) {
+      if (!isSafeTransferId(name)) continue
       const metadata = normalizeIncoming(await readJsonFile(this.metadataPath(name)))
       if (metadata) this.transfers.set(metadata.id, metadata)
     }
   }
 
   async create(request: IncomingTransferRequest): Promise<IncomingTransferStatus> {
-    const existing = this.transfers.get(request.id)
+    const validated = validateIncomingTransferRequest(request)
+    const existing = this.transfers.get(validated.id)
     if (existing) {
-      assertSameTransfer(existing, request)
+      assertSameTransfer(existing, validated)
       return this.status(existing)
     }
     const transfer: IncomingTransferMetadata = {
-      ...request,
-      fileName: safeFileName(request.fileName),
+      ...validated,
       direction: "incoming",
       state: "transferring",
       completedChunks: 0,
-      totalChunks: chunkCount(request.size, request.chunkSize),
+      totalChunks: chunkCount(validated.size, validated.chunkSize),
       transferredBytes: 0,
       receivedChunks: [],
     }
@@ -160,7 +167,7 @@ export class IncomingTransferStore {
   }
 
   private transferDir(id: string): string {
-    return path.join(this.rootDir, id)
+    return this.pathInsideRoot(id)
   }
 
   private chunkDir(id: string): string {
@@ -177,6 +184,16 @@ export class IncomingTransferStore {
 
   private metadataPath(id: string): string {
     return path.join(this.transferDir(id), "metadata.json")
+  }
+
+  private pathInsideRoot(...segments: string[]): string {
+    const root = path.resolve(this.rootDir)
+    const target = path.resolve(root, ...segments)
+    const relative = path.relative(root, target)
+    if (relative.startsWith("..") || path.isAbsolute(relative)) {
+      throw new Error("Transfer path escapes the incoming transfer root.")
+    }
+    return target
   }
 }
 
@@ -306,7 +323,47 @@ function assertSameTransfer(existing: IncomingTransferMetadata, request: Incomin
   }
 }
 
+function validateIncomingTransferRequest(
+  request: IncomingTransferRequest
+): IncomingTransferRequest {
+  if (!request || typeof request !== "object") throw new Error("Transfer metadata is invalid.")
+  if (!isSafeTransferId(request.id)) throw new Error("Transfer id is invalid.")
+  if (typeof request.deviceId !== "string" || !request.deviceId.trim()) {
+    throw new Error("Sender device id is invalid.")
+  }
+  if (typeof request.deviceName !== "string" || !request.deviceName.trim()) {
+    throw new Error("Sender device name is invalid.")
+  }
+  if (!Number.isSafeInteger(request.size) || request.size < 0 || request.size > MAX_LAN_FILE_SIZE) {
+    throw new Error("Transfer size is invalid.")
+  }
+  if (
+    !Number.isSafeInteger(request.chunkSize) ||
+    request.chunkSize < 1 ||
+    request.chunkSize > MAX_LAN_CHUNK_SIZE
+  ) {
+    throw new Error("Transfer chunk size is invalid.")
+  }
+  const totalChunks = chunkCount(request.size, request.chunkSize)
+  if (totalChunks > MAX_LAN_TOTAL_CHUNKS) throw new Error("Transfer has too many chunks.")
+  if (typeof request.sha256 !== "string" || !SHA256_PATTERN.test(request.sha256)) {
+    throw new Error("Transfer SHA-256 is invalid.")
+  }
+  return {
+    ...request,
+    deviceId: request.deviceId.trim(),
+    deviceName: request.deviceName.trim(),
+    fileName: safeFileName(request.fileName),
+    sha256: request.sha256.toLowerCase(),
+  }
+}
+
+function isSafeTransferId(id: string): boolean {
+  return typeof id === "string" && TRANSFER_ID_PATTERN.test(id)
+}
+
 function safeFileName(fileName: string): string {
+  if (typeof fileName !== "string") throw new Error("File name is invalid.")
   const safe = path.basename(fileName).trim()
   if (!safe || safe === "." || safe === "..") throw new Error("File name is invalid.")
   return safe

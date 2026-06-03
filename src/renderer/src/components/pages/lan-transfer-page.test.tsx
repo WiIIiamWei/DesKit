@@ -156,6 +156,8 @@ describe("lan transfer security guide", () => {
         deviceName: "Peer",
         sas: "123456",
         state: "awaiting-confirmation",
+        localConfirmed: false,
+        peerConfirmed: false,
         createdAt: 1,
       },
     ])
@@ -163,9 +165,10 @@ describe("lan transfer security guide", () => {
     renderPage()
 
     const input = await screen.findByRole("textbox")
-    await user.type(input, "123456")
+    expect(screen.getByText("123456")).toBeInTheDocument()
+    await user.type(input, "654321")
 
-    await waitFor(() => expect(electron.confirmLanPairing).toHaveBeenCalledWith("pair", "123456"))
+    await waitFor(() => expect(electron.confirmLanPairing).toHaveBeenCalledWith("pair", "654321"))
   })
 
   it("notifies the other device when the initiator cancels", async () => {
@@ -179,6 +182,8 @@ describe("lan transfer security guide", () => {
         deviceName: "Peer",
         sas: "123456",
         state: "awaiting-confirmation",
+        localConfirmed: false,
+        peerConfirmed: false,
         createdAt: 1,
       },
     ])
@@ -191,7 +196,7 @@ describe("lan transfer security guide", () => {
     expect(electron.confirmLanPairing).not.toHaveBeenCalled()
   })
 
-  it("shows the code and only a reject action for incoming requests", async () => {
+  it("requires the receiving device to enter the code before confirming incoming requests", async () => {
     const user = userEvent.setup()
     window.localStorage.setItem(securityGuideSeenKey, "true")
     electron.listLanPairings.mockResolvedValue([
@@ -202,6 +207,36 @@ describe("lan transfer security guide", () => {
         deviceName: "Peer",
         sas: "654321",
         state: "awaiting-confirmation",
+        localConfirmed: false,
+        peerConfirmed: true,
+        createdAt: 1,
+      },
+    ])
+    electron.confirmLanPairing.mockResolvedValueOnce([])
+    renderPage()
+
+    expect(await screen.findByText("654321")).toBeInTheDocument()
+    expect(screen.getByRole("button", { name: "lan.actions.confirm" })).toBeDisabled()
+
+    await user.type(screen.getByRole("textbox"), "123456")
+
+    await waitFor(() => expect(electron.confirmLanPairing).toHaveBeenCalledWith("pair", "123456"))
+    expect(electron.rejectLanPairing).not.toHaveBeenCalled()
+  })
+
+  it("rejects incoming requests from the receiving device", async () => {
+    const user = userEvent.setup()
+    window.localStorage.setItem(securityGuideSeenKey, "true")
+    electron.listLanPairings.mockResolvedValue([
+      {
+        id: "pair",
+        direction: "incoming",
+        deviceId: "peer",
+        deviceName: "Peer",
+        sas: "654321",
+        state: "awaiting-confirmation",
+        localConfirmed: false,
+        peerConfirmed: false,
         createdAt: 1,
       },
     ])
@@ -209,11 +244,9 @@ describe("lan transfer security guide", () => {
     renderPage()
 
     expect(await screen.findByText("654321")).toBeInTheDocument()
-    expect(screen.queryByRole("textbox")).not.toBeInTheDocument()
 
     await user.click(screen.getByRole("button", { name: "lan.actions.reject" }))
 
     expect(electron.rejectLanPairing).toHaveBeenCalledWith("pair")
-    expect(electron.confirmLanPairing).not.toHaveBeenCalled()
   })
 })
