@@ -20,6 +20,7 @@ describe("normalizeSettings", () => {
   it("keeps a valid hotkey and trims whitespace", () => {
     expect(normalizeSettings({ hotkey: "  Alt+Space  " })).toEqual({
       ...defaultSettings,
+      hotkey: "Alt+Space",
       hotkeys: {
         ...defaultSettings.hotkeys,
         launcher: "Alt+Space",
@@ -37,6 +38,7 @@ describe("normalizeSettings", () => {
       })
     ).toEqual({
       ...defaultSettings,
+      hotkey: "Alt+Space",
       hotkeys: {
         launcher: "Alt+Space",
         screenshot: "Control+Shift+S",
@@ -52,6 +54,7 @@ describe("normalizeSettings", () => {
       })
     ).toEqual({
       ...defaultSettings,
+      hotkey: "Control+Alt+K",
       hotkeys: {
         ...defaultSettings.hotkeys,
         launcher: "Control+Alt+K",
@@ -72,6 +75,7 @@ describe("normalizeSettings", () => {
   it("strips unknown fields", () => {
     expect(normalizeSettings({ hotkey: "Alt+K", evil: true })).toEqual({
       ...defaultSettings,
+      hotkey: "Alt+K",
       hotkeys: {
         ...defaultSettings.hotkeys,
         launcher: "Alt+K",
@@ -99,12 +103,23 @@ describe("normalizeSettings", () => {
     expect(
       normalizeSettings({
         floatingBallEnabled: true,
-        floatingBallFeatures: ["appLauncher", "floatingBall", "appLauncher", 42],
+        floatingBallFeatures: [
+          "appLauncher",
+          "plugin:com.deskit.timestamp:timestamp.convert",
+          "floatingBall",
+          "appLauncher",
+          "plugin:bad",
+          42,
+        ],
       })
     ).toEqual({
       ...defaultSettings,
       floatingBallEnabled: true,
-      floatingBallFeatures: ["appLauncher", "screenshot"],
+      floatingBallFeatures: [
+        "appLauncher",
+        "plugin:com.deskit.timestamp:timestamp.convert",
+        "screenshot",
+      ],
     })
   })
 
@@ -150,6 +165,7 @@ describe("loadSettings / saveSettings", () => {
         launcher: "Alt+Shift+P",
         screenshot: "Control+Shift+S",
       },
+      hotkey: "Alt+Shift+P",
       themeMode: "dark" as const,
     }
     await saveSettings(file, written)

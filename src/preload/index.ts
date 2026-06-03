@@ -5,7 +5,10 @@ import { contextBridge, ipcRenderer } from "electron"
 // The global declared in index.d.ts is only loaded into the renderer's
 // compilation; the preload tsconfig doesn't pick up that .d.ts, so we
 // keep a structurally identical type here for type-only use.
+type FloatingBallFeature = "appLauncher" | "screenshot" | `plugin:${string}:${string}`
+
 interface SettingsPatch {
+  hotkey?: string
   hotkeys?: {
     launcher?: string
     screenshot?: string
@@ -13,9 +16,11 @@ interface SettingsPatch {
   themeMode?: "light" | "dark" | "system"
   accent?: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled?: boolean
-  floatingBallFeatures?: Array<"appLauncher" | "screenshot">
+  floatingBallFeatures?: FloatingBallFeature[]
 }
+
 interface Settings {
+  hotkey: string
   hotkeys: {
     launcher: string
     screenshot: string
@@ -23,9 +28,41 @@ interface Settings {
   themeMode: "light" | "dark" | "system"
   accent: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled: boolean
-  floatingBallFeatures: Array<"appLauncher" | "screenshot">
+  floatingBallFeatures: FloatingBallFeature[]
 }
+
 type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
+
+interface SyncStatus {
+  configured: boolean
+  enabled: boolean
+  loggedIn: boolean
+  githubUserLogin?: string
+  gistId?: string
+  deviceId: string
+  lastSyncedAt?: string
+  lastRemoteUpdatedAt?: string
+  lastLocalUpdatedAt?: string
+  rememberPassphrase: boolean
+  hasSavedPassphrase: boolean
+  pendingConflict?: { updatedAt: string; deviceId: string }
+}
+
+interface GitHubDeviceAuthorization {
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  expiresIn: number
+  interval: number
+}
+
+type GitHubLoginPollResult =
+  | { status: "pending" | "slow_down" | "expired" | "denied" }
+  | { status: "authenticated"; login: string }
+
+type SyncRunResult =
+  | { status: "empty" | "created" | "updated" | "applied" }
+  | { status: "conflict"; conflict: { updatedAt: string; deviceId: string } }
 
 const electronAPI = {
   // ---- Launcher ----
@@ -34,10 +71,14 @@ const electronAPI = {
   refreshApps: () => ipcRenderer.invoke("launcher:refresh"),
   hideLauncher: () => ipcRenderer.invoke("launcher:hide"),
   openExternalUrl: (url: string) => ipcRenderer.invoke("system:open-external", url),
+  writeClipboardContent: (content: unknown) =>
+    ipcRenderer.invoke("system:write-clipboard", content),
+  pasteClipboardContent: (content: unknown) =>
+    ipcRenderer.invoke("system:paste-clipboard", content),
   notifyLauncherReady: () => ipcRenderer.send("launcher:ready"),
 
   // ---- Floating Ball ----
-  openFloatingBallFeature: (feature: "appLauncher" | "screenshot") =>
+  openFloatingBallFeature: (feature: FloatingBallFeature) =>
     ipcRenderer.invoke("floating-ball:open-feature", feature),
   toggleFloatingBallMenu: () => ipcRenderer.invoke("floating-ball:toggle-menu"),
   moveFloatingBallBy: (delta: { x: number; y: number }) =>
@@ -47,6 +88,25 @@ const electronAPI = {
   // ---- Settings ----
   getSettings: () => ipcRenderer.invoke("settings:get"),
   updateSettings: (patch: SettingsPatch) => ipcRenderer.invoke("settings:update", patch),
+  getSyncStatus: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:get-status"),
+  saveSyncClientId: (clientId: string): Promise<SyncStatus> =>
+    ipcRenderer.invoke("sync:save-client-id", clientId),
+  saveSyncGistId: (gistId: string): Promise<SyncStatus> =>
+    ipcRenderer.invoke("sync:save-gist-id", gistId),
+  startGitHubLogin: (): Promise<GitHubDeviceAuthorization> =>
+    ipcRenderer.invoke("sync:github-login-start"),
+  pollGitHubLogin: (deviceCode: string): Promise<GitHubLoginPollResult> =>
+    ipcRenderer.invoke("sync:github-login-poll", deviceCode),
+  configureSyncPassphrase: (passphrase: string, rememberPassphrase: boolean): Promise<SyncStatus> =>
+    ipcRenderer.invoke("sync:configure-passphrase", { passphrase, rememberPassphrase }),
+  pushSync: (passphrase?: string): Promise<SyncRunResult> =>
+    ipcRenderer.invoke("sync:push", passphrase),
+  pullSync: (passphrase?: string): Promise<SyncRunResult> =>
+    ipcRenderer.invoke("sync:pull", passphrase),
+  applyRemoteSync: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:use-remote"),
+  applyLocalSync: (passphrase?: string): Promise<SyncRunResult> =>
+    ipcRenderer.invoke("sync:use-local", passphrase),
+  disconnectSync: (): Promise<SyncStatus> => ipcRenderer.invoke("sync:disconnect"),
 
   // ---- Screenshot ----
   completeScreenshotSelection: (
@@ -105,15 +165,22 @@ const electronAPI = {
     return () => ipcRenderer.removeListener("floating-ball:menu-state", listener)
   },
 
-  onFloatingBallFeatures: (
-    handler: (features: Array<"appLauncher" | "screenshot">) => void
+  onFloatingBallFeatures: (handler: (features: FloatingBallFeature[]) => void): (() => void) => {
+    const listener = (_event: IpcRendererEvent, features: FloatingBallFeature[]): void =>
+      handler(features)
+    ipcRenderer.on("floating-ball:features", listener)
+    return () => ipcRenderer.removeListener("floating-ball:features", listener)
+  },
+
+  onLauncherRunPluginCommand: (
+    handler: (command: { pluginId: string; commandId: string }) => void
   ): (() => void) => {
     const listener = (
       _event: IpcRendererEvent,
-      features: Array<"appLauncher" | "screenshot">
-    ): void => handler(features)
-    ipcRenderer.on("floating-ball:features", listener)
-    return () => ipcRenderer.removeListener("floating-ball:features", listener)
+      command: { pluginId: string; commandId: string }
+    ): void => handler(command)
+    ipcRenderer.on("launcher:run-plugin-command", listener)
+    return () => ipcRenderer.removeListener("launcher:run-plugin-command", listener)
   },
 
   onPluginRegistryChanged: (handler: (plugins: unknown[]) => void): (() => void) => {

@@ -1,7 +1,12 @@
 /* eslint-disable react/naming-convention-context-name */
 import type { PluginModule, View } from "@deskit/plugin-sdk"
 import type { PluginBridge } from "./plugin-bridge"
-import type { DiscoveredPlugin, PluginInvokeRequest, PluginSandboxModule } from "./types"
+import type {
+  DiscoveredPlugin,
+  PluginEventRequest,
+  PluginInvokeRequest,
+  PluginSandboxModule,
+} from "./types"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import vm from "node:vm"
@@ -9,6 +14,7 @@ import { commandInvocation } from "./types"
 
 type TimerCallback = (...args: unknown[]) => void
 type SandboxHookPhase = PluginInvokeRequest["phase"] | "dispose"
+type SandboxEventPhase = "onClipboardChange"
 
 export class PluginSandboxError extends Error {
   constructor(message: string) {
@@ -42,6 +48,11 @@ interface SandboxHookRequest {
   actionPayload?: unknown
 }
 
+interface SandboxEventHookRequest {
+  phase: SandboxEventPhase
+  eventPayload?: unknown
+}
+
 const invokeRequestKey = "__deskitInvokeRequest"
 const invokeContextKey = "__deskitInvokeContext"
 const invokeHookScript = `
@@ -56,12 +67,31 @@ const invokeHookScript = `
 })()
 `
 
+const eventRequestKey = "__deskitEventRequest"
+const eventContextKey = "__deskitEventContext"
+const eventHookScript = `
+(() => {
+  const request = globalThis.${eventRequestKey}
+  const ctx = globalThis.${eventContextKey}
+  if (request.phase === "onClipboardChange") {
+    const handler = module.exports.events && module.exports.events.onClipboardChange
+    if (!handler) return undefined
+    return handler(request.eventPayload, ctx)
+  }
+  return undefined
+})()
+`
+
 // Compiled once: the hook body has no per-call literals (it reads the
 // request/ctx from injected globals), so the same Script is reused across
 // every invoke. onSearchChange fires on every keystroke, so avoiding a
 // recompile per call is a real saving.
 const compiledInvokeHookScript = new vm.Script(invokeHookScript, {
   filename: "deskit-plugin:invoke-hook",
+})
+
+const compiledEventHookScript = new vm.Script(eventHookScript, {
+  filename: "deskit-plugin:event-hook",
 })
 
 // P0 isolation is a lightweight compatibility boundary. node:vm lets the host
@@ -199,6 +229,24 @@ export class PluginSandbox {
     )
   }
 
+  async dispatchEvent(request: PluginEventRequest): Promise<void> {
+    const plugin = this.loaded.get(request.pluginId)
+    if (!plugin) throw new PluginSandboxError(`Plugin is not loaded: ${request.pluginId}`)
+    if (request.event === "clipboard:change" && !plugin.module.events?.onClipboardChange) return
+
+    const pluginCtx = this.options.bridge.createContext(request.pluginId, plugin.manifest)
+    await this.withTimeout(
+      this.runEventHookInContext(
+        plugin,
+        {
+          phase: "onClipboardChange",
+          eventPayload: request.payload,
+        },
+        pluginCtx
+      )
+    )
+  }
+
   getLoadedModule(pluginId: string): PluginSandboxModule | undefined {
     const plugin = this.loaded.get(pluginId)
     if (!plugin) return undefined
@@ -242,6 +290,29 @@ export class PluginSandbox {
     } finally {
       delete sandboxGlobals[invokeRequestKey]
       delete sandboxGlobals[invokeContextKey]
+    }
+  }
+
+  private runEventHookInContext<T>(
+    plugin: LoadedPlugin,
+    request: SandboxEventHookRequest,
+    pluginCtx: unknown
+  ): Promise<T> | T {
+    const sandboxGlobals = plugin.sandboxVm as Record<string, unknown>
+    sandboxGlobals[eventRequestKey] = request
+    sandboxGlobals[eventContextKey] = pluginCtx
+    try {
+      return compiledEventHookScript.runInContext(plugin.sandboxVm, {
+        timeout: this.invokeTimeoutMs,
+      }) as Promise<T> | T
+    } catch (err) {
+      if (isVmTimeout(err)) {
+        throw new PluginSandboxError(`Plugin call exceeded ${this.invokeTimeoutMs}ms`)
+      }
+      throw err
+    } finally {
+      delete sandboxGlobals[eventRequestKey]
+      delete sandboxGlobals[eventContextKey]
     }
   }
 }

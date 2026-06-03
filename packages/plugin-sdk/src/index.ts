@@ -23,12 +23,17 @@ export type {
 export type {
   ClipboardActionValue,
   ClipboardContent,
-  ClipboardFileContent,
   ClipboardImageContent,
   ClipboardTextContent,
 } from "./clipboard"
 
-export type { CommandHandler, CommandInvocation, PluginModule } from "./commands"
+export type {
+  ClipboardChangeEvent,
+  CommandHandler,
+  CommandInvocation,
+  PluginEventHandlers,
+  PluginModule,
+} from "./commands"
 
 export type {
   CaptureRegionResult,

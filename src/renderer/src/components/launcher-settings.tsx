@@ -15,25 +15,32 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
-import { getSettings, isElectron, refreshApps, updateSettings } from "@/lib/electron"
+import { acceleratorFromKeyboardEvent, modifierKeys, splitAccelerator } from "@/lib/accelerators"
+import {
+  getSettings,
+  isElectron,
+  onSettingsChanged,
+  refreshApps,
+  updateSettings,
+} from "@/lib/electron"
 
 /**
  * Render an Electron accelerator string ("Control+Shift+P") as a row of
  * <Kbd> chips joined by "+". Each token is normalised to a short label
- * (Ctrl, Alt, ⌘ on macOS).
+ * (Ctrl, Alt, Cmd on macOS).
  */
 function HotkeyChips({ accelerator }: { accelerator: string }) {
   const isMac = isMacPlatform()
   const tokens = useMemo(() => splitAccelerator(accelerator, isMac), [accelerator, isMac])
   if (tokens.length === 0) {
-    return <span className="text-xs text-muted-foreground">—</span>
+    return <span className="text-xs text-muted-foreground">-</span>
   }
   return (
     <KbdGroup>
       {tokens.map((token, i) => (
         // Tokens can legitimately repeat (e.g. user typo "Ctrl+Ctrl+P"),
         // and the whole list is rebuilt whenever the accelerator string
-        // changes — positional keys are stable here.
+        // changes; positional keys are stable here.
         // eslint-disable-next-line react/no-array-index-key
         <span key={`${token}-${i}`} className="flex items-center gap-1">
           {i > 0 && <span className="text-muted-foreground/60">+</span>}
@@ -44,124 +51,81 @@ function HotkeyChips({ accelerator }: { accelerator: string }) {
   )
 }
 
-function splitAccelerator(accelerator: string, isMac = isMacPlatform()): string[] {
-  return accelerator
-    .split("+")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const lower = part.toLowerCase()
-      switch (lower) {
-        case "commandorcontrol":
-        case "cmdorctrl":
-        case "control":
-        case "ctrl":
-          return "Ctrl"
-        case "command":
-        case "cmd":
-        case "meta":
-        case "super":
-          return "⌘"
-        case "alt":
-        case "option":
-          return isMac ? "⌥" : "Alt"
-        case "shift":
-          return "Shift"
-        case "space":
-          return "Space"
-        default:
-          return part.length === 1 ? part.toUpperCase() : part
-      }
-    })
-}
-
-const modifierKeys = new Set(["Alt", "Control", "Meta", "Shift"])
 type HotkeyTarget = "launcher" | "screenshot"
-
-function acceleratorFromKeyboardEvent(event: KeyboardEvent<HTMLInputElement>): string | null {
-  if (modifierKeys.has(event.key)) return null
-
-  const key = normalizeAcceleratorKey(event)
-  if (!key) return null
-
-  const modifiers: string[] = []
-  if (event.ctrlKey) modifiers.push("Control")
-  if (event.altKey) modifiers.push("Alt")
-  if (event.shiftKey) modifiers.push("Shift")
-  if (event.metaKey) modifiers.push(isMacPlatform() ? "Command" : "Meta")
-
-  if (modifiers.length === 0) return null
-  return [...modifiers, key].join("+")
-}
 
 function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") return false
   return /Mac|iPhone|iPad|iPod/.test(navigator.platform)
 }
 
-function normalizeAcceleratorKey(event: KeyboardEvent<HTMLInputElement>): string | null {
-  if (
-    event.code === "Space" ||
-    event.key === " " ||
-    event.key === "Space" ||
-    event.key === "Spacebar"
-  ) {
-    return "Space"
-  }
-  if (event.key === "+") return "Plus"
-  if (event.code === "NumpadAdd") return "Plus"
-  if (event.key.length === 1) return event.key.toUpperCase()
-  if (event.code.startsWith("Key")) return event.code.slice(3).toUpperCase()
-  if (event.code.startsWith("Digit")) return event.code.slice(5)
+function createEmptyHotkeys(): DeskitHotkeySettings {
+  return { launcher: "", screenshot: "" }
+}
 
-  switch (event.key) {
-    case "ArrowDown":
-    case "ArrowLeft":
-    case "ArrowRight":
-    case "ArrowUp":
-    case "Backspace":
-    case "Delete":
-    case "End":
-    case "Enter":
-    case "Escape":
-    case "Home":
-    case "Insert":
-    case "PageDown":
-    case "PageUp":
-    case "Space":
-    case "Tab":
-      return event.key
-    default:
-      return /^F\d{1,2}$/.test(event.key) ? event.key : null
-  }
+function sameHotkeys(left: DeskitHotkeySettings, right: DeskitHotkeySettings): boolean {
+  return left.launcher === right.launcher && left.screenshot === right.screenshot
 }
 
 /**
- * Settings card for the launcher: rebind the global hotkey and trigger
+ * Settings card for the launcher: rebind global hotkeys and trigger
  * a manual app re-scan. Stays compact so it can sit on the main shell
  * alongside other future setting groups.
  */
 export function LauncherSettings() {
   const { t } = useTranslation()
-  const [hotkeys, setHotkeys] = useState<DeskitHotkeySettings>({
-    launcher: "",
-    screenshot: "",
-  })
-  const [savedHotkeys, setSavedHotkeys] = useState<DeskitHotkeySettings>({
-    launcher: "",
-    screenshot: "",
-  })
+  const [hotkeys, setHotkeys] = useState<DeskitHotkeySettings>(createEmptyHotkeys)
+  const [savedHotkeys, setSavedHotkeys] = useState<DeskitHotkeySettings>(createEmptyHotkeys)
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [capturingHotkey, setCapturingHotkey] = useState<HotkeyTarget | null>(null)
+  const hotkeysRef = useRef<DeskitHotkeySettings>(createEmptyHotkeys())
+  const savedHotkeysRef = useRef<DeskitHotkeySettings>(createEmptyHotkeys())
   const launcherHotkeyInputRef = useRef<HTMLInputElement>(null)
   const screenshotHotkeyInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
+    hotkeysRef.current = hotkeys
+  }, [hotkeys])
+
+  useEffect(() => {
+    savedHotkeysRef.current = savedHotkeys
+  }, [savedHotkeys])
+
+  useEffect(() => {
     if (!isElectron()) return
     void getSettings().then((settings) => {
+      hotkeysRef.current = settings.hotkeys
+      savedHotkeysRef.current = settings.hotkeys
       setHotkeys(settings.hotkeys)
       setSavedHotkeys(settings.hotkeys)
+    })
+    return onSettingsChanged((settings) => {
+      const incoming = settings.hotkeys
+      const currentHotkeys = hotkeysRef.current
+      const currentSavedHotkeys = savedHotkeysRef.current
+      if (sameHotkeys(incoming, currentSavedHotkeys)) return
+
+      savedHotkeysRef.current = incoming
+      setSavedHotkeys(incoming)
+      setStatus(null)
+
+      setHotkeys((current) => {
+        const next = { ...current }
+        if (
+          currentHotkeys.launcher === currentSavedHotkeys.launcher ||
+          currentHotkeys.launcher === incoming.launcher
+        ) {
+          next.launcher = incoming.launcher
+        }
+        if (
+          currentHotkeys.screenshot === currentSavedHotkeys.screenshot ||
+          currentHotkeys.screenshot === incoming.screenshot
+        ) {
+          next.screenshot = incoming.screenshot
+        }
+        hotkeysRef.current = next
+        return next
+      })
     })
   }, [])
 
@@ -170,7 +134,15 @@ export function LauncherSettings() {
   const dirty =
     hotkeys.launcher.trim() !== "" &&
     hotkeys.screenshot.trim() !== "" &&
-    (hotkeys.launcher !== savedHotkeys.launcher || hotkeys.screenshot !== savedHotkeys.screenshot)
+    !sameHotkeys(hotkeys, savedHotkeys)
+
+  function setHotkeyValue(target: HotkeyTarget, value: string) {
+    setHotkeys((current) => {
+      const next = { ...current, [target]: value }
+      hotkeysRef.current = next
+      return next
+    })
+  }
 
   function onHotkeyKeyDown(target: HotkeyTarget, event: KeyboardEvent<HTMLInputElement>) {
     if (capturingHotkey !== target) return
@@ -191,7 +163,7 @@ export function LauncherSettings() {
     if (!next) return
 
     setStatus(null)
-    setHotkeys((current) => ({ ...current, [target]: next }))
+    setHotkeyValue(target, next)
     setCapturingHotkey(null)
   }
 
@@ -206,13 +178,17 @@ export function LauncherSettings() {
     setStatus(null)
     try {
       const requestedHotkeys = hotkeys
-      const next = await updateSettings({ hotkeys: requestedHotkeys })
+      const next = await updateSettings({
+        hotkey: requestedHotkeys.launcher,
+        hotkeys: requestedHotkeys,
+      })
+      hotkeysRef.current = next.hotkeys
+      savedHotkeysRef.current = next.hotkeys
       setHotkeys(next.hotkeys)
       setSavedHotkeys(next.hotkeys)
-      // Main process keeps the previous hotkey if the new accelerator
-      // can't be registered (returns the still-active value). Detect
-      // that mismatch and surface it to the user.
-      if (next.hotkeys.launcher !== requestedHotkeys.launcher) {
+      // Main process keeps the previous hotkey if a new accelerator
+      // can't be registered. Detect that mismatch and surface it to the user.
+      if (!sameHotkeys(next.hotkeys, requestedHotkeys)) {
         setStatus({ kind: "error", text: t("launcher.settings.invalid") })
       } else {
         setStatus({ kind: "ok", text: t("launcher.settings.saved") })
@@ -262,8 +238,7 @@ export function LauncherSettings() {
             value={hotkeys[target]}
             onChange={(e) => {
               if (!isCapturing) {
-                const value = e.target.value
-                setHotkeys((current) => ({ ...current, [target]: value }))
+                setHotkeyValue(target, e.target.value)
               }
             }}
             onBlur={() => {

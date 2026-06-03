@@ -64,12 +64,7 @@ function writeClipboardContent(content: ClipboardContent): void {
   }
   if (content.type === "image") {
     clipboard.writeImage(nativeImage.createFromDataURL(content.dataUrl))
-    return
   }
-  // Electron does not expose a portable file-list clipboard writer. Keep the
-  // file paths available to paste targets that accept plain text, while the
-  // contract still preserves the richer file-list shape for history plugins.
-  clipboard.writeText(content.paths.join("\n"))
 }
 
 async function captureScreen(

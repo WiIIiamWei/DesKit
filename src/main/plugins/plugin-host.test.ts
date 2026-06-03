@@ -1,4 +1,5 @@
-import type { PluginCommandResult, PluginRegistryEntry } from "./types"
+import type { ClipboardContent } from "@deskit/plugin-sdk"
+import type { PluginCommandResult, PluginManifest, PluginRegistryEntry } from "./types"
 import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import * as os from "node:os"
@@ -33,6 +34,21 @@ const noopAdapters = {
   },
 }
 
+function makeHostWithClipboard(
+  read: () => Promise<ClipboardContent | undefined>,
+  clipboardPollMs = 10
+): PluginHost {
+  return new PluginHost({
+    userDataDir: dir,
+    resourcesDir: path.join(dir, "resources"),
+    clipboardPollMs,
+    adapters: {
+      ...noopAdapters,
+      clipboard: { read, write: async () => {} },
+    },
+  })
+}
+
 function makeHost(): PluginHost {
   return new PluginHost({
     userDataDir: dir,
@@ -48,6 +64,65 @@ function makeHostWithFetch(fetch: (url: string) => Promise<Response>): PluginHos
     adapters: noopAdapters,
     fetch,
   })
+}
+
+async function writeHostPlugin(
+  options: {
+    id?: string
+    code?: string
+    activationEvents?: PluginManifest["contributes"]["activationEvents"]
+    permissions?: string[]
+  } = {}
+): Promise<string> {
+  const pluginId = options.id ?? "com.deskit.clipboard"
+  const pluginDir = path.join(dir, "plugins", pluginId)
+  await fs.mkdir(path.join(pluginDir, "dist"), { recursive: true })
+  await fs.writeFile(
+    path.join(pluginDir, "deskit.json"),
+    `${JSON.stringify(
+      {
+        id: pluginId,
+        name: pluginId.split(".").at(-1) ?? "plugin",
+        displayName: "Clipboard Plugin",
+        description: "Test clipboard plugin",
+        version: "0.1.0",
+        author: "DesKit",
+        engines: { deskit: "^0.2.0" },
+        main: "dist/index.js",
+        contributes: {
+          activationEvents: options.activationEvents,
+          commands: [{ id: "clipboard.run", title: "Clipboard", mode: "view" }],
+        },
+        permissions: options.permissions ?? ["clipboard:read", "storage:plugin"],
+      },
+      null,
+      2
+    )}\n`,
+    "utf-8"
+  )
+  await fs.writeFile(
+    path.join(pluginDir, "dist", "index.js"),
+    options.code ??
+      `
+module.exports = {
+  commands: {
+    "clipboard.run": {
+      run() {
+        return { type: "toast", level: "info", message: "ok" }
+      }
+    }
+  },
+  events: {
+    async onClipboardChange(event, ctx) {
+      const entries = (await ctx.storage.get("entries")) ?? []
+      await ctx.storage.set("entries", entries.concat(event.content.text))
+    }
+  }
+}
+`,
+    "utf-8"
+  )
+  return pluginDir
 }
 
 const baseEntry: PluginRegistryEntry = {
@@ -79,6 +154,13 @@ const baseEntry: PluginRegistryEntry = {
             { value: "ms", label: "ms" },
             { value: "s", label: "s" },
           ],
+        },
+        {
+          id: "openShortcut",
+          type: "shortcut",
+          label: "Open shortcut",
+          default: "Super+Control+C",
+          command: "test.run",
         },
       ],
     },
@@ -119,6 +201,9 @@ describe("pluginHost.setPreference value validation", () => {
     await expect(host.setPreference("com.deskit.test", "limit", 42)).resolves.toBeUndefined()
     await expect(host.setPreference("com.deskit.test", "enabled", false)).resolves.toBeUndefined()
     await expect(host.setPreference("com.deskit.test", "unit", "s")).resolves.toBeUndefined()
+    await expect(
+      host.setPreference("com.deskit.test", "openShortcut", "Alt+Space")
+    ).resolves.toBeUndefined()
   })
 
   it("rejects mistyped text values", async () => {
@@ -164,6 +249,16 @@ describe("pluginHost.setPreference value validation", () => {
     )
   })
 
+  it("rejects mistyped shortcut values", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
+    await expect(
+      host.setPreference("com.deskit.test", "openShortcut", false)
+    ).rejects.toBeInstanceOf(PluginPreferenceTypeError)
+  })
+
   it("allows undefined to clear a preference back to its default", async () => {
     const host = makeHost()
     await host.preferences.load()
@@ -182,6 +277,38 @@ describe("pluginHost.setPreference value validation", () => {
     await expect(host.setPreference("com.deskit.test", "unknownKey", "x")).rejects.toThrow(
       /Unknown plugin preference/
     )
+  })
+
+  it("imports synced preferences and leaves uninstalled plugin preferences pending", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockImplementation((pluginId: string) =>
+      pluginId === "com.deskit.test" ? baseEntry : undefined
+    )
+
+    await expect(
+      host.importSyncedPreferences({
+        "com.deskit.test": {
+          label: "remote",
+          unit: "s",
+          missing: true,
+          limit: "large",
+        },
+        "com.deskit.pending": { token: "encrypted upstream" },
+      })
+    ).resolves.toMatchObject({
+      applied: 2,
+      pending: 1,
+      skipped: [
+        { pluginId: "com.deskit.test", key: "missing" },
+        { pluginId: "com.deskit.test", key: "limit" },
+      ],
+    })
+
+    expect(host.exportPreferences()).toEqual({
+      "com.deskit.test": { label: "remote", unit: "s" },
+      "com.deskit.pending": { token: "encrypted upstream" },
+    })
   })
 })
 
@@ -286,6 +413,7 @@ describe("pluginHost facade forwards to registry", () => {
       limit: 10,
       enabled: true,
       unit: "ms",
+      openShortcut: "Super+Control+C",
     })
   })
 
@@ -296,5 +424,50 @@ describe("pluginHost facade forwards to registry", () => {
       .mockReturnValue([] as PluginCommandResult[])
     host.searchCommands("ts", "zh-CN", 5)
     expect(spy).toHaveBeenCalledWith("ts", "zh-CN", 5)
+  })
+})
+
+describe("pluginHost clipboard watcher", () => {
+  it("dispatches clipboard changes through a real loaded plugin", async () => {
+    vi.useFakeTimers()
+    const read = vi.fn(async () => ({ type: "text", text: "hello" }) as ClipboardContent)
+    const host = makeHostWithClipboard(read)
+    await writeHostPlugin({ activationEvents: ["clipboard:change"] })
+
+    try {
+      await host.init()
+      await vi.runOnlyPendingTimersAsync()
+
+      expect(read).toHaveBeenCalled()
+      const raw = await fs.readFile(
+        path.join(dir, "plugin-data", "com.deskit.clipboard.json"),
+        "utf-8"
+      )
+      expect(JSON.parse(raw)).toEqual({ entries: ["hello"] })
+    } finally {
+      host.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it("does not start when clipboard activation lacks read permission", async () => {
+    vi.useFakeTimers()
+    const read = vi.fn(async () => ({ type: "text", text: "hello" }) as ClipboardContent)
+    const host = makeHostWithClipboard(read)
+    await writeHostPlugin({
+      activationEvents: ["clipboard:change"],
+      permissions: ["storage:plugin"],
+    })
+
+    try {
+      await host.init()
+      await vi.advanceTimersByTimeAsync(20)
+
+      expect(host.get("invalid:user:com.deskit.clipboard")?.status).toBe("invalid")
+      expect(read).not.toHaveBeenCalled()
+    } finally {
+      host.dispose()
+      vi.useRealTimers()
+    }
   })
 })

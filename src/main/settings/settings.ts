@@ -6,11 +6,16 @@ import * as path from "node:path"
 // versions of the app interoperate cleanly.
 export type ThemeMode = "light" | "dark" | "system"
 export type ThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
-export type FloatingBallFeature = "appLauncher" | "screenshot"
+export type BuiltinFloatingBallFeature = "appLauncher" | "screenshot"
+export type PluginFloatingBallFeature = `plugin:${string}:${string}`
+export type FloatingBallFeature = BuiltinFloatingBallFeature | PluginFloatingBallFeature
 
 export const THEME_MODES: readonly ThemeMode[] = ["light", "dark", "system"]
 export const THEME_ACCENTS: readonly ThemeAccent[] = ["neutral", "blue", "green", "rose", "violet"]
-export const FLOATING_BALL_FEATURES: readonly FloatingBallFeature[] = ["appLauncher", "screenshot"]
+export const FLOATING_BALL_FEATURES: readonly BuiltinFloatingBallFeature[] = [
+  "appLauncher",
+  "screenshot",
+]
 const MAX_FLOATING_BALL_FEATURES = 6
 const CURRENT_SETTINGS_VERSION = 2
 
@@ -24,6 +29,11 @@ export interface HotkeySettings {
 export interface UserSettings {
   /** Internal schema version for one-time settings migrations. */
   settingsVersion: number
+  /**
+   * Legacy launcher accelerator retained for sync/backward compatibility.
+   * Mirrors `hotkeys.launcher`.
+   */
+  hotkey: string
   /** Global Electron Accelerator strings. */
   hotkeys: HotkeySettings
   /** Preferred color scheme. "system" defers to OS preference. */
@@ -42,6 +52,7 @@ export type UserSettingsPatch = Partial<Omit<UserSettings, "hotkeys">> & {
 
 export const defaultSettings: UserSettings = {
   settingsVersion: CURRENT_SETTINGS_VERSION,
+  hotkey: "Control+Space",
   hotkeys: {
     launcher: "Control+Space",
     screenshot: "Control+Shift+A",
@@ -57,10 +68,11 @@ export function settingsFilePath(userDataDir: string): string {
 }
 
 export function normalizeSettings(raw: unknown): UserSettings {
-  const next: UserSettings = { ...defaultSettings }
+  const next: UserSettings = { ...defaultSettings, hotkeys: { ...defaultSettings.hotkeys } }
   if (raw && typeof raw === "object") {
     const r = raw as Record<string, unknown>
     next.hotkeys = normalizeHotkeys(r)
+    next.hotkey = next.hotkeys.launcher
     if (
       typeof r.themeMode === "string" &&
       (THEME_MODES as readonly string[]).includes(r.themeMode)
@@ -109,12 +121,8 @@ function normalizeFloatingBallFeatures(
 ): FloatingBallFeature[] {
   const seen = new Set<FloatingBallFeature>()
   for (const item of raw) {
-    if (
-      typeof item === "string" &&
-      (FLOATING_BALL_FEATURES as readonly string[]).includes(item) &&
-      !seen.has(item as FloatingBallFeature)
-    ) {
-      seen.add(item as FloatingBallFeature)
+    if (typeof item === "string" && isFloatingBallFeature(item) && !seen.has(item)) {
+      seen.add(item)
       if (seen.size === MAX_FLOATING_BALL_FEATURES) break
     }
   }
@@ -129,20 +137,36 @@ function normalizeFloatingBallFeatures(
   return seen.size > 0 ? [...seen] : [...defaultSettings.floatingBallFeatures]
 }
 
+function isFloatingBallFeature(value: string): value is FloatingBallFeature {
+  return isBuiltinFloatingBallFeature(value) || isPluginFloatingBallFeature(value)
+}
+
+function isBuiltinFloatingBallFeature(value: string): value is BuiltinFloatingBallFeature {
+  return (FLOATING_BALL_FEATURES as readonly string[]).includes(value)
+}
+
+function isPluginFloatingBallFeature(value: string): value is PluginFloatingBallFeature {
+  return /^plugin:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$/.test(
+    value
+  )
+}
+
 export async function loadSettings(filePath: string): Promise<UserSettings> {
   try {
     const raw = await fs.readFile(filePath, "utf-8")
     return normalizeSettings(JSON.parse(raw))
   } catch (err) {
-    if (isFileNotFound(err)) return { ...defaultSettings }
-    if (err instanceof SyntaxError) return { ...defaultSettings }
+    if (isFileNotFound(err)) return { ...defaultSettings, hotkeys: { ...defaultSettings.hotkeys } }
+    if (err instanceof SyntaxError) {
+      return { ...defaultSettings, hotkeys: { ...defaultSettings.hotkeys } }
+    }
     throw err
   }
 }
 
 export async function saveSettings(filePath: string, settings: UserSettings): Promise<void> {
   await fs.mkdir(path.dirname(filePath), { recursive: true })
-  await fs.writeFile(filePath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8")
+  await fs.writeFile(filePath, `${JSON.stringify(normalizeSettings(settings), null, 2)}\n`, "utf-8")
 }
 
 function isFileNotFound(err: unknown): boolean {

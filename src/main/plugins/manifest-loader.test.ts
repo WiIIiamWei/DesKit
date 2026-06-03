@@ -32,6 +32,172 @@ describe("parsePluginManifest", () => {
     expect(parsed.contributes.commands[0]?.mode).toBe("view")
   })
 
+  it("accepts lucide icons in plugin and command manifests", () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        icon: "lucide:puzzle",
+        contributes: {
+          commands: [
+            {
+              id: "test.run",
+              title: "Run",
+              mode: "view",
+              icon: "lucide:clock",
+            },
+          ],
+        },
+      })
+    )
+    expect(parsed.icon).toBe("lucide:puzzle")
+    expect(parsed.contributes.commands[0]?.icon).toBe("lucide:clock")
+  })
+
+  it("accepts packaged image paths in plugin and command manifests", () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        icon: "assets/plugin.svg",
+        contributes: {
+          commands: [
+            {
+              id: "test.run",
+              title: "Run",
+              mode: "view",
+              icon: "assets/command.png",
+            },
+          ],
+        },
+      })
+    )
+    expect(parsed.icon).toBe("assets/plugin.svg")
+    expect(parsed.contributes.commands[0]?.icon).toBe("assets/command.png")
+  })
+
+  it("rejects remote icon URLs in plugin manifests", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          icon: "https://example.com/icon.png",
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
+  it("rejects non-image icon paths in plugin manifests", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          icon: "dist/index.js",
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
+  it("accepts clipboard activation events", () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        contributes: {
+          activationEvents: ["clipboard:change"],
+          commands: [{ id: "test.run", title: "Run", mode: "view" }],
+        },
+        permissions: ["clipboard:read"],
+      })
+    )
+    expect(parsed.contributes.activationEvents).toEqual(["clipboard:change"])
+  })
+
+  it("accepts shortcut preferences that target contributed commands", () => {
+    const parsed = parsePluginManifest(
+      manifest({
+        contributes: {
+          commands: [{ id: "test.run", title: "Run", mode: "view" }],
+          preferences: [
+            {
+              id: "openShortcut",
+              type: "shortcut",
+              label: "Open shortcut",
+              default: "Super+Control+C",
+              command: "test.run",
+            },
+          ],
+        },
+      })
+    )
+
+    expect(parsed.contributes.preferences?.[0]).toMatchObject({
+      id: "openShortcut",
+      type: "shortcut",
+      command: "test.run",
+    })
+  })
+
+  it("rejects shortcut preferences without a command", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          contributes: {
+            commands: [{ id: "test.run", title: "Run", mode: "view" }],
+            preferences: [
+              {
+                id: "openShortcut",
+                type: "shortcut",
+                label: "Open shortcut",
+                default: "Super+Control+C",
+              },
+            ],
+          },
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
+  it("rejects shortcut preferences that target missing commands", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          contributes: {
+            commands: [{ id: "test.run", title: "Run", mode: "view" }],
+            preferences: [
+              {
+                id: "openShortcut",
+                type: "shortcut",
+                label: "Open shortcut",
+                default: "Super+Control+C",
+                command: "missing.run",
+              },
+            ],
+          },
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
+  it("rejects clipboard activation events without clipboard read permission", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          contributes: {
+            activationEvents: ["clipboard:change"],
+            commands: [{ id: "test.run", title: "Run", mode: "view" }],
+          },
+          permissions: [],
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
+  it("rejects unknown activation events", () => {
+    expect(() =>
+      parsePluginManifest(
+        manifest({
+          contributes: {
+            activationEvents: ["window:focus"],
+            commands: [{ id: "test.run", title: "Run", mode: "view" }],
+          },
+        })
+      )
+    ).toThrow(ManifestValidationError)
+  })
+
   it("rejects missing required fields", () => {
     const raw = manifest()
     delete raw.main

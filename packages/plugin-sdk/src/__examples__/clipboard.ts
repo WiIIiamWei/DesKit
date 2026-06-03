@@ -1,7 +1,7 @@
 /* eslint-disable no-restricted-syntax */
 // Fixture: validates that storage + clipboard.watch + custom Action supports
-// text, image and file clipboard history entries. Mirror of stage 5's
-// clipboard plugin.
+// text and image clipboard history entries. Mirror of stage 5's clipboard
+// plugin.
 import type { ClipboardContent, ListView, PluginModule } from "../index"
 
 interface Entry {
@@ -94,7 +94,7 @@ function getTitle(content: ClipboardContent): string {
     const size = content.width && content.height ? ` ${content.width}x${content.height}` : ""
     return content.name ? `${content.name}${size}` : `Image${size}`
   }
-  return content.paths.length === 1 ? (content.paths[0] ?? "File") : `${content.paths.length} files`
+  return "Clipboard item"
 }
 
 export = plugin

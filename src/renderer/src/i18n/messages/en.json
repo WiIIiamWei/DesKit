@@ -36,6 +36,78 @@
     "accent.rose": "Rose",
     "accent.violet": "Violet"
   },
+  "sync": {
+    "title": "Gist Sync",
+    "subtitle": "Sync user settings and plugin preferences through an encrypted secret GitHub Gist.",
+    "unavailable": "Sync is only available inside the desktop app.",
+    "loading": "Loading sync status…",
+    "clientId": "GitHub OAuth Client ID",
+    "clientIdPlaceholder": "Paste the OAuth App client ID",
+    "clientIdHint": "DesKit includes a default OAuth App. Override this only for development or self-hosted builds.",
+    "gistId": "Existing Gist ID",
+    "gistIdPlaceholder": "Optional advanced override",
+    "gistIdHint": "Optional. Paste an existing DesKit sync Gist ID to reuse it on this device.",
+    "save": "Save",
+    "login": "Log in with GitHub",
+    "userCode": "GitHub device code",
+    "openGitHub": "Open GitHub",
+    "passphrase": "Sync password",
+    "passphraseSaved": "Saved on this device",
+    "remember": "Remember on this device",
+    "savePassphrase": "Save password",
+    "pull": "Pull",
+    "push": "Push",
+    "refresh": "Refresh",
+    "disconnect": "Disconnect",
+    "conflictTitle": "Sync conflict",
+    "conflictBody": "Remote settings changed at {{updatedAt}} while this device also has local changes.",
+    "useRemote": "Use remote",
+    "useLocal": "Use local",
+    "lastSynced": "Last synced: {{time}}",
+    "status": {
+      "needsClient": "Configure GitHub OAuth before syncing",
+      "needsLogin": "GitHub login required",
+      "needsPassphrase": "Set a sync password to enable encryption",
+      "conflict": "Conflict needs your choice",
+      "ready": "Encrypted sync is ready"
+    },
+    "messages": {
+      "clientSaved": "OAuth client ID saved.",
+      "gistSaved": "Gist ID saved.",
+      "loginStarted": "GitHub login started.",
+      "loginDone": "Logged in as @{{login}}.",
+      "passphraseSaved": "Sync password saved.",
+      "passphraseRequired": "Enter the sync password for this Gist before pulling.",
+      "decryptFailed": "Could not decrypt this Gist. Enter the original sync password, or choose the Gist created by this device.",
+      "authExpired": "GitHub login expired. Disconnect and log in again.",
+      "githubForbidden": "GitHub rejected this sync request. Try again later or confirm the OAuth grant includes gist access.",
+      "gistNotFound": "This sync Gist was not found. Check the Gist ID or let DesKit create a new sync Gist.",
+      "gistNotWritable": "This GitHub account cannot update that Gist. Use your own Gist ID or upload to create a new sync Gist.",
+      "invalidRemoteData": "Remote sync data is not compatible. It may be from an older build or manually edited.",
+      "unexpected": "Sync failed: {{detail}}",
+      "pulled": "Remote settings applied.",
+      "pushed": "Local settings uploaded.",
+      "conflict": "Remote and local changes conflict.",
+      "remoteApplied": "Remote settings applied.",
+      "localUploaded": "Local settings uploaded.",
+      "disconnected": "Sync disconnected on this device.",
+      "network": {
+        "proxyFailed": "Network proxy connection failed. Check your VPN or system proxy and try again.",
+        "offline": "Network is offline. Connect to the internet and try again.",
+        "dnsFailed": "Could not resolve GitHub. Check DNS, proxy, or network settings.",
+        "timeout": "Connection to GitHub timed out. Try again later or check your proxy.",
+        "refused": "Connection was refused. Check your system proxy or firewall.",
+        "certificate": "HTTPS certificate validation failed. Check proxy certificates or system time.",
+        "generic": "Network request failed. Check GitHub access, VPN, or system proxy and try again."
+      },
+      "login": {
+        "pending": "Waiting for GitHub authorization…",
+        "slow_down": "GitHub asked us to slow down polling.",
+        "expired": "The GitHub device code expired.",
+        "denied": "GitHub authorization was denied."
+      }
+    }
+  },
   "appLauncher": {
     "feature": {
       "title": "App Launcher",
@@ -64,7 +136,13 @@
       "enable": "Show desktop floating ball",
       "enableHint": "Disabled by default at startup until you turn it on here.",
       "menuFeatures": "Radial menu tools",
-      "menuFeaturesHint": "Choose up to 6 tools. The floating ball itself is not a menu tool."
+      "menuFeaturesHint": "Choose up to 6 tools or plugin commands. The floating ball itself is not a menu tool.",
+      "addFeature": "Add a tool or plugin command",
+      "searchPlaceholder": "Search tools and plugin commands…",
+      "emptyOptions": "No matching tools or plugin commands.",
+      "builtinFeature": "Built-in tool",
+      "unavailableFeature": "Unavailable plugin command",
+      "removeFeature": "Remove {{name}}"
     }
   },
   "plugins": {
@@ -92,6 +170,7 @@
       "dev": "Development"
     },
     "meta": {
+      "id": "Plugin ID",
       "version": "Version",
       "author": "Author",
       "commands": "Commands",
@@ -107,7 +186,10 @@
     "preferences": {
       "title": "Preferences",
       "body": "Changes are saved to the plugin preference store.",
-      "invalidNumber": "Please enter a valid number."
+      "invalidNumber": "Please enter a valid number.",
+      "capture": "Capture",
+      "capturing": "Press keys...",
+      "shortcutPlaceholder": "Control+Super+C"
     },
     "toasts": {
       "enabled": "Plugin enabled.",
@@ -141,6 +223,15 @@
       "install": "Available",
       "installed": "Installed",
       "reinstall": "Installed"
+    },
+    "details": {
+      "back": "Back to marketplace",
+      "version": "Version",
+      "author": "Author",
+      "engine": "DesKit engine",
+      "homepage": "Homepage",
+      "categories": "Categories",
+      "openHomepage": "Open homepage"
     },
     "category": {
       "all": "All",

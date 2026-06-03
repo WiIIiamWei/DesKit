@@ -2,6 +2,7 @@ import type { UserSettings } from "./settings/settings"
 import * as path from "node:path"
 import process from "node:process"
 import { BrowserWindow, Menu, screen } from "electron"
+import { defaultAppIcon } from "./app-icon"
 import { attachWindowSecurity } from "./window-security"
 
 const MENU_SIZE = process.platform === "darwin" ? 320 : 240
@@ -41,6 +42,7 @@ export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserW
     alwaysOnTop: true,
     title: "DesKit Floating Ball",
     backgroundColor: "#00000000",
+    icon: defaultAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
