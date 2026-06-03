@@ -113,6 +113,7 @@ export function getPinnedImageDataUrl(sender: WebContents): string | null {
 }
 
 export function closePinnedImageWindow(sender: WebContents): void {
+  if (!pinnedImages.has(sender.id)) return
   BrowserWindow.fromWebContents(sender)?.close()
 }
 

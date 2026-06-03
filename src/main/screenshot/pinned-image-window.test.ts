@@ -5,6 +5,7 @@ import * as path from "node:path"
 import { BrowserWindow } from "electron"
 import { beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  closePinnedImageWindow,
   createPinnedImageState,
   createPinnedImageWindow,
   normalizePinnedImageOpacity,
@@ -54,6 +55,14 @@ describe("pinned image window", () => {
 
     expect(() => win.emit("closed")).not.toThrow()
     expect(BrowserWindow).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not close windows that are not registered pinned images", () => {
+    const win = new BrowserWindow() as BrowserWindowMock
+
+    closePinnedImageWindow(win.webContents)
+
+    expect(win.close).not.toHaveBeenCalled()
   })
 
   it("can remove host-owned pinned image files when the window closes", async () => {
