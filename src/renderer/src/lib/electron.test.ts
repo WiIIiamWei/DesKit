@@ -6,6 +6,7 @@ import {
   configureSyncPassphrase,
   disconnectSync,
   disposePluginCommand,
+  finishFloatingBallDrag,
   getPlugin,
   getSettings,
   getSyncStatus,
@@ -21,6 +22,7 @@ import {
   listMarketplacePlugins,
   listPlugins,
   moveFloatingBallBy,
+  moveFloatingBallDrag,
   notifyLauncherReady,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
@@ -42,6 +44,7 @@ import {
   searchPluginCommands,
   setPluginEnabled,
   setPluginPreference,
+  startFloatingBallDrag,
   startGitHubLogin,
   toggleFloatingBallMenu,
   uninstallPlugin,
@@ -65,6 +68,9 @@ function mockApi() {
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
+    startFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
+    moveFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
+    finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
     listPlugins: vi.fn().mockResolvedValue(ok([])),
@@ -229,6 +235,24 @@ describe("lib/electron", () => {
       const api = mockApi()
       await toggleFloatingBallMenu()
       expect(api.toggleFloatingBallMenu).toHaveBeenCalled()
+    })
+
+    it("startFloatingBallDrag calls startFloatingBallDrag", async () => {
+      const api = mockApi()
+      await startFloatingBallDrag()
+      expect(api.startFloatingBallDrag).toHaveBeenCalled()
+    })
+
+    it("moveFloatingBallDrag calls moveFloatingBallDrag", async () => {
+      const api = mockApi()
+      await moveFloatingBallDrag()
+      expect(api.moveFloatingBallDrag).toHaveBeenCalled()
+    })
+
+    it("finishFloatingBallDrag calls finishFloatingBallDrag", async () => {
+      const api = mockApi()
+      await finishFloatingBallDrag()
+      expect(api.finishFloatingBallDrag).toHaveBeenCalled()
     })
 
     it("moveFloatingBallBy forwards delta", async () => {

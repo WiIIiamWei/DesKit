@@ -93,6 +93,18 @@ export async function toggleFloatingBallMenu(): Promise<void> {
   await api().toggleFloatingBallMenu()
 }
 
+export async function startFloatingBallDrag(): Promise<void> {
+  await api().startFloatingBallDrag()
+}
+
+export async function moveFloatingBallDrag(): Promise<void> {
+  await api().moveFloatingBallDrag()
+}
+
+export async function finishFloatingBallDrag(): Promise<void> {
+  await api().finishFloatingBallDrag()
+}
+
 export async function moveFloatingBallBy(delta: { x: number; y: number }): Promise<void> {
   await api().moveFloatingBallBy(delta)
 }

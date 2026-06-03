@@ -81,6 +81,9 @@ const electronAPI = {
   openFloatingBallFeature: (feature: FloatingBallFeature) =>
     ipcRenderer.invoke("floating-ball:open-feature", feature),
   toggleFloatingBallMenu: () => ipcRenderer.invoke("floating-ball:toggle-menu"),
+  startFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-start"),
+  moveFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-move"),
+  finishFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-end"),
   moveFloatingBallBy: (delta: { x: number; y: number }) =>
     ipcRenderer.invoke("floating-ball:move-by", delta),
   hideFloatingBall: () => ipcRenderer.invoke("floating-ball:hide"),
