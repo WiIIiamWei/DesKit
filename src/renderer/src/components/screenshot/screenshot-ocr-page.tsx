@@ -72,16 +72,19 @@ export function ScreenshotOcrPage() {
 
   return (
     <div className="grid h-screen grid-cols-[minmax(0,1fr)_minmax(320px,420px)] overflow-hidden bg-background text-foreground">
-      <div className="flex min-w-0 items-center justify-center bg-muted/35 p-4">
-        {state?.imageDataUrl ? (
-          <img
-            src={state.imageDataUrl}
-            alt="截图预览"
-            className="max-h-full max-w-full rounded border object-contain shadow-sm"
-          />
-        ) : (
-          <div className="text-sm text-muted-foreground">{t("screenshot.ocr.loading")}</div>
-        )}
+      <div className="flex min-h-0 min-w-0 bg-muted/35 p-4">
+        <div className="flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-hidden rounded border bg-background/20 shadow-sm">
+          {state?.imageDataUrl ? (
+            <img
+              src={state.imageDataUrl}
+              alt="截图预览"
+              draggable={false}
+              className="h-full w-full select-none object-contain"
+            />
+          ) : (
+            <div className="text-sm text-muted-foreground">{t("screenshot.ocr.loading")}</div>
+          )}
+        </div>
       </div>
       <div className="flex min-w-0 flex-col border-l bg-background">
         <header className="flex h-12 shrink-0 items-center justify-between border-b px-3">
