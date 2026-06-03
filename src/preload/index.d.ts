@@ -89,6 +89,7 @@ declare global {
         height?: number
         name?: string
       }
+    | { type: "file"; paths: string[] }
   type DeskitPluginSourceKind = "builtin" | "user" | "dev"
   type DeskitPluginRuntimeStatus = "active" | "disabled" | "invalid" | "crashed" | "shadowed"
   type DeskitPluginCommandMode = "view" | "no-view"
