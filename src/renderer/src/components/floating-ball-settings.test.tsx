@@ -13,8 +13,13 @@ type TestElectronApi = NonNullable<Window["electronAPI"]>
 type SettingsChangedHandler = (settings: DeskitUserSettings) => void
 
 function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSettings {
+  const hotkeys = overrides.hotkeys ?? {
+    launcher: overrides.hotkey ?? "Control+Space",
+    screenshot: "Control+Shift+A",
+  }
   return {
-    hotkey: "Control+Space",
+    hotkey: overrides.hotkey ?? hotkeys.launcher,
+    hotkeys,
     themeMode: "system",
     accent: "neutral",
     floatingBallEnabled: false,

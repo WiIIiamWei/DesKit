@@ -32,6 +32,12 @@ export function createElectronPluginAdapters(userDataDir: string): PluginBridgeA
         if (error) throw new Error(error)
       },
       captureScreen: async (pluginId, options) => captureScreen(userDataDir, pluginId, options),
+      captureRegion: async () => {
+        throw new Error("Region capture is not available in this host")
+      },
+      pinImage: async () => {
+        throw new Error("Image pinning is not available in this host")
+      },
     },
   }
 }

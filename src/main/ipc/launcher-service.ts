@@ -1,5 +1,5 @@
 import type { AppEntry, SearchResult } from "../launcher/types"
-import type { UserSettings } from "../settings/settings"
+import type { UserSettings, UserSettingsPatch } from "../settings/settings"
 import { app } from "electron"
 import { AppCache } from "../launcher/app-cache"
 import { launchApp } from "../launcher/launch-app"
@@ -31,8 +31,15 @@ export class LauncherService {
     return this.settings
   }
 
-  async updateSettings(patch: Partial<UserSettings>): Promise<UserSettings> {
-    const next = normalizeSettings({ ...this.settings, ...patch })
+  async updateSettings(patch: UserSettingsPatch): Promise<UserSettings> {
+    const next = normalizeSettings({
+      ...this.settings,
+      ...patch,
+      hotkeys: {
+        ...this.settings.hotkeys,
+        ...patch.hotkeys,
+      },
+    })
     this.settings = next
     if (this.settingsPath) await saveSettings(this.settingsPath, next)
     return next

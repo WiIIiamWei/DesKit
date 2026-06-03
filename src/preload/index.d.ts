@@ -6,7 +6,7 @@ export {}
 
 declare global {
   type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
-  type DeskitFloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
+  type DeskitFloatingBallFeature = "appLauncher" | "screenshot" | `plugin:${string}:${string}`
 
   interface LauncherAppEntry {
     id: string
@@ -27,8 +27,14 @@ declare global {
   type DeskitThemeMode = "light" | "dark" | "system"
   type DeskitThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
 
+  interface DeskitHotkeySettings {
+    launcher: string
+    screenshot: string
+  }
+
   interface DeskitUserSettings {
     hotkey: string
+    hotkeys: DeskitHotkeySettings
     themeMode: DeskitThemeMode
     accent: DeskitThemeAccent
     floatingBallEnabled: boolean
@@ -71,6 +77,7 @@ declare global {
     | { status: "empty" | "created" | "updated" | "applied" }
     | { status: "conflict"; conflict: DeskitSyncConflict }
 
+  type DeskitScreenshotAction = "copy" | "save" | "pin" | "annotate"
   type DeskitLocalizedString = string | Record<string, string>
   type DeskitClipboardContent =
     | { type: "text"; text: string }
@@ -221,6 +228,22 @@ declare global {
       applyRemoteSync: () => Promise<DeskitSyncStatus>
       applyLocalSync: (passphrase?: string) => Promise<DeskitSyncRunResult>
       disconnectSync: () => Promise<DeskitSyncStatus>
+      completeScreenshotSelection: (
+        selection: { x: number; y: number; width: number; height: number },
+        action: DeskitScreenshotAction
+      ) => void
+      cancelScreenshotSelection: () => void
+      getScreenshotAnnotationImage: () => Promise<string | null>
+      completeScreenshotAnnotation: (
+        dataUrl: string,
+        action: Exclude<DeskitScreenshotAction, "annotate">
+      ) => void
+      cancelScreenshotAnnotation: () => void
+      getPinnedImageData: () => Promise<string | null>
+      copyPinnedImage: () => Promise<void>
+      savePinnedImage: () => Promise<void>
+      setPinnedImageOpacity: (opacity: number) => Promise<void>
+      closePinnedImage: () => void
       listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
       getPlugin: (
         pluginId: string

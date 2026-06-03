@@ -1,4 +1,4 @@
-import { Check, ChevronsUpDown, CircleDot, Plus, Search, X } from "lucide-react"
+import { Check, ChevronsUpDown, CircleDot, Plus, ScanLine, Search, X } from "lucide-react"
 import { useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { PluginIcon } from "@/components/plugins/plugin-icon"
@@ -27,6 +27,7 @@ import {
 
 const MAX_FLOATING_BALL_FEATURES = 6
 const APP_LAUNCHER_FEATURE = "appLauncher"
+const SCREENSHOT_FEATURE = "screenshot"
 
 interface FloatingBallOption {
   id: DeskitFloatingBallFeature
@@ -40,7 +41,10 @@ interface FloatingBallOption {
 export function FloatingBallSettings() {
   const { t, i18n } = useTranslation()
   const [enabled, setEnabled] = useState(false)
-  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([APP_LAUNCHER_FEATURE])
+  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([
+    APP_LAUNCHER_FEATURE,
+    SCREENSHOT_FEATURE,
+  ])
   const [plugins, setPlugins] = useState<DeskitPluginRegistryEntry[]>([])
   const [pickerOpen, setPickerOpen] = useState(false)
 
@@ -245,7 +249,8 @@ function FloatingBallFeaturePicker({
 
 function FeatureIcon({ option }: { option: FloatingBallOption }) {
   if (option.kind === "builtin") {
-    return <Search className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+    const Icon = option.id === SCREENSHOT_FEATURE ? ScanLine : Search
+    return <Icon className="size-4 shrink-0 text-muted-foreground" aria-hidden />
   }
   return (
     <PluginIcon
@@ -265,6 +270,12 @@ function floatingBallOptions(
     {
       id: APP_LAUNCHER_FEATURE,
       title: t("floatingBall.features.appLauncher"),
+      subtitle: t("floatingBall.settings.builtinFeature"),
+      kind: "builtin",
+    },
+    {
+      id: SCREENSHOT_FEATURE,
+      title: t("floatingBall.features.screenshot"),
       subtitle: t("floatingBall.settings.builtinFeature"),
       kind: "builtin",
     },
@@ -289,11 +300,11 @@ function fallbackOption(
   feature: DeskitFloatingBallFeature,
   t: (key: string, options?: Record<string, unknown>) => string
 ): FloatingBallOption {
-  if (feature === APP_LAUNCHER_FEATURE) {
+  if (feature === APP_LAUNCHER_FEATURE || feature === SCREENSHOT_FEATURE) {
     return {
       id: feature,
       icon: undefined,
-      title: t("floatingBall.features.appLauncher"),
+      title: t(`floatingBall.features.${feature}`),
       subtitle: t("floatingBall.settings.builtinFeature"),
       kind: "builtin",
     }

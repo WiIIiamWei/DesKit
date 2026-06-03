@@ -1,5 +1,12 @@
 import type { ClipboardContent } from "./clipboard"
 
+export interface CaptureRegionResult {
+  imagePath: string
+  width: number
+  height: number
+  displayId: string
+}
+
 /**
  * Per-plugin key/value store. Backed by `userData/plugin-data/<pluginId>.json`
  * with throttled atomic writes (250ms batch) on the host. Values must be
@@ -78,6 +85,10 @@ export interface SystemAPI {
     /** Optional filename (without extension). Default = ISO timestamp. */
     name?: string
   }) => Promise<{ path: string }>
+  /** Opens DesKit's trusted region-capture overlay and returns a PNG path, or null if cancelled. */
+  captureRegion: () => Promise<CaptureRegionResult | null>
+  /** Pins an image as a temporary always-on-top desktop reference window. */
+  pinImage: (imagePath: string) => Promise<void>
 }
 
 /**

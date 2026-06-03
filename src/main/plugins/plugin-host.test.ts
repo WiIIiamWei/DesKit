@@ -39,6 +39,8 @@ const noopAdapters = {
     openUrl: async () => {},
     openPath: async () => {},
     captureScreen: async () => ({ path: "" }),
+    captureRegion: async () => null,
+    pinImage: async () => {},
   },
 }
 

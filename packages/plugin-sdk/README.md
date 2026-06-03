@@ -47,3 +47,20 @@ simple commands, while clipboard-history plugins should use `read` / `write` /
 Plugins that need HTTP(S) integrations can use `ctx.network.request` after
 declaring `network:http`. The host returns text responses across the sandbox
 boundary, which is suitable for JSON APIs and WebDAV-style sync documents.
+
+## Screenshot Host APIs
+
+Official screenshot-style plugins should use host APIs for capture and pinning
+instead of creating windows or rendering their own DOM. Region capture requires
+`system:capture-screen`; pinning requires `system:pin-image`.
+
+```ts
+const capture = await ctx.system.captureRegion()
+if (capture) {
+  await ctx.system.pinImage(capture.imagePath)
+}
+```
+
+`captureRegion()` opens DesKit's trusted region-selection overlay and returns a
+PNG path, dimensions, and display id. `pinImage()` creates a temporary
+always-on-top image window managed by the host.

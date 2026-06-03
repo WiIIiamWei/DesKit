@@ -37,6 +37,7 @@ export type {
 } from "./commands"
 
 export type {
+  CaptureRegionResult,
   ClipboardAPI,
   NetworkAPI,
   NetworkRequestOptions,
