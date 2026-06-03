@@ -216,9 +216,10 @@ function clamp(value: number, min: number, max: number): number {
 function showFloatingBallContextMenu(): void {
   const deps = currentDeps
   if (!deps) return
+  const s = floatingBallStrings(deps.getLocale())
   Menu.buildFromTemplate([
     {
-      label: getCloseLabel(deps.getLocale()),
+      label: s.close,
       click: () => {
         hideFloatingBallWindow()
         deps.onDisable()
@@ -227,6 +228,21 @@ function showFloatingBallContextMenu(): void {
   ]).popup({ window: getFloatingBallWindow() ?? undefined })
 }
 
-function getCloseLabel(locale: string): string {
-  return locale.toLowerCase().startsWith("zh") ? "关闭桌面悬浮球" : "Close Floating Ball"
+interface FloatingBallStrings {
+  close: string
+}
+
+function floatingBallStrings(locale: string): FloatingBallStrings {
+  if (isChinese(locale)) {
+    return {
+      close: "关闭桌面悬浮球",
+    }
+  }
+  return {
+    close: "Close Floating Ball",
+  }
+}
+
+function isChinese(locale: string): boolean {
+  return locale.toLowerCase().startsWith("zh")
 }

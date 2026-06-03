@@ -1,6 +1,7 @@
 import type { BrowserWindow as ElectronBrowserWindow } from "electron"
 import type { Mock } from "vitest"
 import type { FloatingBallWindowDeps } from "./floating-ball-window"
+import process from "node:process"
 import { BrowserWindow, screen } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
@@ -15,6 +16,8 @@ type MockBrowserWindow = ElectronBrowserWindow & {
   getBounds: Mock
   setBounds: Mock
 }
+
+const MENU_SIZE = process.platform === "darwin" ? 320 : 240
 
 const deps: FloatingBallWindowDeps = {
   rendererDevUrl: undefined,
@@ -70,8 +73,8 @@ describe("floating ball window dragging", () => {
     expect(win.setBounds).toHaveBeenLastCalledWith({
       x: 1070,
       y: 440,
-      width: 240,
-      height: 240,
+      width: MENU_SIZE,
+      height: MENU_SIZE,
     })
   })
 
