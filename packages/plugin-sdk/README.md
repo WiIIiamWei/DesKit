@@ -36,10 +36,14 @@ export = plugin
 
 P0 scope is type-first: the package defines the plugin contract, command
 handlers, declarative views, actions, and host-provided runtime APIs. Runtime
-APIs (storage, clipboard, notifications, system, runtime) are provided by the
+APIs (storage, clipboard, network, notifications, system, runtime) are provided by the
 host through a bridge that conforms to the same interfaces.
 
 Clipboard APIs support text, image, and file-list payloads through
 `ClipboardContent`. The text-only helpers (`readText` / `writeText`) remain for
 simple commands, while clipboard-history plugins should use `read` / `write` /
 `watch` so P0 can cover all required clipboard entry types.
+
+Plugins that need HTTP(S) integrations can use `ctx.network.request` after
+declaring `network:http`. The host returns text responses across the sandbox
+boundary, which is suitable for JSON APIs and WebDAV-style sync documents.

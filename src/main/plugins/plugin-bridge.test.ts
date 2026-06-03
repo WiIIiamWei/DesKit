@@ -112,6 +112,75 @@ describe("pluginBridge", () => {
 
     expect(listener).toHaveBeenCalledWith({ type: "text", text: "hello" })
   })
+
+  it("routes network requests through the adapter when permitted", async () => {
+    const request = vi.fn(async () => ({
+      url: "https://example.test/sync.json",
+      status: 200,
+      statusText: "OK",
+      ok: true,
+      headers: { "content-type": "application/json" },
+      body: "{}",
+    }))
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters({ network: { request } }),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["network:http"] })
+    )
+
+    await expect(
+      pluginCtx.network.request("https://example.test/sync.json", {
+        method: "put",
+        headers: { Authorization: "Basic token" },
+        body: "{}",
+        timeoutMs: 120_000,
+      })
+    ).resolves.toMatchObject({ ok: true, body: "{}" })
+
+    expect(request).toHaveBeenCalledWith("https://example.test/sync.json", {
+      method: "PUT",
+      headers: { Authorization: "Basic token" },
+      body: "{}",
+      timeoutMs: 60_000,
+    })
+  })
+
+  it("denies plugin network requests without permission", async () => {
+    const request = vi.fn()
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters({ network: { request } }),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext("com.deskit.test", manifest({ permissions: [] }))
+
+    await expect(pluginCtx.network.request("https://example.test")).rejects.toBeInstanceOf(
+      PermissionDenied
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
+
+  it("rejects non-http plugin network URLs", async () => {
+    const request = vi.fn()
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters({ network: { request } }),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["network:http"] })
+    )
+
+    await expect(pluginCtx.network.request("file:///etc/passwd")).rejects.toThrow(
+      "Only http(s) URLs can be requested"
+    )
+    expect(request).not.toHaveBeenCalled()
+  })
 })
 
 function manifest(overrides: Partial<PluginManifest> = {}): PluginManifest {
@@ -137,6 +206,16 @@ function adapters(overrides: Partial<PluginBridgeAdapters> = {}): PluginBridgeAd
       write: async () => {},
     },
     notifications: { show: async () => {} },
+    network: {
+      request: async (url) => ({
+        url,
+        status: 200,
+        statusText: "OK",
+        ok: true,
+        headers: {},
+        body: "",
+      }),
+    },
     system: {
       openUrl: async () => {},
       openPath: async () => {},

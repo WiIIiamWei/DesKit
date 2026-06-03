@@ -169,6 +169,16 @@ function sandboxForTest(invokeTimeoutMs = 100, loadTimeoutMs = 100): PluginSandb
     adapters: {
       clipboard: { read: async () => undefined, write: async () => {} },
       notifications: { show: async () => {} },
+      network: {
+        request: async (url) => ({
+          url,
+          status: 200,
+          statusText: "OK",
+          ok: true,
+          headers: {},
+          body: "",
+        }),
+      },
       system: {
         openUrl: async () => {},
         openPath: async () => {},

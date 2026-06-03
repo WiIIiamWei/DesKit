@@ -20,7 +20,7 @@ export interface StorageAPI {
 export interface ClipboardAPI {
   /**
    * Reads the richest clipboard payload the host can currently represent.
-   * P0 currently supports text and image clipboard entries.
+   * P0 supports text, image, and file-list clipboard entries.
    */
   read: () => Promise<ClipboardContent | undefined>
   write: (content: ClipboardContent) => Promise<void>
@@ -37,6 +37,31 @@ export interface ClipboardAPI {
 
 export interface NotificationAPI {
   show: (options: { title: string; body?: string; silent?: boolean }) => Promise<void>
+}
+
+export interface NetworkRequestOptions {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+  timeoutMs?: number
+}
+
+export interface NetworkResponse {
+  url: string
+  status: number
+  statusText: string
+  ok: boolean
+  headers: Record<string, string>
+  body: string
+}
+
+/**
+ * HTTP(S) client for plugin-managed integrations. Requires `network:http`.
+ * The host returns a text body instead of exposing streaming Response objects
+ * across the sandbox boundary.
+ */
+export interface NetworkAPI {
+  request: (url: string, options?: NetworkRequestOptions) => Promise<NetworkResponse>
 }
 
 export interface SystemAPI {
@@ -78,6 +103,7 @@ export interface PluginContext {
 
   storage: StorageAPI
   clipboard: ClipboardAPI
+  network: NetworkAPI
   notifications: NotificationAPI
   system: SystemAPI
 

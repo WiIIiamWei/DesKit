@@ -2,11 +2,10 @@
  * Clipboard payloads supported by the DesKit host.
  *
  * The shape is intentionally JSON-serialisable so clipboard-history plugins
- * can persist entries in `StorageAPI` without special codecs. P0 supports text
- * and image payloads; file clipboard entries are intentionally excluded for now
- * because recording them can be expensive.
+ * can persist entries in `StorageAPI` without special codecs. P0 supports text,
+ * image, and file-list payloads.
  */
-export type ClipboardContent = ClipboardTextContent | ClipboardImageContent
+export type ClipboardContent = ClipboardTextContent | ClipboardImageContent | ClipboardFileContent
 
 export interface ClipboardTextContent {
   type: "text"
@@ -21,6 +20,11 @@ export interface ClipboardImageContent {
   width?: number
   height?: number
   name?: string
+}
+
+export interface ClipboardFileContent {
+  type: "file"
+  paths: string[]
 }
 
 export type ClipboardActionValue = string | ClipboardContent

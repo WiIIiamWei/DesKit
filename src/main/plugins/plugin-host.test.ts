@@ -25,6 +25,16 @@ afterEach(async () => {
 const noopAdapters = {
   clipboard: { read: async () => undefined, write: async () => {} },
   notifications: { show: async () => {} },
+  network: {
+    request: async (url: string) => ({
+      url,
+      status: 200,
+      statusText: "OK",
+      ok: true,
+      headers: {},
+      body: "",
+    }),
+  },
   system: {
     openUrl: async () => {},
     openPath: async () => {},

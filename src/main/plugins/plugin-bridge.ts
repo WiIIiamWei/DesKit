@@ -1,5 +1,7 @@
 import type {
   ClipboardContent,
+  NetworkAPI,
+  NetworkRequestOptions,
   NotificationAPI,
   PluginContext,
   StorageAPI,
@@ -29,6 +31,10 @@ export interface NotificationAdapter {
   show: NotificationAPI["show"]
 }
 
+export interface NetworkAdapter {
+  request: NetworkAPI["request"]
+}
+
 export interface SystemAdapter {
   openUrl: SystemAPI["openUrl"]
   openPath: SystemAPI["openPath"]
@@ -38,6 +44,7 @@ export interface SystemAdapter {
 export interface PluginBridgeAdapters {
   clipboard: ClipboardAdapter
   notifications: NotificationAdapter
+  network: NetworkAdapter
   system: SystemAdapter
 }
 
@@ -112,6 +119,15 @@ export class PluginBridge {
         show: async (options) => {
           gate.check("notification")
           await this.options.adapters.notifications.show(options)
+        },
+      },
+      network: {
+        request: async (url, options) => {
+          gate.check("network:http")
+          return this.options.adapters.network.request(
+            normalizeHttpUrl(url),
+            normalizeNetworkRequestOptions(options)
+          )
         },
       },
       system: {
@@ -289,6 +305,41 @@ function preferencesFromManifest(manifest: PluginManifest): Record<string, unkno
 
 function safePluginFileName(pluginId: string): string {
   return pluginId.replace(/[^\w.-]/g, "_")
+}
+
+function normalizeHttpUrl(url: string): string {
+  const parsed = new URL(url)
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Only http(s) URLs can be requested by plugins")
+  }
+  return parsed.toString()
+}
+
+function normalizeNetworkRequestOptions(options?: NetworkRequestOptions): NetworkRequestOptions {
+  const method = typeof options?.method === "string" ? options.method.toUpperCase() : "GET"
+  const headers = normalizeNetworkHeaders(options?.headers)
+  const body = typeof options?.body === "string" ? options.body : undefined
+  const timeoutMs = normalizeTimeoutMs(options?.timeoutMs)
+  return {
+    method,
+    ...(Object.keys(headers).length > 0 ? { headers } : {}),
+    ...(body !== undefined ? { body } : {}),
+    ...(timeoutMs !== undefined ? { timeoutMs } : {}),
+  }
+}
+
+function normalizeNetworkHeaders(headers: unknown): Record<string, string> {
+  if (!headers || typeof headers !== "object" || Array.isArray(headers)) return {}
+  const normalized: Record<string, string> = {}
+  for (const [key, value] of Object.entries(headers)) {
+    if (typeof value === "string") normalized[key] = value
+  }
+  return normalized
+}
+
+function normalizeTimeoutMs(timeoutMs: unknown): number | undefined {
+  if (typeof timeoutMs !== "number" || !Number.isFinite(timeoutMs) || timeoutMs <= 0) return undefined
+  return Math.min(timeoutMs, 60_000)
 }
 
 function isFileNotFound(err: unknown): boolean {

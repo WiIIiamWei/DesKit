@@ -23,6 +23,7 @@ export type {
 export type {
   ClipboardActionValue,
   ClipboardContent,
+  ClipboardFileContent,
   ClipboardImageContent,
   ClipboardTextContent,
 } from "./clipboard"
@@ -35,7 +36,16 @@ export type {
   PluginModule,
 } from "./commands"
 
-export type { ClipboardAPI, NotificationAPI, PluginContext, StorageAPI, SystemAPI } from "./context"
+export type {
+  ClipboardAPI,
+  NetworkAPI,
+  NetworkRequestOptions,
+  NetworkResponse,
+  NotificationAPI,
+  PluginContext,
+  StorageAPI,
+  SystemAPI,
+} from "./context"
 
 export type { LocalizedString } from "./locales"
 
