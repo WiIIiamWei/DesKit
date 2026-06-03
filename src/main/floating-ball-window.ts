@@ -21,6 +21,7 @@ export interface FloatingBallWindowDeps {
 let floatingBallWindow: BrowserWindow | null = null
 let currentDeps: FloatingBallWindowDeps | null = null
 let menuExpanded = false
+let dragState: { cursor: Electron.Point; bounds: Electron.Rectangle } | null = null
 
 export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserWindow {
   currentDeps = deps
@@ -84,6 +85,7 @@ export function showFloatingBallWindow(deps: FloatingBallWindowDeps): void {
 export function hideFloatingBallWindow(): void {
   const win = getFloatingBallWindow()
   if (!win) return
+  finishFloatingBallDrag()
   collapseFloatingBallMenu()
   win.hide()
 }
@@ -92,6 +94,7 @@ export function destroyFloatingBallWindow(): void {
   const win = getFloatingBallWindow()
   floatingBallWindow = null
   currentDeps = null
+  finishFloatingBallDrag()
   if (win) win.destroy()
 }
 
@@ -123,6 +126,32 @@ export function openFloatingBallFeature(
   collapseFloatingBallMenu()
 }
 
+export function startFloatingBallDrag(): void {
+  const win = getFloatingBallWindow()
+  if (!win) return
+  dragState = {
+    cursor: screen.getCursorScreenPoint(),
+    bounds: fixedSizeBounds(win.getBounds()),
+  }
+}
+
+export function moveFloatingBallDrag(): void {
+  const win = getFloatingBallWindow()
+  if (!win || !dragState) return
+  const cursor = screen.getCursorScreenPoint()
+  const next = {
+    x: dragState.bounds.x + cursor.x - dragState.cursor.x,
+    y: dragState.bounds.y + cursor.y - dragState.cursor.y,
+    width: MENU_SIZE,
+    height: MENU_SIZE,
+  }
+  win.setBounds(clampBounds(next, screen.getDisplayMatching(next).workArea))
+}
+
+export function finishFloatingBallDrag(): void {
+  dragState = null
+}
+
 export function moveFloatingBallBy(delta: { x: number; y: number }): void {
   const win = getFloatingBallWindow()
   if (!win) return
@@ -130,8 +159,8 @@ export function moveFloatingBallBy(delta: { x: number; y: number }): void {
   const next = {
     x: bounds.x + Math.round(delta.x),
     y: bounds.y + Math.round(delta.y),
-    width: bounds.width,
-    height: bounds.height,
+    width: MENU_SIZE,
+    height: MENU_SIZE,
   }
   win.setBounds(clampBounds(next, screen.getDisplayMatching(next).workArea))
 }
@@ -161,6 +190,15 @@ function moveFloatingBallToDefaultPosition(win: BrowserWindow): void {
     width: MENU_SIZE,
     height: MENU_SIZE,
   })
+}
+
+function fixedSizeBounds(bounds: Electron.Rectangle): Electron.Rectangle {
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: MENU_SIZE,
+    height: MENU_SIZE,
+  }
 }
 
 function clampBounds(bounds: Electron.Rectangle, workArea: Electron.Rectangle): Electron.Rectangle {

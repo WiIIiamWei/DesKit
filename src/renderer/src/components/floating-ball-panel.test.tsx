@@ -44,6 +44,9 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
     listPlugins: vi.fn().mockResolvedValue({ ok: true, data: [] }),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
+    startFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
+    moveFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
+    finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     onFloatingBallMenuState: vi.fn((handler: MenuStateHandler) => {
       menuStateHandler = handler
