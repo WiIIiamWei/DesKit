@@ -5,6 +5,7 @@ export type PluginPermission =
   | "clipboard:read"
   | "clipboard:write"
   | "network:http"
+  | "sync:plugin"
   | "notification"
   | "system:open-url"
   | "system:open-path"

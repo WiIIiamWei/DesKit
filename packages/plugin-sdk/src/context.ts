@@ -71,6 +71,25 @@ export interface NetworkAPI {
   request: (url: string, options?: NetworkRequestOptions) => Promise<NetworkResponse>
 }
 
+export interface PluginSyncStatus {
+  enabled: boolean
+  available: boolean
+  lastSyncedAt?: string
+  lastRemoteUpdatedAt?: string
+  lastLocalUpdatedAt?: string
+}
+
+/**
+ * Small per-plugin data sync surface backed by DesKit's encrypted settings
+ * sync Gist. Requires `sync:plugin`.
+ */
+export interface PluginSyncAPI {
+  status: () => Promise<PluginSyncStatus>
+  get: <T = unknown>(key: string) => Promise<T | undefined>
+  set: <T = unknown>(key: string, value: T) => Promise<void>
+  delete: (key: string) => Promise<void>
+}
+
 export interface SystemAPI {
   /** Opens the URL in the user's default browser. Only `http(s)` is honoured. */
   openUrl: (url: string) => Promise<void>
@@ -115,6 +134,7 @@ export interface PluginContext {
   storage: StorageAPI
   clipboard: ClipboardAPI
   network: NetworkAPI
+  sync: PluginSyncAPI
   notifications: NotificationAPI
   system: SystemAPI
 
