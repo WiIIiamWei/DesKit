@@ -1,4 +1,4 @@
-import { act, cleanup, render, screen } from "@testing-library/react"
+import { act, cleanup, createEvent, fireEvent, render, screen } from "@testing-library/react"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import { TooltipProvider } from "@/components/ui/tooltip"
 import { FloatingBallPanel } from "./floating-ball-panel"
@@ -16,6 +16,7 @@ type FeaturesHandler = (features: DeskitFloatingBallFeature[]) => void
 type SettingsChangedHandler = (settings: DeskitUserSettings) => void
 
 interface FloatingBallHarness {
+  api: Partial<TestElectronApi>
   emitMenuState: MenuStateHandler
   emitFloatingBallFeatures: FeaturesHandler
   emitSettingsChanged: SettingsChangedHandler
@@ -71,6 +72,7 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
 
   window.electronAPI = api as unknown as TestElectronApi
   return {
+    api,
     emitMenuState: (expanded: boolean) => {
       act(() => menuStateHandler?.(expanded))
     },
@@ -89,6 +91,39 @@ function renderPanel() {
       <FloatingBallPanel />
     </TooltipProvider>
   )
+}
+
+function installPointerCapture(button: HTMLElement) {
+  let captured = false
+  const pointerCapture = {
+    setPointerCapture: vi.fn(() => {
+      captured = true
+    }),
+    hasPointerCapture: vi.fn(() => captured),
+    releasePointerCapture: vi.fn((pointerId: number) => {
+      captured = false
+      const event = createEvent.lostPointerCapture(button)
+      Object.defineProperty(event, "pointerId", { value: pointerId })
+      fireEvent(button, event)
+    }),
+  }
+  Object.assign(button, pointerCapture)
+  return pointerCapture
+}
+
+function firePointerEvent(
+  target: HTMLElement,
+  type: "pointerDown" | "pointerMove" | "pointerUp",
+  init: { button?: number; pointerId: number; screenX: number; screenY: number }
+) {
+  const event = createEvent[type](target)
+  Object.defineProperties(event, {
+    button: { value: init.button ?? 0 },
+    pointerId: { value: init.pointerId },
+    screenX: { value: init.screenX },
+    screenY: { value: init.screenY },
+  })
+  fireEvent(target, event)
 }
 
 describe("floating ball panel", () => {
@@ -115,5 +150,39 @@ describe("floating ball panel", () => {
     api.emitSettingsChanged(baseSettings(["appLauncher"]))
 
     expect(screen.getByRole("button", { name: "floatingBall.features.appLauncher" })).toBeVisible()
+  })
+
+  it("finishes a drag once when pointer up releases capture and suppresses the next click", () => {
+    const { api } = installElectronApi(baseSettings())
+    renderPanel()
+    const ball = screen.getByRole("button", { name: "floatingBall.title" })
+    const pointerCapture = installPointerCapture(ball)
+
+    firePointerEvent(ball, "pointerDown", { button: 0, pointerId: 1, screenX: 10, screenY: 10 })
+    firePointerEvent(ball, "pointerMove", { pointerId: 1, screenX: 20, screenY: 10 })
+    firePointerEvent(ball, "pointerUp", { pointerId: 1, screenX: 20, screenY: 10 })
+    fireEvent.click(ball)
+
+    expect(api.startFloatingBallDrag).toHaveBeenCalledTimes(1)
+    expect(api.moveFloatingBallDrag).toHaveBeenCalledTimes(1)
+    expect(api.finishFloatingBallDrag).toHaveBeenCalledTimes(1)
+    expect(api.toggleFloatingBallMenu).not.toHaveBeenCalled()
+    expect(pointerCapture.releasePointerCapture).toHaveBeenCalledTimes(1)
+  })
+
+  it("opens the floating ball menu after a click without dragging", () => {
+    const { api } = installElectronApi(baseSettings())
+    renderPanel()
+    const ball = screen.getByRole("button", { name: "floatingBall.title" })
+    installPointerCapture(ball)
+
+    firePointerEvent(ball, "pointerDown", { button: 0, pointerId: 1, screenX: 10, screenY: 10 })
+    firePointerEvent(ball, "pointerUp", { pointerId: 1, screenX: 10, screenY: 10 })
+    fireEvent.click(ball)
+
+    expect(api.startFloatingBallDrag).toHaveBeenCalledTimes(1)
+    expect(api.moveFloatingBallDrag).not.toHaveBeenCalled()
+    expect(api.finishFloatingBallDrag).toHaveBeenCalledTimes(1)
+    expect(api.toggleFloatingBallMenu).toHaveBeenCalledTimes(1)
   })
 })

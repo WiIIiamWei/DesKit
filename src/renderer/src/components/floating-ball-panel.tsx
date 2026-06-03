@@ -138,12 +138,13 @@ export function FloatingBallPanel() {
   function onPointerUp(event: PointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
+    const moved = drag.moved
+    dragRef.current = null
+    suppressNextClickRef.current = moved
+    void finishFloatingBallDrag()
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId)
     }
-    void finishFloatingBallDrag()
-    suppressNextClickRef.current = drag.moved
-    dragRef.current = null
   }
 
   function onBallClick() {
