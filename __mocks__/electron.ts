@@ -103,6 +103,14 @@ export const screen = {
     bounds: { x: 0, y: 0, width: 1440, height: 900 },
     workArea: { x: 0, y: 0, width: 1440, height: 900 },
   })),
+  getAllDisplays: vi.fn(() => [
+    {
+      id: 1,
+      scaleFactor: 1,
+      bounds: { x: 0, y: 0, width: 1440, height: 900 },
+      workArea: { x: 0, y: 0, width: 1440, height: 900 },
+    },
+  ]),
 }
 export const nativeImage = {
   createEmpty: vi.fn(() => ({ isEmpty: vi.fn(() => true) })),
