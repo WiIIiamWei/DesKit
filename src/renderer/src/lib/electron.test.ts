@@ -124,6 +124,10 @@ function mockApi() {
     savePinnedImage: vi.fn().mockResolvedValue(undefined),
     setPinnedImageOpacity: vi.fn().mockResolvedValue(undefined),
     closePinnedImage: vi.fn().mockResolvedValue(undefined),
+    getScreenshotOcrState: vi.fn().mockResolvedValue(null),
+    closeScreenshotOcrWindow: vi.fn().mockResolvedValue(undefined),
+    recaptureScreenshotOcr: vi.fn().mockResolvedValue(true),
+    onScreenshotOcrUpdated: vi.fn().mockReturnValue(() => {}),
     getSyncStatus: vi.fn().mockResolvedValue({
       configured: true,
       enabled: true,

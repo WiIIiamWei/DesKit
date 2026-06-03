@@ -31,7 +31,7 @@ interface Settings {
   floatingBallFeatures: FloatingBallFeature[]
 }
 
-type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
+type ScreenshotAction = "copy" | "save" | "pin" | "annotate" | "ocr"
 
 interface SyncStatus {
   configured: boolean
@@ -127,6 +127,13 @@ const electronAPI = {
   setPinnedImageOpacity: (opacity: number) =>
     ipcRenderer.invoke("pinned-image:set-opacity", opacity),
   closePinnedImage: () => ipcRenderer.send("pinned-image:close"),
+  getScreenshotOcrState: () => ipcRenderer.invoke("screenshot:ocr-state"),
+  closeScreenshotOcrWindow: () => ipcRenderer.send("screenshot:ocr-close"),
+  recaptureScreenshotOcr: () => ipcRenderer.invoke("screenshot:ocr-recapture"),
+  onScreenshotOcrUpdated: (handler: () => void) => {
+    ipcRenderer.on("screenshot:ocr-updated", handler)
+    return () => ipcRenderer.off("screenshot:ocr-updated", handler)
+  },
 
   // ---- Plugins ----
   listPlugins: () => ipcRenderer.invoke("plugin:list"),

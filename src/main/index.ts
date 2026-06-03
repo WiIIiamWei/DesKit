@@ -1,6 +1,7 @@
 import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { IpcMainInvokeEvent } from "electron"
 import type { PluginRegistryEntry } from "./plugins/types"
+import type { ScreenshotAction } from "./screenshot/types"
 import type { SearchWindowDeps } from "./search-window"
 import type { FloatingBallFeature, UserSettingsPatch } from "./settings/settings"
 import type {
@@ -57,6 +58,13 @@ import {
 } from "./screenshot/annotator-window"
 import { captureSelectionBitmap } from "./screenshot/capture-bitmap"
 import { captureRegion } from "./screenshot/capture-region"
+import {
+  closeScreenshotOcrWindow,
+  getScreenshotOcrState,
+  isScreenshotOcrWindow,
+  openScreenshotOcrWindow,
+  showScreenshotOcrMessage,
+} from "./screenshot/ocr-window"
 import {
   cancelScreenshotOverlay,
   completeScreenshotOverlay,
@@ -378,7 +386,13 @@ function registerIpc(): void {
     if (!selection || typeof selection !== "object") return
     const s = selection as Record<string, unknown>
     const action = value.action
-    if (action !== "copy" && action !== "save" && action !== "pin" && action !== "annotate") {
+    if (
+      action !== "copy" &&
+      action !== "save" &&
+      action !== "pin" &&
+      action !== "annotate" &&
+      action !== "ocr"
+    ) {
       return
     }
     if (
@@ -439,6 +453,24 @@ function registerIpc(): void {
 
   ipcMain.on("pinned-image:close", (event) => {
     closePinnedImageWindow(event.sender)
+  })
+
+  ipcMain.handle("screenshot:ocr-state", (event) => {
+    return getScreenshotOcrState(event.sender)
+  })
+
+  ipcMain.on("screenshot:ocr-close", (event) => {
+    closeScreenshotOcrWindow(event.sender)
+  })
+
+  ipcMain.handle("screenshot:ocr-recapture", async (event) => {
+    if (!isScreenshotOcrWindow(event.sender)) return false
+    await startScreenshotCapture({
+      forcedAction: "ocr",
+      mode: "capture",
+      onCancel: () => showScreenshotOcrMessage(event.sender, "已取消重新截图"),
+    })
+    return true
   })
 
   ipcMain.handle("sync:get-status", () => syncStatus())
@@ -1061,16 +1093,33 @@ function rebindScreenshotHotkey(accelerator: string): boolean {
   return ok
 }
 
-async function startScreenshotCapture(): Promise<void> {
+interface StartScreenshotCaptureOptions {
+  forcedAction?: ScreenshotAction
+  mode?: "actions" | "capture"
+  onCancel?: () => void
+}
+
+async function startScreenshotCapture(options: StartScreenshotCaptureOptions = {}): Promise<void> {
   const userDataDir = app.getPath("userData")
   let capturedTempPath: string | null = null
   try {
     await cleanupScreenshotTempDir(userDataDir)
     const result = await captureRegion({
-      selectRegion: () => selectScreenshotRegion({ rendererDevUrl, appOrigin: APP_ORIGIN }),
+      selectRegion: async () => {
+        const selected = await selectScreenshotRegion(
+          { rendererDevUrl, appOrigin: APP_ORIGIN },
+          { mode: options.mode }
+        )
+        return selected && options.forcedAction
+          ? { ...selected, action: options.forcedAction }
+          : selected
+      },
       captureSelection: (selection) => captureSelectionBitmap(selection, { userDataDir }),
     })
-    if (!result) return
+    if (!result) {
+      options.onCancel?.()
+      return
+    }
     capturedTempPath = result.imagePath
 
     if (result.action === "copy") {
@@ -1091,6 +1140,11 @@ async function startScreenshotCapture(): Promise<void> {
           appOrigin: APP_ORIGIN,
         }
       )
+      capturedTempPath = null
+      return
+    }
+    if (result.action === "ocr") {
+      openScreenshotOcrWindow({ rendererDevUrl, appOrigin: APP_ORIGIN }, result)
       capturedTempPath = null
       return
     }
