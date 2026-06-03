@@ -1,6 +1,7 @@
 import type { ReactNode } from "react"
 import { Copy, Save, X } from "lucide-react"
 import { useEffect, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import {
   closePinnedImage,
@@ -11,6 +12,7 @@ import {
 } from "@/lib/electron"
 
 export function PinnedImagePage() {
+  const { t } = useTranslation()
   const [dataUrl, setDataUrl] = useState<string | null>(null)
   const [opacity, setOpacity] = useState(1)
 
@@ -19,8 +21,12 @@ export function PinnedImagePage() {
     const previousHtmlBackground = document.documentElement.style.background
     document.body.style.background = "transparent"
     document.documentElement.style.background = "transparent"
-    void getPinnedImageData().then(setDataUrl)
+    let cancelled = false
+    void getPinnedImageData().then((nextDataUrl) => {
+      if (!cancelled) setDataUrl(nextDataUrl)
+    })
     return () => {
+      cancelled = true
       document.body.style.background = previousBodyBackground
       document.documentElement.style.background = previousHtmlBackground
     }
@@ -36,7 +42,7 @@ export function PinnedImagePage() {
       <div className="pointer-events-none absolute right-2 top-2 z-10 flex translate-y-[-2px] items-center gap-1 rounded-md border border-white/15 bg-zinc-950/80 px-1.5 py-1 opacity-0 shadow-xl backdrop-blur transition duration-150 group-focus-within:translate-y-0 group-focus-within:opacity-100 group-hover:translate-y-0 group-hover:opacity-100 [-webkit-app-region:no-drag]">
         <div className="pointer-events-auto flex items-center gap-1">
           <input
-            aria-label="Opacity"
+            aria-label={t("screenshot.opacity")}
             type="range"
             min="0.2"
             max="1"
@@ -45,13 +51,13 @@ export function PinnedImagePage() {
             onChange={(event) => void onOpacityChange(Number(event.target.value))}
             className="h-6 w-20 accent-white"
           />
-          <IconButton title="Copy" onClick={() => void copyPinnedImage()}>
+          <IconButton title={t("screenshot.actions.copy")} onClick={() => void copyPinnedImage()}>
             <Copy className="size-3.5" aria-hidden />
           </IconButton>
-          <IconButton title="Save" onClick={() => void savePinnedImage()}>
+          <IconButton title={t("screenshot.actions.save")} onClick={() => void savePinnedImage()}>
             <Save className="size-3.5" aria-hidden />
           </IconButton>
-          <IconButton title="Close" onClick={() => void closePinnedImage()}>
+          <IconButton title={t("screenshot.actions.close")} onClick={() => void closePinnedImage()}>
             <X className="size-3.5" aria-hidden />
           </IconButton>
         </div>

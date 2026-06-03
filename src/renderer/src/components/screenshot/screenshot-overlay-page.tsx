@@ -1,6 +1,7 @@
 import type { CSSProperties, PointerEvent, ReactNode } from "react"
 import { Check, Copy, PenLine, Pin, RotateCcw, Save, X } from "lucide-react"
 import { useCallback, useLayoutEffect, useMemo, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import { cancelScreenshotSelection, completeScreenshotSelection } from "@/lib/electron"
 import { cn } from "@/lib/utils"
@@ -22,6 +23,7 @@ interface DragState {
 const MIN_SELECTION_SIZE = 4
 
 export function ScreenshotOverlayPage() {
+  const { t } = useTranslation()
   const captureOnly =
     new URLSearchParams(window.location.search).get("screenshotMode") === "capture"
   const [drag, setDrag] = useState<DragState | null>(null)
@@ -115,34 +117,49 @@ export function ScreenshotOverlayPage() {
               onPointerUp={(event) => event.stopPropagation()}
             >
               {captureOnly ? (
-                <ToolbarButton title="Capture" onClick={() => void finish("copy")}>
+                <ToolbarButton
+                  title={t("screenshot.actions.capture")}
+                  onClick={() => void finish("copy")}
+                >
                   <Check className="size-4" aria-hidden />
                 </ToolbarButton>
               ) : (
                 <>
-                  <ToolbarButton title="Copy" onClick={() => void finish("copy")}>
+                  <ToolbarButton
+                    title={t("screenshot.actions.copy")}
+                    onClick={() => void finish("copy")}
+                  >
                     <Copy className="size-4" aria-hidden />
                   </ToolbarButton>
-                  <ToolbarButton title="Save" onClick={() => void finish("save")}>
+                  <ToolbarButton
+                    title={t("screenshot.actions.save")}
+                    onClick={() => void finish("save")}
+                  >
                     <Save className="size-4" aria-hidden />
                   </ToolbarButton>
-                  <ToolbarButton title="Pin" onClick={() => void finish("pin")}>
+                  <ToolbarButton
+                    title={t("screenshot.actions.pin")}
+                    onClick={() => void finish("pin")}
+                  >
                     <Pin className="size-4" aria-hidden />
                   </ToolbarButton>
-                  <ToolbarButton title="Annotate" onClick={() => void finish("annotate")}>
+                  <ToolbarButton
+                    title={t("screenshot.actions.annotate")}
+                    onClick={() => void finish("annotate")}
+                  >
                     <PenLine className="size-4" aria-hidden />
                   </ToolbarButton>
                 </>
               )}
               <ToolbarButton
-                title="Reselect"
+                title={t("screenshot.actions.reselect")}
                 onClick={() => {
                   setSelection(null)
                 }}
               >
                 <RotateCcw className="size-4" aria-hidden />
               </ToolbarButton>
-              <ToolbarButton title="Cancel" onClick={cancel}>
+              <ToolbarButton title={t("screenshot.actions.cancel")} onClick={cancel}>
                 <X className="size-4" aria-hidden />
               </ToolbarButton>
             </div>

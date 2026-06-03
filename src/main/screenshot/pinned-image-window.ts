@@ -1,5 +1,6 @@
 import type { BrowserWindow as BrowserWindowType, WebContents } from "electron"
 import type { PinnedImageOptions, PinnedImageState } from "./types"
+import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { BrowserWindow, nativeImage, screen } from "electron"
 import { attachWindowSecurity } from "../window-security"
@@ -22,6 +23,7 @@ export function createPinnedImageState(
   options: PinnedImageOptions = {}
 ): PinnedImageState {
   return {
+    deleteOnClose: Boolean(options.deleteOnClose),
     id,
     imagePath,
     opacity: normalizePinnedImageOpacity(options.opacity),
@@ -75,7 +77,10 @@ export function createPinnedImageWindow(
   win.setOpacity(state.opacity)
   const webContentsId = win.webContents.id
   pinnedImages.set(webContentsId, state)
-  win.on("closed", () => pinnedImages.delete(webContentsId))
+  win.on("closed", () => {
+    pinnedImages.delete(webContentsId)
+    if (state.deleteOnClose) void fs.rm(state.imagePath, { force: true })
+  })
   const url = deps.rendererDevUrl
     ? `${deps.rendererDevUrl}#${PINNED_IMAGE_HASH}`
     : `${deps.appOrigin}/index.html#${PINNED_IMAGE_HASH}`

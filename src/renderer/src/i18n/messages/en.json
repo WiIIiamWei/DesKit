@@ -190,5 +190,28 @@
       "saved": "Hotkey updated.",
       "invalid": "Could not register that combination. The previous shortcut is still active."
     }
+  },
+  "screenshot": {
+    "actions": {
+      "annotate": "Annotate",
+      "cancel": "Cancel",
+      "capture": "Capture",
+      "close": "Close",
+      "copy": "Copy",
+      "pin": "Pin",
+      "reselect": "Reselect",
+      "save": "Save",
+      "undo": "Undo"
+    },
+    "tools": {
+      "arrow": "Arrow",
+      "ellipse": "Ellipse",
+      "mosaic": "Mosaic",
+      "pen": "Pen",
+      "rectangle": "Rectangle"
+    },
+    "colorLabel": "Color {{color}}",
+    "opacity": "Opacity",
+    "strokeWidth": "Stroke width"
   }
 }

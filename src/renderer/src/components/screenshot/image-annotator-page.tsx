@@ -13,6 +13,7 @@ import {
   X,
 } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
+import { useTranslation } from "react-i18next"
 import { Button } from "@/components/ui/button"
 import {
   cancelScreenshotAnnotation,
@@ -58,6 +59,7 @@ interface DragState {
 const ANNOTATION_COLORS = ["#ef4444", "#f97316", "#facc15", "#22c55e", "#38bdf8", "#ffffff"]
 
 export function ImageAnnotatorPage() {
+  const { t } = useTranslation()
   const canvasRef = useRef<HTMLCanvasElement | null>(null)
   const imageRef = useRef<HTMLImageElement | null>(null)
   const [imageLoaded, setImageLoaded] = useState(false)
@@ -132,13 +134,16 @@ export function ImageAnnotatorPage() {
   }
 
   function onPointerMove(event: PointerEvent<HTMLCanvasElement>) {
-    if (!drag) return
     const point = canvasPoint(event)
-    setDrag({
-      ...drag,
-      points: tool === "pen" ? [...drag.points, point] : drag.points,
-      to: point,
-    })
+    setDrag((current) =>
+      current
+        ? {
+            ...current,
+            points: tool === "pen" ? [...current.points, point] : current.points,
+            to: point,
+          }
+        : current
+    )
   }
 
   function onPointerUp(event: PointerEvent<HTMLCanvasElement>) {
@@ -166,31 +171,43 @@ export function ImageAnnotatorPage() {
     <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white [-webkit-app-region:drag]">
       <div className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border border-white/15 bg-zinc-950/85 px-1.5 py-1 shadow-2xl backdrop-blur [-webkit-app-region:no-drag]">
         <div className="flex items-center gap-1">
-          <ToolButton active={tool === "arrow"} title="Arrow" onClick={() => setTool("arrow")}>
+          <ToolButton
+            active={tool === "arrow"}
+            title={t("screenshot.tools.arrow")}
+            onClick={() => setTool("arrow")}
+          >
             <Slash className="size-4" aria-hidden />
           </ToolButton>
-          <ToolButton active={tool === "pen"} title="Pen" onClick={() => setTool("pen")}>
+          <ToolButton
+            active={tool === "pen"}
+            title={t("screenshot.tools.pen")}
+            onClick={() => setTool("pen")}
+          >
             <PencilLine className="size-4" aria-hidden />
           </ToolButton>
           <ToolButton
             active={tool === "rectangle"}
-            title="Rectangle"
+            title={t("screenshot.tools.rectangle")}
             onClick={() => setTool("rectangle")}
           >
             <RectangleHorizontal className="size-4" aria-hidden />
           </ToolButton>
           <ToolButton
             active={tool === "ellipse"}
-            title="Ellipse"
+            title={t("screenshot.tools.ellipse")}
             onClick={() => setTool("ellipse")}
           >
             <Circle className="size-4" aria-hidden />
           </ToolButton>
-          <ToolButton active={tool === "mosaic"} title="Mosaic" onClick={() => setTool("mosaic")}>
+          <ToolButton
+            active={tool === "mosaic"}
+            title={t("screenshot.tools.mosaic")}
+            onClick={() => setTool("mosaic")}
+          >
             <Grid3x3 className="size-4" aria-hidden />
           </ToolButton>
           <ToolButton
-            title="Undo"
+            title={t("screenshot.actions.undo")}
             disabled={ops.length === 0}
             onClick={() => setOps(ops.slice(0, -1))}
           >
@@ -203,8 +220,8 @@ export function ImageAnnotatorPage() {
             <button
               key={swatch}
               type="button"
-              title={swatch}
-              aria-label={`Color ${swatch}`}
+              title={t("screenshot.colorLabel", { color: swatch })}
+              aria-label={t("screenshot.colorLabel", { color: swatch })}
               onClick={() => setColor(swatch)}
               className={cn(
                 "size-5 rounded-full border border-white/20 transition hover:scale-105",
@@ -215,7 +232,7 @@ export function ImageAnnotatorPage() {
           ))}
           <SlidersHorizontal className="ml-1 size-4 text-white/65" aria-hidden />
           <input
-            aria-label="Stroke width"
+            aria-label={t("screenshot.strokeWidth")}
             type="range"
             min="2"
             max="10"
@@ -227,16 +244,19 @@ export function ImageAnnotatorPage() {
         </div>
         <div className="h-5 w-px bg-white/15" />
         <div className="flex items-center gap-1">
-          <ToolButton title="Copy" onClick={() => void finish("copy")}>
+          <ToolButton title={t("screenshot.actions.copy")} onClick={() => void finish("copy")}>
             <Copy className="size-4" aria-hidden />
           </ToolButton>
-          <ToolButton title="Save" onClick={() => void finish("save")}>
+          <ToolButton title={t("screenshot.actions.save")} onClick={() => void finish("save")}>
             <Save className="size-4" aria-hidden />
           </ToolButton>
-          <ToolButton title="Pin" onClick={() => void finish("pin")}>
+          <ToolButton title={t("screenshot.actions.pin")} onClick={() => void finish("pin")}>
             <Pin className="size-4" aria-hidden />
           </ToolButton>
-          <ToolButton title="Cancel" onClick={() => void cancelScreenshotAnnotation()}>
+          <ToolButton
+            title={t("screenshot.actions.cancel")}
+            onClick={() => void cancelScreenshotAnnotation()}
+          >
             <X className="size-4" aria-hidden />
           </ToolButton>
         </div>

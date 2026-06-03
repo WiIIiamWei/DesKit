@@ -53,7 +53,12 @@ import {
   getPinnedImageDataUrl,
   setPinnedImageOpacity,
 } from "./screenshot/pinned-image-window"
-import { ensureScreenshotSavePath } from "./screenshot/screenshot-store"
+import {
+  cleanupScreenshotTempDir,
+  deleteScreenshotTempFile,
+  ensureScreenshotSavePath,
+  ensureScreenshotTempDir,
+} from "./screenshot/screenshot-store"
 import {
   consumeSearchWindowTrayOpenSuppression,
   ensureSearchWindow,
@@ -547,13 +552,16 @@ function rebindScreenshotHotkey(accelerator: string): boolean {
 }
 
 async function startScreenshotCapture(): Promise<void> {
+  const userDataDir = app.getPath("userData")
+  let capturedTempPath: string | null = null
   try {
+    await cleanupScreenshotTempDir(userDataDir)
     const result = await captureRegion({
       selectRegion: () => selectScreenshotRegion({ rendererDevUrl, appOrigin: APP_ORIGIN }),
-      captureSelection: (selection) =>
-        captureSelectionBitmap(selection, { userDataDir: app.getPath("userData") }),
+      captureSelection: (selection) => captureSelectionBitmap(selection, { userDataDir }),
     })
     if (!result) return
+    capturedTempPath = result.imagePath
 
     if (result.action === "copy") {
       clipboard.writeImage(nativeImage.createFromPath(result.imagePath))
@@ -566,10 +574,14 @@ async function startScreenshotCapture(): Promise<void> {
       return
     }
     if (result.action === "pin") {
-      createPinnedImageWindow(createPinnedImageState(`pin-${Date.now()}`, result.imagePath), {
-        rendererDevUrl,
-        appOrigin: APP_ORIGIN,
-      })
+      createPinnedImageWindow(
+        createPinnedImageState(`pin-${Date.now()}`, result.imagePath, { deleteOnClose: true }),
+        {
+          rendererDevUrl,
+          appOrigin: APP_ORIGIN,
+        }
+      )
+      capturedTempPath = null
       return
     }
     if (result.action === "annotate") {
@@ -577,11 +589,15 @@ async function startScreenshotCapture(): Promise<void> {
         { rendererDevUrl, appOrigin: APP_ORIGIN },
         result.imagePath
       )
+      await deleteScreenshotTempFile(userDataDir, result.imagePath)
+      capturedTempPath = null
       if (!annotated) return
       await handleScreenshotDataUrl(annotated.dataUrl, annotated.action)
     }
   } catch (err) {
     console.error("[deskit] screenshot capture failed", err)
+  } finally {
+    if (capturedTempPath) await deleteScreenshotTempFile(userDataDir, capturedTempPath)
   }
 }
 
@@ -607,12 +623,15 @@ async function handleScreenshotDataUrl(
     "screenshot-temp",
     `annotated-${Date.now()}.png`
   )
-  await fs.mkdir(path.dirname(tempPath), { recursive: true })
+  await ensureScreenshotTempDir(app.getPath("userData"))
   await fs.writeFile(tempPath, buffer)
-  createPinnedImageWindow(createPinnedImageState(`pin-${Date.now()}`, tempPath), {
-    rendererDevUrl,
-    appOrigin: APP_ORIGIN,
-  })
+  createPinnedImageWindow(
+    createPinnedImageState(`pin-${Date.now()}`, tempPath, { deleteOnClose: true }),
+    {
+      rendererDevUrl,
+      appOrigin: APP_ORIGIN,
+    }
+  )
 }
 
 function trayActions() {

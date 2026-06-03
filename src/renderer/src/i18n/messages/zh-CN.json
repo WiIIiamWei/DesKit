@@ -190,5 +190,28 @@
       "saved": "快捷键已更新。",
       "invalid": "无法注册该组合，仍使用上一次的快捷键。"
     }
+  },
+  "screenshot": {
+    "actions": {
+      "annotate": "标注",
+      "cancel": "取消",
+      "capture": "截图",
+      "close": "关闭",
+      "copy": "复制",
+      "pin": "贴图",
+      "reselect": "重选",
+      "save": "保存",
+      "undo": "撤销"
+    },
+    "tools": {
+      "arrow": "箭头",
+      "ellipse": "椭圆",
+      "mosaic": "马赛克",
+      "pen": "画笔",
+      "rectangle": "矩形"
+    },
+    "colorLabel": "颜色 {{color}}",
+    "opacity": "不透明度",
+    "strokeWidth": "线宽"
   }
 }

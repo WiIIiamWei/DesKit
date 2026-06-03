@@ -30,10 +30,12 @@ export interface CaptureRegionBitmap {
 }
 
 export interface PinnedImageOptions {
+  deleteOnClose?: boolean
   opacity?: number
 }
 
 export interface PinnedImageState {
+  deleteOnClose: boolean
   id: string
   imagePath: string
   opacity: number

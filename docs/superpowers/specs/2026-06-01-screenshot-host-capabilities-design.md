@@ -92,7 +92,7 @@ The first version does not provide a default-save-directory setting.
 1. User selects a region.
 2. User clicks annotate.
 3. DesKit opens annotation mode for the captured image.
-4. User can draw line/arrow annotations or rectangular mosaic regions.
+4. User can draw line/arrow, freehand pen, rectangle, ellipse, or rectangular mosaic annotations.
 5. User can undo the last operation.
 6. User can copy, save, or pin the flattened annotated PNG.
 
@@ -192,7 +192,12 @@ Out of scope:
 First-version annotation tools:
 
 - Line/arrow tool.
+- Freehand pen tool.
+- Rectangle outline tool.
+- Ellipse outline tool.
 - Rectangular mosaic tool.
+- Color selection.
+- Stroke width selection.
 - Undo last operation.
 - Copy, save, and pin flattened output.
 
@@ -205,7 +210,6 @@ Line/arrow defaults:
 Out of scope:
 
 - Text annotations.
-- Freehand drawing.
 - Editable layer panel.
 - Crop.
 - Stickers.
