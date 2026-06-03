@@ -58,6 +58,9 @@ function createBrowserWindowMock() {
 export const contextBridge = { exposeInMainWorld: vi.fn() }
 export const ipcRenderer = { invoke: vi.fn(), on: vi.fn() }
 export const ipcMain = { handle: vi.fn(), on: vi.fn() }
+export const dialog = {
+  showOpenDialog: vi.fn(() => Promise.resolve({ canceled: true, filePaths: [] })),
+}
 export const app = {
   whenReady: vi.fn(() => Promise.resolve()),
   getAppPath: vi.fn(() => "/app"),
@@ -127,6 +130,7 @@ export default {
   contextBridge,
   ipcRenderer,
   ipcMain,
+  dialog,
   app,
   BrowserWindow,
   session,

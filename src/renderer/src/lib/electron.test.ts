@@ -14,6 +14,7 @@ import {
   installMarketplacePlugin,
   installPluginFolder,
   installPluginPackage,
+  installPluginPackageFromDialog,
   invokePluginCommand,
   isElectron,
   launchApp,
@@ -72,6 +73,7 @@ function mockApi() {
     setPluginPreference: vi.fn().mockResolvedValue(ok(undefined)),
     installPluginFolder: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
     installPluginPackage: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
+    installPluginPackageFromDialog: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
     uninstallPlugin: vi.fn().mockResolvedValue(ok(undefined)),
     reloadPlugin: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
     searchPluginCommands: vi.fn().mockResolvedValue(ok([])),
@@ -317,6 +319,12 @@ describe("lib/electron", () => {
       const api = mockApi()
       await installPluginPackage("/tmp/plugin.deskit")
       expect(api.installPluginPackage).toHaveBeenCalledWith("/tmp/plugin.deskit")
+    })
+
+    it("installPluginPackageFromDialog opens and installs a selected package", async () => {
+      const api = mockApi()
+      await installPluginPackageFromDialog()
+      expect(api.installPluginPackageFromDialog).toHaveBeenCalledOnce()
     })
 
     it("uninstallPlugin forwards plugin id", async () => {

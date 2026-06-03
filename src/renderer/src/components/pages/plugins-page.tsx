@@ -1,6 +1,6 @@
 import type { KeyboardEvent, ReactNode } from "react"
 import type { PluginRegistryEntry } from "@/lib/electron"
-import { AlertCircle, ChevronDown, Keyboard, RefreshCw, Trash2 } from "lucide-react"
+import { AlertCircle, ChevronDown, Keyboard, PackagePlus, RefreshCw, Trash2 } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
@@ -25,6 +25,7 @@ import { Switch } from "@/components/ui/switch"
 import { acceleratorFromKeyboardEvent, modifierKeys } from "@/lib/accelerators"
 import {
   ElectronIpcError,
+  installPluginPackageFromDialog,
   isElectron,
   listPlugins,
   onPluginRegistryChanged,
@@ -89,6 +90,16 @@ export function PluginsPage() {
     })
   }
 
+  async function onInstallPackage() {
+    await mutate("install-package", async () => {
+      const installed = await installPluginPackageFromDialog()
+      if (!installed) return
+
+      upsertPlugin(installed)
+      toast.success(t("plugins.toasts.installed"))
+    })
+  }
+
   async function onPreferenceChange(
     plugin: PluginRegistryEntry,
     preference: ManifestPreference,
@@ -128,7 +139,12 @@ export function PluginsPage() {
   }
 
   function upsertPlugin(plugin: PluginRegistryEntry) {
-    setPlugins((current) => current.map((item) => (samePlugin(item, plugin) ? plugin : item)))
+    setPlugins((current) => {
+      const index = current.findIndex((item) => samePlugin(item, plugin))
+      if (index === -1) return [plugin, ...current]
+
+      return current.map((item, itemIndex) => (itemIndex === index ? plugin : item))
+    })
   }
 
   if (!electronReady) {
@@ -148,10 +164,21 @@ export function PluginsPage() {
       title={t("plugins.title")}
       subtitle={t("plugins.subtitle")}
       action={
-        <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
-          <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden />
-          {t("plugins.actions.refresh")}
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading || pending === "install-package"}
+            onClick={() => void onInstallPackage()}
+          >
+            <PackagePlus className="size-4" aria-hidden />
+            {t("plugins.actions.installPackage")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden />
+            {t("plugins.actions.refresh")}
+          </Button>
+        </div>
       }
     >
       {!loading && plugins.length > 0 && (
