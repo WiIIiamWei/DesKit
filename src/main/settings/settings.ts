@@ -6,11 +6,13 @@ import * as path from "node:path"
 // versions of the app interoperate cleanly.
 export type ThemeMode = "light" | "dark" | "system"
 export type ThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
-export type FloatingBallFeature = "appLauncher"
+export type BuiltinFloatingBallFeature = "appLauncher"
+export type PluginFloatingBallFeature = `plugin:${string}:${string}`
+export type FloatingBallFeature = BuiltinFloatingBallFeature | PluginFloatingBallFeature
 
 export const THEME_MODES: readonly ThemeMode[] = ["light", "dark", "system"]
 export const THEME_ACCENTS: readonly ThemeAccent[] = ["neutral", "blue", "green", "rose", "violet"]
-export const FLOATING_BALL_FEATURES: readonly FloatingBallFeature[] = ["appLauncher"]
+export const FLOATING_BALL_FEATURES: readonly BuiltinFloatingBallFeature[] = ["appLauncher"]
 const MAX_FLOATING_BALL_FEATURES = 6
 
 export interface UserSettings {
@@ -73,16 +75,26 @@ export function normalizeSettings(raw: unknown): UserSettings {
 function normalizeFloatingBallFeatures(raw: unknown[]): FloatingBallFeature[] {
   const seen = new Set<FloatingBallFeature>()
   for (const item of raw) {
-    if (
-      typeof item === "string" &&
-      (FLOATING_BALL_FEATURES as readonly string[]).includes(item) &&
-      !seen.has(item as FloatingBallFeature)
-    ) {
-      seen.add(item as FloatingBallFeature)
+    if (typeof item === "string" && isFloatingBallFeature(item) && !seen.has(item)) {
+      seen.add(item)
       if (seen.size === MAX_FLOATING_BALL_FEATURES) break
     }
   }
   return seen.size > 0 ? [...seen] : [...defaultSettings.floatingBallFeatures]
+}
+
+function isFloatingBallFeature(value: string): value is FloatingBallFeature {
+  return isBuiltinFloatingBallFeature(value) || isPluginFloatingBallFeature(value)
+}
+
+function isBuiltinFloatingBallFeature(value: string): value is BuiltinFloatingBallFeature {
+  return (FLOATING_BALL_FEATURES as readonly string[]).includes(value)
+}
+
+function isPluginFloatingBallFeature(value: string): value is PluginFloatingBallFeature {
+  return /^plugin:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$/.test(
+    value
+  )
 }
 
 export async function loadSettings(filePath: string): Promise<UserSettings> {

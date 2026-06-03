@@ -3,27 +3,39 @@ import { Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import logoUrl from "@/assets/logo.svg"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
+import { localize } from "@/components/plugins/view-utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
   getSettings,
+  listPlugins,
   moveFloatingBallBy,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
+  onPluginRegistryChanged,
+  onSettingsChanged,
   openFloatingBallFeature,
   toggleFloatingBallMenu,
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
 
-const FEATURE_ICONS: Record<DeskitFloatingBallFeature, typeof Search> = {
-  appLauncher: Search,
-}
+const APP_LAUNCHER_FEATURE = "appLauncher"
 const MENU_SLOT_ANGLES = [30, 90, 150, 210, 270, 330] as const
 const DRAG_THRESHOLD = 4
 
+interface FloatingBallMenuItem {
+  id: DeskitFloatingBallFeature
+  icon?: string
+  pluginId?: string
+  title: string
+  kind: "builtin" | "plugin"
+}
+
 export function FloatingBallPanel() {
-  const { t } = useTranslation()
+  const { t, i18n } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>(["appLauncher"])
+  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([APP_LAUNCHER_FEATURE])
+  const [plugins, setPlugins] = useState<DeskitPluginRegistryEntry[]>([])
   const dragRef = useRef<{
     pointerId: number
     startX: number
@@ -57,10 +69,28 @@ export function FloatingBallPanel() {
 
   useEffect(() => {
     void getSettings().then((settings) => setFeatures(settings.floatingBallFeatures))
-    return mergeCleanups(onFloatingBallMenuState(setExpanded), onFloatingBallFeatures(setFeatures))
+    void listPlugins()
+      .then(setPlugins)
+      .catch((err) => console.error("listPlugins failed", err))
+    return mergeCleanups(
+      onFloatingBallMenuState(setExpanded),
+      onFloatingBallFeatures(setFeatures),
+      onPluginRegistryChanged(setPlugins),
+      onSettingsChanged((settings) => setFeatures(settings.floatingBallFeatures))
+    )
   }, [])
 
-  const menuItems = useMemo(() => features.slice(0, 6), [features])
+  const menuItems = useMemo(
+    () =>
+      features
+        .slice(0, 6)
+        .map((feature) => menuItem(feature, plugins, i18n.language, t))
+        .map((item, index, items) => ({
+          item,
+          position: menuItemPosition(index, items.length),
+        })),
+    [features, i18n.language, plugins, t]
+  )
 
   async function onFeatureClick(feature: DeskitFloatingBallFeature) {
     await openFloatingBallFeature(feature)
@@ -126,26 +156,23 @@ export function FloatingBallPanel() {
         )}
         aria-hidden={!expanded}
       >
-        {menuItems.map((feature, index) => {
-          const Icon = FEATURE_ICONS[feature]
-          const angle = MENU_SLOT_ANGLES[index] ?? 30
-          const radius = 78
-          const x = Math.cos((angle * Math.PI) / 180) * radius
-          const y = -Math.sin((angle * Math.PI) / 180) * radius
+        {menuItems.map(({ item, position }) => {
           return (
-            <Tooltip key={feature}>
+            <Tooltip key={item.id}>
               <TooltipTrigger asChild>
                 <button
                   type="button"
-                  onClick={() => void onFeatureClick(feature)}
-                  className="absolute left-1/2 top-1/2 grid size-12 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border border-border bg-popover text-popover-foreground shadow-lg transition hover:scale-110 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  style={{ transform: `translate(${x}px, ${y}px) translate(-50%, -50%)` }}
+                  onClick={() => void onFeatureClick(item.id)}
+                  className="absolute left-1/2 top-1/2 grid size-12 place-items-center rounded-full border border-border bg-popover text-popover-foreground shadow-lg transition hover:scale-110 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  style={{
+                    transform: `translate(${position.x}px, ${position.y}px) translate(-50%, -50%)`,
+                  }}
                 >
-                  <Icon className="size-5" aria-hidden />
-                  <span className="sr-only">{t(`floatingBall.features.${feature}`)}</span>
+                  <FeatureIcon item={item} />
+                  <span className="sr-only">{item.title}</span>
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="top">{t(`floatingBall.features.${feature}`)}</TooltipContent>
+              <TooltipContent side="top">{item.title}</TooltipContent>
             </Tooltip>
           )
         })}
@@ -159,13 +186,66 @@ export function FloatingBallPanel() {
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
         title={t("floatingBall.title")}
-        className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white dark:bg-popover shadow-xl transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white shadow-xl transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-popover"
       >
         <img src={logoUrl} alt="" draggable={false} className="size-8" aria-hidden />
         <span className="sr-only">{t("floatingBall.title")}</span>
       </button>
     </div>
   )
+}
+
+function FeatureIcon({ item }: { item: FloatingBallMenuItem }) {
+  if (item.kind === "plugin") {
+    return <PluginIcon pluginId={item.pluginId} icon={item.icon} className="size-5" />
+  }
+  return <Search className="size-5" aria-hidden />
+}
+
+function menuItem(
+  feature: DeskitFloatingBallFeature,
+  plugins: DeskitPluginRegistryEntry[],
+  locale: string,
+  t: (key: string) => string
+): FloatingBallMenuItem {
+  if (feature === APP_LAUNCHER_FEATURE) {
+    return { id: feature, title: t("floatingBall.features.appLauncher"), kind: "builtin" }
+  }
+  const parsed = parsePluginFeatureId(feature)
+  if (!parsed) return { id: feature, title: feature, kind: "plugin" }
+
+  const plugin = plugins.find((entry) => entry.pluginId === parsed.pluginId)
+  const command = plugin?.manifest?.contributes.commands.find(
+    (item) => item.id === parsed.commandId
+  )
+  return {
+    id: feature,
+    icon: command?.icon ?? plugin?.manifest?.icon,
+    pluginId: plugin?.pluginId,
+    title: command ? localize(command.title, locale) || parsed.commandId : parsed.commandId,
+    kind: "plugin",
+  }
+}
+
+function menuItemPosition(index: number, count: number): { x: number; y: number } {
+  const radius = 78
+  const angle =
+    count === MENU_SLOT_ANGLES.length
+      ? MENU_SLOT_ANGLES[index]
+      : -90 + (360 / Math.max(count, 1)) * index
+  return {
+    x: Math.cos((angle * Math.PI) / 180) * radius,
+    y: Math.sin((angle * Math.PI) / 180) * radius,
+  }
+}
+
+function parsePluginFeatureId(
+  feature: DeskitFloatingBallFeature
+): { pluginId: string; commandId: string } | null {
+  if (!feature.startsWith("plugin:")) return null
+  const [, pluginId, commandId] = feature.split(":")
+  if (!pluginId || !commandId) return null
+  return { pluginId, commandId }
 }
 
 function mergeCleanups(...cleanups: Array<() => void>): () => void {

@@ -1,9 +1,19 @@
 import type { ReactNode } from "react"
 import type { MarketplaceEntry, PluginRegistryEntry } from "@/lib/electron"
-import { AlertCircle, Download, PackageSearch, RefreshCw, Send, Store } from "lucide-react"
+import {
+  AlertCircle,
+  ArrowLeft,
+  Download,
+  ExternalLink,
+  PackageSearch,
+  RefreshCw,
+  Send,
+  Store,
+} from "lucide-react"
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
@@ -18,6 +28,7 @@ import {
   listMarketplacePlugins,
   listPlugins,
   onPluginRegistryChanged,
+  openExternalUrl,
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
 
@@ -32,6 +43,7 @@ export function MarketplacePage() {
   const [category, setCategory] = useState(ALL_CATEGORY)
   const [loading, setLoading] = useState(electronReady)
   const [installingId, setInstallingId] = useState<string | null>(null)
+  const [selectedEntryKey, setSelectedEntryKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
@@ -83,6 +95,11 @@ export function MarketplacePage() {
     })
   }, [category, i18n.language, marketplace, query])
 
+  const selectedEntry = useMemo(() => {
+    if (!selectedEntryKey) return null
+    return marketplace.find((entry) => marketplaceEntryKey(entry) === selectedEntryKey) ?? null
+  }, [marketplace, selectedEntryKey])
+
   async function install(entry: MarketplaceEntry) {
     setInstallingId(entry.id)
     setError(null)
@@ -120,36 +137,6 @@ export function MarketplacePage() {
         </Button>
       }
     >
-      <div className="flex flex-col gap-3 rounded-lg border bg-card p-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <div className="relative min-w-64 flex-1">
-            <PackageSearch className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              value={query}
-              onChange={(event) => setQuery(event.currentTarget.value)}
-              placeholder={t("marketplace.searchPlaceholder")}
-              className="pl-9"
-            />
-          </div>
-        </div>
-
-        <div className="flex flex-wrap items-center gap-2">
-          {categories.map((item) => (
-            <Button
-              key={item}
-              type="button"
-              variant={category === item ? "default" : "outline"}
-              size="sm"
-              onClick={() => setCategory(item)}
-            >
-              {item === ALL_CATEGORY
-                ? t("marketplace.category.all")
-                : t(`marketplace.category.${item}`, { defaultValue: item })}
-            </Button>
-          ))}
-        </div>
-      </div>
-
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="size-4" aria-hidden />
@@ -158,33 +145,77 @@ export function MarketplacePage() {
         </Alert>
       )}
 
-      {loading ? (
-        <Card>
-          <CardHeader>
-            <CardTitle>{t("marketplace.loading")}</CardTitle>
-            <CardDescription>{t("marketplace.loadingHint")}</CardDescription>
-          </CardHeader>
-        </Card>
-      ) : visibleEntries.length === 0 ? (
-        <Card>
-          <CardContent className="flex min-h-56 items-center justify-center gap-3 text-sm text-muted-foreground">
-            <PackageSearch className="size-4" aria-hidden />
-            {t("marketplace.empty")}
-          </CardContent>
-        </Card>
+      {selectedEntry ? (
+        <MarketplaceDetails
+          entry={selectedEntry}
+          installed={installed.get(selectedEntry.id)}
+          installing={installingId === selectedEntry.id}
+          locale={i18n.language}
+          onBack={() => setSelectedEntryKey(null)}
+          onInstall={install}
+        />
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-          {visibleEntries.map((entry) => (
-            <MarketplaceCard
-              key={`${entry.id}:${entry.version}`}
-              entry={entry}
-              installed={installed.get(entry.id)}
-              installing={installingId === entry.id}
-              locale={i18n.language}
-              onInstall={install}
-            />
-          ))}
-        </div>
+        <>
+          <div className="flex flex-col gap-3 rounded-lg border bg-card p-3">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <div className="relative min-w-64 flex-1">
+                <PackageSearch className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  value={query}
+                  onChange={(event) => setQuery(event.currentTarget.value)}
+                  placeholder={t("marketplace.searchPlaceholder")}
+                  className="pl-9"
+                />
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              {categories.map((item) => (
+                <Button
+                  key={item}
+                  type="button"
+                  variant={category === item ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setCategory(item)}
+                >
+                  {item === ALL_CATEGORY
+                    ? t("marketplace.category.all")
+                    : t(`marketplace.category.${item}`, { defaultValue: item })}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          {loading ? (
+            <Card>
+              <CardHeader>
+                <CardTitle>{t("marketplace.loading")}</CardTitle>
+                <CardDescription>{t("marketplace.loadingHint")}</CardDescription>
+              </CardHeader>
+            </Card>
+          ) : visibleEntries.length === 0 ? (
+            <Card>
+              <CardContent className="flex min-h-56 items-center justify-center gap-3 text-sm text-muted-foreground">
+                <PackageSearch className="size-4" aria-hidden />
+                {t("marketplace.empty")}
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+              {visibleEntries.map((entry) => (
+                <MarketplaceCard
+                  key={`${entry.id}:${entry.version}`}
+                  entry={entry}
+                  installed={installed.get(entry.id)}
+                  installing={installingId === entry.id}
+                  locale={i18n.language}
+                  onInstall={install}
+                  onSelect={(entry) => setSelectedEntryKey(marketplaceEntryKey(entry))}
+                />
+              ))}
+            </div>
+          )}
+        </>
       )}
     </MarketplaceFrame>
   )
@@ -232,53 +263,64 @@ function MarketplaceCard({
   installing,
   locale,
   onInstall,
+  onSelect,
 }: {
   entry: MarketplaceEntry
   installed?: PluginRegistryEntry
   installing: boolean
   locale: string
   onInstall: (entry: MarketplaceEntry) => Promise<void>
+  onSelect: (entry: MarketplaceEntry) => void
 }) {
   const { t } = useTranslation()
   const installState = getInstallState(installed)
   const installable = canInstall(installed)
+  const title = localize(entry.displayName, locale) || entry.name
+  const description = localize(entry.description, locale)
 
   return (
-    <Card className="overflow-hidden">
-      <CardHeader className="gap-3">
+    <Card
+      role="button"
+      tabIndex={0}
+      className="h-64 cursor-pointer overflow-hidden transition-colors hover:bg-accent/40 focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:outline-none"
+      onClick={() => onSelect(entry)}
+      onKeyDown={(event) => {
+        if (event.key !== "Enter" && event.key !== " ") return
+        event.preventDefault()
+        onSelect(entry)
+      }}
+    >
+      <CardHeader className="gap-3 pb-0">
         <div className="flex items-start justify-between gap-3">
-          <span className="flex size-10 shrink-0 items-center justify-center rounded-md border bg-muted">
-            <Store className="size-4 text-muted-foreground" aria-hidden />
-          </span>
+          <MarketplaceIcon
+            icon={entry.icon}
+            className="size-10 rounded-md"
+            iconClassName="size-4"
+          />
           <Badge variant={installed ? "default" : "outline"}>
             {installed ? t(`marketplace.installState.${installState}`) : `v${entry.version}`}
           </Badge>
         </div>
         <div className="min-w-0">
-          <CardTitle className="truncate text-base">
-            {localize(entry.displayName, locale) || entry.name}
-          </CardTitle>
-          <CardDescription className="mt-1 line-clamp-2">
-            {localize(entry.description, locale)}
+          <CardTitle className="h-5 truncate text-base leading-5">{title}</CardTitle>
+          <CardDescription className="mt-1 line-clamp-2 min-h-10 leading-5">
+            {description}
           </CardDescription>
         </div>
       </CardHeader>
 
-      <CardContent className="flex flex-col gap-4">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-          <span>{entry.author}</span>
-          <span>·</span>
-          <span>{entry.deskitEngine}</span>
-          {entry.categories?.slice(0, 2).map((category) => (
-            <Badge key={category} variant="secondary" className="font-normal">
-              {t(`marketplace.category.${category}`, { defaultValue: category })}
-            </Badge>
-          ))}
+      <CardContent className="flex min-h-0 flex-1 flex-col gap-4">
+        <div className="min-w-0 truncate text-xs text-muted-foreground">
+          v{entry.version} · {entry.author}
         </div>
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <span className="block">
+            <span
+              className="mt-auto block"
+              onClick={(event) => event.stopPropagation()}
+              onKeyDown={(event) => event.stopPropagation()}
+            >
               <Button
                 type="button"
                 className="w-full"
@@ -303,6 +345,159 @@ function MarketplaceCard({
       </CardContent>
     </Card>
   )
+}
+
+function MarketplaceDetails({
+  entry,
+  installed,
+  installing,
+  locale,
+  onBack,
+  onInstall,
+}: {
+  entry: MarketplaceEntry
+  installed?: PluginRegistryEntry
+  installing: boolean
+  locale: string
+  onBack: () => void
+  onInstall: (entry: MarketplaceEntry) => Promise<void>
+}) {
+  const { t } = useTranslation()
+  const installState = getInstallState(installed)
+  const installable = canInstall(installed)
+  const title = localize(entry.displayName, locale) || entry.name
+  const description = localize(entry.description, locale)
+
+  return (
+    <div className="flex flex-col gap-4">
+      <Button type="button" variant="ghost" className="w-fit gap-2 px-2" onClick={onBack}>
+        <ArrowLeft className="size-4" aria-hidden />
+        {t("marketplace.details.back")}
+      </Button>
+
+      <Card>
+        <CardHeader className="gap-4">
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div className="flex min-w-0 gap-3">
+              <MarketplaceIcon
+                icon={entry.icon}
+                className="size-12 rounded-lg"
+                iconClassName="size-5"
+              />
+              <div className="min-w-0">
+                <CardTitle className="text-xl leading-tight">{title}</CardTitle>
+                <CardDescription className="mt-2">{description}</CardDescription>
+              </div>
+            </div>
+            <Badge variant={installed ? "default" : "outline"} className="w-fit shrink-0">
+              {installed ? t(`marketplace.installState.${installState}`) : `v${entry.version}`}
+            </Badge>
+          </div>
+        </CardHeader>
+
+        <CardContent className="flex flex-col gap-6">
+          <dl className="grid gap-4 text-sm sm:grid-cols-2">
+            <MarketplaceDetailItem label={t("marketplace.details.version")} value={entry.version} />
+            <MarketplaceDetailItem label={t("marketplace.details.author")} value={entry.author} />
+            <MarketplaceDetailItem
+              label={t("marketplace.details.engine")}
+              value={entry.deskitEngine}
+            />
+            <MarketplaceDetailItem
+              label={t("marketplace.details.homepage")}
+              value={entry.homepage}
+            />
+          </dl>
+
+          {entry.categories && entry.categories.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-medium">{t("marketplace.details.categories")}</h2>
+              <div className="flex flex-wrap gap-2">
+                {entry.categories.map((category) => (
+                  <Badge key={category} variant="secondary" className="font-normal">
+                    {t(`marketplace.category.${category}`, { defaultValue: category })}
+                  </Badge>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col gap-2 sm:flex-row">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    type="button"
+                    disabled={!installable || installing}
+                    onClick={() => void onInstall(entry)}
+                  >
+                    <Download className={cn("size-4", installing && "animate-pulse")} />
+                    {installing
+                      ? t("marketplace.actions.installing")
+                      : t(`marketplace.actions.${installState}`)}
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              {!installable && installed && (
+                <TooltipContent>
+                  {t("marketplace.protectedSource", {
+                    source: t(`plugins.source.${installed.source.kind}`),
+                  })}
+                </TooltipContent>
+              )}
+            </Tooltip>
+
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => void openExternalUrl(entry.homepage)}
+            >
+              <ExternalLink className="size-4" aria-hidden />
+              {t("marketplace.details.openHomepage")}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
+
+function MarketplaceIcon({
+  icon,
+  className,
+  iconClassName,
+}: {
+  icon?: string
+  className?: string
+  iconClassName?: string
+}) {
+  return (
+    <span
+      className={cn(
+        "flex shrink-0 items-center justify-center border bg-muted text-muted-foreground",
+        className
+      )}
+    >
+      <PluginIcon icon={marketplaceIcon(icon)} fallback={Store} className={iconClassName} />
+    </span>
+  )
+}
+
+function marketplaceIcon(icon?: string): string | undefined {
+  return icon?.startsWith("lucide:") ? icon : undefined
+}
+
+function MarketplaceDetailItem({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0 space-y-1">
+      <dt className="text-xs text-muted-foreground">{label}</dt>
+      <dd className="truncate font-medium">{value}</dd>
+    </div>
+  )
+}
+
+function marketplaceEntryKey(entry: MarketplaceEntry): string {
+  return `${entry.id}:${entry.version}`
 }
 
 function installedPluginMap(entries: PluginRegistryEntry[]): Map<string, PluginRegistryEntry> {

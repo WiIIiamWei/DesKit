@@ -1,21 +1,16 @@
-import type { ReactNode } from "react"
+import type { KeyboardEvent, ReactNode } from "react"
 import type { PluginRegistryEntry } from "@/lib/electron"
-import { AlertCircle, RefreshCw, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useState } from "react"
+import { AlertCircle, ChevronDown, Keyboard, RefreshCw, Trash2 } from "lucide-react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import {
-  Card,
-  CardAction,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card"
+import { Card, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import {
@@ -27,6 +22,7 @@ import {
 } from "@/components/ui/select"
 import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
+import { acceleratorFromKeyboardEvent, modifierKeys } from "@/lib/accelerators"
 import {
   ElectronIpcError,
   isElectron,
@@ -189,7 +185,7 @@ export function PluginsPage() {
       ) : (
         <div className="flex flex-col gap-3">
           {plugins.map((plugin) => (
-            <PluginCard
+            <PluginListItem
               key={`${plugin.pluginId}:${plugin.source.kind}:${plugin.rootDir}`}
               locale={i18n.language}
               pending={pending}
@@ -231,7 +227,7 @@ function PageFrame({
   )
 }
 
-function PluginCard({
+function PluginListItem({
   locale,
   onPreferenceChange,
   onReload,
@@ -263,98 +259,116 @@ function PluginCard({
   const canUninstall = plugin.source.kind !== "builtin"
 
   return (
-    <Card className={cn("gap-4", plugin.status === "invalid" && "border-destructive/50")}>
-      <CardHeader>
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-          <div className="min-w-0 space-y-2">
-            <CardTitle className="flex flex-wrap items-center gap-2 text-base">
-              <span className="truncate">{title}</span>
-              <StatusBadge status={plugin.status} />
-              <Badge variant="outline">{plugin.pluginId}</Badge>
-            </CardTitle>
-            <CardDescription>{description}</CardDescription>
-          </div>
-          <CardAction className="static col-auto row-auto justify-self-auto">
-            <div className="flex items-center gap-2">
-              <Label htmlFor={`plugin-enabled-${plugin.pluginId}`} className="text-xs">
-                {t(
-                  plugin.status === "disabled"
-                    ? "plugins.actions.enable"
-                    : "plugins.actions.disable"
-                )}
-              </Label>
-              <Switch
-                id={`plugin-enabled-${plugin.pluginId}`}
-                size="sm"
-                checked={plugin.status === "active"}
-                disabled={!canToggle || togglePending}
-                onCheckedChange={(checked) => void onToggle(plugin, checked)}
-              />
-            </div>
-          </CardAction>
-        </div>
-      </CardHeader>
-
-      <CardContent className="flex flex-col gap-4">
-        <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
-          <span>
-            {t("plugins.meta.version")}: {manifest?.version ?? "—"}
-          </span>
-          <span>
-            {t("plugins.meta.author")}: {manifest?.author ?? "—"}
-          </span>
-          <span>
-            {t("plugins.meta.commands")}: {manifest?.contributes.commands.length ?? 0}
-          </span>
-          <span className="truncate" title={plugin.rootDir}>
-            {t("plugins.meta.path")}: {plugin.rootDir}
-          </span>
-        </div>
-
-        {plugin.error && (
-          <Alert variant="destructive">
-            <AlertCircle className="size-4" aria-hidden />
-            <AlertTitle>{t("plugins.pluginErrorTitle")}</AlertTitle>
-            <AlertDescription>{plugin.error}</AlertDescription>
-          </Alert>
-        )}
-
-        {manifest?.contributes.preferences?.length ? (
-          <>
-            <Separator />
-            <PluginPreferences
-              locale={locale}
-              pending={pending}
-              plugin={plugin}
-              preferences={manifest.contributes.preferences}
-              onPreferenceChange={onPreferenceChange}
+    <Collapsible
+      className={cn(
+        "overflow-hidden rounded-xl border bg-card shadow-sm transition-shadow",
+        plugin.status === "invalid" && "border-destructive/50"
+      )}
+    >
+      <div className="flex items-start gap-3 px-4 py-3">
+        <CollapsibleTrigger asChild>
+          <button
+            type="button"
+            className="group flex min-w-0 flex-1 items-start gap-3 text-left outline-none"
+          >
+            <ChevronDown className="mt-0.5 size-4 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180" />
+            <PluginIcon
+              pluginId={plugin.pluginId}
+              icon={manifest?.icon}
+              className="mt-0.5 size-5 shrink-0 text-muted-foreground"
             />
-          </>
-        ) : null}
-
-        <Separator />
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={reloadPending}
-            onClick={() => void onReload(plugin)}
-          >
-            <RefreshCw className={cn("size-4", reloadPending && "animate-spin")} aria-hidden />
-            {t("plugins.actions.reload")}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={!canUninstall || uninstallPending}
-            onClick={() => void onUninstall(plugin)}
-          >
-            <Trash2 className="size-4" aria-hidden />
-            {t("plugins.actions.uninstall")}
-          </Button>
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="truncate text-sm font-medium">{title}</span>
+                <StatusBadge status={plugin.status} />
+                <Badge variant="outline">{t(`plugins.source.${plugin.source.kind}`)}</Badge>
+              </div>
+              <p className="truncate text-sm text-muted-foreground" title={description}>
+                {description}
+              </p>
+            </div>
+          </button>
+        </CollapsibleTrigger>
+        <div className="flex shrink-0 items-center pt-0.5">
+          <Switch
+            id={`plugin-enabled-${plugin.pluginId}`}
+            checked={plugin.status === "active"}
+            disabled={!canToggle || togglePending}
+            aria-label={t(
+              plugin.status === "disabled" ? "plugins.actions.enable" : "plugins.actions.disable"
+            )}
+            onCheckedChange={(checked) => void onToggle(plugin, checked)}
+          />
         </div>
-      </CardContent>
-    </Card>
+      </div>
+
+      <CollapsibleContent>
+        <div className="border-t px-4 py-4">
+          <div className="flex flex-col gap-4">
+            <div className="grid gap-2 text-xs text-muted-foreground sm:grid-cols-2">
+              <span className="min-w-0 truncate sm:col-span-2" title={plugin.pluginId}>
+                {t("plugins.meta.id")}: {plugin.pluginId}
+              </span>
+              <span>
+                {t("plugins.meta.version")}: {manifest?.version ?? "—"}
+              </span>
+              <span>
+                {t("plugins.meta.author")}: {manifest?.author ?? "—"}
+              </span>
+              <span>
+                {t("plugins.meta.commands")}: {manifest?.contributes.commands.length ?? 0}
+              </span>
+              <span className="min-w-0 truncate sm:col-span-2" title={plugin.rootDir}>
+                {t("plugins.meta.path")}: {plugin.rootDir}
+              </span>
+            </div>
+
+            {plugin.error && (
+              <Alert variant="destructive">
+                <AlertCircle className="size-4" aria-hidden />
+                <AlertTitle>{t("plugins.pluginErrorTitle")}</AlertTitle>
+                <AlertDescription>{plugin.error}</AlertDescription>
+              </Alert>
+            )}
+
+            {manifest?.contributes.preferences?.length ? (
+              <>
+                <Separator />
+                <PluginPreferences
+                  locale={locale}
+                  pending={pending}
+                  plugin={plugin}
+                  preferences={manifest.contributes.preferences}
+                  onPreferenceChange={onPreferenceChange}
+                />
+              </>
+            ) : null}
+
+            <Separator />
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={reloadPending}
+                onClick={() => void onReload(plugin)}
+              >
+                <RefreshCw className={cn("size-4", reloadPending && "animate-spin")} aria-hidden />
+                {t("plugins.actions.reload")}
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={!canUninstall || uninstallPending}
+                onClick={() => void onUninstall(plugin)}
+              >
+                <Trash2 className="size-4" aria-hidden />
+                {t("plugins.actions.uninstall")}
+              </Button>
+            </div>
+          </div>
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   )
 }
 
@@ -382,7 +396,7 @@ function PluginPreferences({
         <h3 className="text-sm font-medium">{t("plugins.preferences.title")}</h3>
         <p className="text-xs text-muted-foreground">{t("plugins.preferences.body")}</p>
       </div>
-      <div className="grid gap-3 sm:grid-cols-2">
+      <div className="divide-y rounded-lg border">
         {preferences.map((preference) => (
           <PreferenceControl
             key={preference.id}
@@ -424,63 +438,172 @@ function PreferenceControl({
   const label = localize(preference.label, locale) || preference.id
 
   return (
-    <div className="flex flex-col gap-2 rounded-lg border bg-muted/20 p-3">
-      <Label htmlFor={id}>{label}</Label>
-      {preference.type === "checkbox" ? (
-        <Switch
-          id={id}
-          checked={Boolean(value)}
-          disabled={pending}
-          onCheckedChange={(checked) => void onPreferenceChange(plugin, preference, checked)}
-        />
-      ) : preference.type === "select" ? (
-        <Select
-          value={typeof value === "string" ? value : (preference.options?.[0]?.value ?? "")}
-          disabled={pending || !preference.options?.length}
-          onValueChange={(nextValue) => void onPreferenceChange(plugin, preference, nextValue)}
-        >
-          <SelectTrigger id={id} className="w-full">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {preference.options?.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {localize(option.label, locale) || option.value}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      ) : preference.type === "number" ? (
-        <Input
-          id={id}
-          key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
-          type="number"
-          disabled={pending}
-          defaultValue={typeof value === "number" ? String(value) : ""}
-          onBlur={(event) => {
-            const raw = event.currentTarget.value.trim()
-            if (!raw) return
-            const nextValue = Number(raw)
-            if (!Number.isFinite(nextValue)) {
-              toast.error(t("plugins.preferences.invalidNumber"))
-              event.currentTarget.value = typeof value === "number" ? String(value) : ""
-              return
-            }
-            if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
-          }}
-        />
-      ) : (
-        <Input
-          id={id}
-          key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
-          disabled={pending}
-          defaultValue={typeof value === "string" ? value : ""}
-          onBlur={(event) => {
-            const nextValue = event.currentTarget.value
-            if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
-          }}
-        />
-      )}
+    <div className="flex flex-col gap-3 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+      <Label htmlFor={id} className="min-w-0 text-sm font-medium">
+        {label}
+      </Label>
+      <div className="w-full sm:w-64">
+        {preference.type === "checkbox" ? (
+          <div className="flex justify-start sm:justify-end">
+            <Switch
+              id={id}
+              checked={Boolean(value)}
+              disabled={pending}
+              onCheckedChange={(checked) => void onPreferenceChange(plugin, preference, checked)}
+            />
+          </div>
+        ) : preference.type === "shortcut" ? (
+          <ShortcutPreferenceControl
+            id={id}
+            key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+            pending={pending}
+            plugin={plugin}
+            preference={preference}
+            value={value}
+            onPreferenceChange={onPreferenceChange}
+          />
+        ) : preference.type === "select" ? (
+          <Select
+            value={typeof value === "string" ? value : (preference.options?.[0]?.value ?? "")}
+            disabled={pending || !preference.options?.length}
+            onValueChange={(nextValue) => void onPreferenceChange(plugin, preference, nextValue)}
+          >
+            <SelectTrigger id={id} className="w-full">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {preference.options?.map((option) => (
+                <SelectItem key={option.value} value={option.value}>
+                  {localize(option.label, locale) || option.value}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        ) : preference.type === "number" ? (
+          <Input
+            id={id}
+            key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+            type="number"
+            disabled={pending}
+            defaultValue={typeof value === "number" ? String(value) : ""}
+            onBlur={(event) => {
+              const raw = event.currentTarget.value.trim()
+              if (!raw) return
+              const nextValue = Number(raw)
+              if (!Number.isFinite(nextValue)) {
+                toast.error(t("plugins.preferences.invalidNumber"))
+                event.currentTarget.value = typeof value === "number" ? String(value) : ""
+                return
+              }
+              if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
+            }}
+          />
+        ) : (
+          <Input
+            id={id}
+            key={`${plugin.pluginId}:${preference.id}:${String(value)}`}
+            disabled={pending}
+            defaultValue={typeof value === "string" ? value : ""}
+            onBlur={(event) => {
+              const nextValue = event.currentTarget.value
+              if (nextValue !== value) void onPreferenceChange(plugin, preference, nextValue)
+            }}
+          />
+        )}
+      </div>
+    </div>
+  )
+}
+
+function ShortcutPreferenceControl({
+  id,
+  onPreferenceChange,
+  pending,
+  plugin,
+  preference,
+  value,
+}: {
+  id: string
+  onPreferenceChange: (
+    plugin: PluginRegistryEntry,
+    preference: ManifestPreference,
+    value: unknown
+  ) => Promise<void>
+  pending: boolean
+  plugin: PluginRegistryEntry
+  preference: ManifestPreference
+  value: unknown
+}) {
+  const { t } = useTranslation()
+  const currentValue = typeof value === "string" ? value : ""
+  const [draft, setDraft] = useState(currentValue)
+  const [capturing, setCapturing] = useState(false)
+  const inputRef = useRef<HTMLInputElement>(null)
+
+  async function save(nextValue: string) {
+    if (nextValue === currentValue) return
+    await onPreferenceChange(plugin, preference, nextValue)
+  }
+
+  function onShortcutKeyDown(event: KeyboardEvent<HTMLInputElement>) {
+    if (!capturing) return
+
+    event.preventDefault()
+    event.stopPropagation()
+
+    if (event.key === "Escape") {
+      setCapturing(false)
+      setDraft(currentValue)
+      return
+    }
+
+    if (modifierKeys.has(event.key)) return
+
+    const nextValue = acceleratorFromKeyboardEvent(event)
+    if (!nextValue) return
+
+    setDraft(nextValue)
+    setCapturing(false)
+    void save(nextValue)
+  }
+
+  return (
+    <div className="flex gap-2">
+      <Input
+        ref={inputRef}
+        id={id}
+        value={draft}
+        disabled={pending}
+        readOnly={capturing}
+        spellCheck={false}
+        autoComplete="off"
+        placeholder={t("plugins.preferences.shortcutPlaceholder")}
+        className="font-mono text-sm"
+        onChange={(event) => {
+          if (!capturing) setDraft(event.target.value)
+        }}
+        onBlur={() => {
+          setCapturing(false)
+          void save(draft)
+        }}
+        onKeyDown={onShortcutKeyDown}
+        onPaste={(event) => {
+          if (capturing) event.preventDefault()
+        }}
+      />
+      <Button
+        type="button"
+        variant={capturing ? "secondary" : "outline"}
+        disabled={pending}
+        aria-pressed={capturing}
+        onClick={() => {
+          setCapturing(true)
+          inputRef.current?.focus()
+        }}
+      >
+        <Keyboard className="size-4" aria-hidden />
+        {capturing ? t("plugins.preferences.capturing") : t("plugins.preferences.capture")}
+      </Button>
     </div>
   )
 }

@@ -15,7 +15,14 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
-import { getSettings, isElectron, refreshApps, updateSettings } from "@/lib/electron"
+import { acceleratorFromKeyboardEvent, modifierKeys, splitAccelerator } from "@/lib/accelerators"
+import {
+  getSettings,
+  isElectron,
+  onSettingsChanged,
+  refreshApps,
+  updateSettings,
+} from "@/lib/electron"
 
 /**
  * Render an Electron accelerator string ("Control+Shift+P") as a row of
@@ -44,95 +51,9 @@ function HotkeyChips({ accelerator }: { accelerator: string }) {
   )
 }
 
-function splitAccelerator(accelerator: string, isMac = isMacPlatform()): string[] {
-  return accelerator
-    .split("+")
-    .map((part) => part.trim())
-    .filter(Boolean)
-    .map((part) => {
-      const lower = part.toLowerCase()
-      switch (lower) {
-        case "commandorcontrol":
-        case "cmdorctrl":
-        case "control":
-        case "ctrl":
-          return "Ctrl"
-        case "command":
-        case "cmd":
-        case "meta":
-        case "super":
-          return "⌘"
-        case "alt":
-        case "option":
-          return isMac ? "⌥" : "Alt"
-        case "shift":
-          return "Shift"
-        case "space":
-          return "Space"
-        default:
-          return part.length === 1 ? part.toUpperCase() : part
-      }
-    })
-}
-
-const modifierKeys = new Set(["Alt", "Control", "Meta", "Shift"])
-
-function acceleratorFromKeyboardEvent(event: KeyboardEvent<HTMLInputElement>): string | null {
-  if (modifierKeys.has(event.key)) return null
-
-  const key = normalizeAcceleratorKey(event)
-  if (!key) return null
-
-  const modifiers: string[] = []
-  if (event.ctrlKey) modifiers.push("Control")
-  if (event.altKey) modifiers.push("Alt")
-  if (event.shiftKey) modifiers.push("Shift")
-  if (event.metaKey) modifiers.push(isMacPlatform() ? "Command" : "Meta")
-
-  if (modifiers.length === 0) return null
-  return [...modifiers, key].join("+")
-}
-
 function isMacPlatform(): boolean {
   if (typeof navigator === "undefined") return false
   return /Mac|iPhone|iPad|iPod/.test(navigator.platform)
-}
-
-function normalizeAcceleratorKey(event: KeyboardEvent<HTMLInputElement>): string | null {
-  if (
-    event.code === "Space" ||
-    event.key === " " ||
-    event.key === "Space" ||
-    event.key === "Spacebar"
-  ) {
-    return "Space"
-  }
-  if (event.key === "+") return "Plus"
-  if (event.code === "NumpadAdd") return "Plus"
-  if (event.key.length === 1) return event.key.toUpperCase()
-  if (event.code.startsWith("Key")) return event.code.slice(3).toUpperCase()
-  if (event.code.startsWith("Digit")) return event.code.slice(5)
-
-  switch (event.key) {
-    case "ArrowDown":
-    case "ArrowLeft":
-    case "ArrowRight":
-    case "ArrowUp":
-    case "Backspace":
-    case "Delete":
-    case "End":
-    case "Enter":
-    case "Escape":
-    case "Home":
-    case "Insert":
-    case "PageDown":
-    case "PageUp":
-    case "Space":
-    case "Tab":
-      return event.key
-    default:
-      return /^F\d{1,2}$/.test(event.key) ? event.key : null
-  }
 }
 
 /**
@@ -147,13 +68,39 @@ export function LauncherSettings() {
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [capturingHotkey, setCapturingHotkey] = useState(false)
+  const hotkeyRef = useRef("")
+  const savedHotkeyRef = useRef("")
   const hotkeyInputRef = useRef<HTMLInputElement>(null)
+
+  useEffect(() => {
+    hotkeyRef.current = hotkey
+  }, [hotkey])
+
+  useEffect(() => {
+    savedHotkeyRef.current = savedHotkey
+  }, [savedHotkey])
 
   useEffect(() => {
     if (!isElectron()) return
     void getSettings().then((settings) => {
+      hotkeyRef.current = settings.hotkey
+      savedHotkeyRef.current = settings.hotkey
       setHotkey(settings.hotkey)
       setSavedHotkey(settings.hotkey)
+    })
+    return onSettingsChanged((settings) => {
+      const currentHotkey = hotkeyInputRef.current?.value ?? hotkeyRef.current
+      const currentSavedHotkey = savedHotkeyRef.current
+      if (settings.hotkey === currentSavedHotkey) return
+
+      savedHotkeyRef.current = settings.hotkey
+      setSavedHotkey(settings.hotkey)
+      setStatus(null)
+
+      if (currentHotkey === currentSavedHotkey || currentHotkey === settings.hotkey) {
+        hotkeyRef.current = settings.hotkey
+        setHotkey(settings.hotkey)
+      }
     })
   }, [])
 
@@ -180,6 +127,7 @@ export function LauncherSettings() {
     if (!next) return
 
     setStatus(null)
+    hotkeyRef.current = next
     setHotkey(next)
     setCapturingHotkey(false)
   }
@@ -194,11 +142,13 @@ export function LauncherSettings() {
     setStatus(null)
     try {
       const next = await updateSettings({ hotkey })
+      savedHotkeyRef.current = next.hotkey
       setSavedHotkey(next.hotkey)
       // Main process keeps the previous hotkey if the new accelerator
       // can't be registered (returns the still-active value). Detect
       // that mismatch and surface it to the user.
       if (next.hotkey !== hotkey) {
+        hotkeyRef.current = next.hotkey
         setHotkey(next.hotkey)
         setStatus({ kind: "error", text: t("launcher.settings.invalid") })
       } else {
@@ -244,7 +194,10 @@ export function LauncherSettings() {
               id="hotkey-input"
               value={hotkey}
               onChange={(e) => {
-                if (!capturingHotkey) setHotkey(e.target.value)
+                if (!capturingHotkey) {
+                  hotkeyRef.current = e.target.value
+                  setHotkey(e.target.value)
+                }
               }}
               onBlur={() => setCapturingHotkey(false)}
               onKeyDown={onHotkeyKeyDown}

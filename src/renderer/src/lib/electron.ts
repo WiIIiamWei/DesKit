@@ -27,6 +27,10 @@ export type MarketplaceEntry = DeskitMarketplaceEntry
 export type PluginCommandResult = DeskitPluginCommandResult
 export type PluginInvokePhase = DeskitPluginInvokePhase
 export type PluginView = DeskitPluginView
+export type SyncStatus = DeskitSyncStatus
+export type GitHubDeviceAuthorization = DeskitGitHubDeviceAuthorization
+export type GitHubLoginPollResult = DeskitGitHubLoginPollResult
+export type SyncRunResult = DeskitSyncRunResult
 export type PluginIpcError = DeskitPluginIpcError
 export type PluginIpcErrorCode = DeskitPluginIpcErrorCode
 type PluginIpcResult<T> = DeskitPluginIpcResult<T>
@@ -77,6 +81,10 @@ export async function writeClipboardContent(content: DeskitClipboardContent): Pr
   return api().writeClipboardContent(content)
 }
 
+export async function pasteClipboardContent(content: DeskitClipboardContent): Promise<boolean> {
+  return api().pasteClipboardContent(content)
+}
+
 export function notifyLauncherReady(): void {
   api().notifyLauncherReady()
 }
@@ -103,6 +111,53 @@ export async function getSettings(): Promise<UserSettings> {
 
 export async function updateSettings(patch: Partial<UserSettings>): Promise<UserSettings> {
   return api().updateSettings(patch)
+}
+
+export async function getSyncStatus(): Promise<SyncStatus> {
+  return api().getSyncStatus()
+}
+
+export async function saveSyncClientId(clientId: string): Promise<SyncStatus> {
+  return api().saveSyncClientId(clientId)
+}
+
+export async function saveSyncGistId(gistId: string): Promise<SyncStatus> {
+  return api().saveSyncGistId(gistId)
+}
+
+export async function startGitHubLogin(): Promise<GitHubDeviceAuthorization> {
+  return api().startGitHubLogin()
+}
+
+export async function pollGitHubLogin(deviceCode: string): Promise<GitHubLoginPollResult> {
+  return api().pollGitHubLogin(deviceCode)
+}
+
+export async function configureSyncPassphrase(
+  passphrase: string,
+  rememberPassphrase: boolean
+): Promise<SyncStatus> {
+  return api().configureSyncPassphrase(passphrase, rememberPassphrase)
+}
+
+export async function pushSync(passphrase?: string): Promise<SyncRunResult> {
+  return api().pushSync(passphrase)
+}
+
+export async function pullSync(passphrase?: string): Promise<SyncRunResult> {
+  return api().pullSync(passphrase)
+}
+
+export async function applyRemoteSync(): Promise<SyncStatus> {
+  return api().applyRemoteSync()
+}
+
+export async function applyLocalSync(passphrase?: string): Promise<SyncRunResult> {
+  return api().applyLocalSync(passphrase)
+}
+
+export async function disconnectSync(): Promise<SyncStatus> {
+  return api().disconnectSync()
 }
 
 export async function getLanStatus(): Promise<LanStatus> {
@@ -240,6 +295,12 @@ export function onFloatingBallFeatures(
   handler: (features: FloatingBallFeature[]) => void
 ): () => void {
   return api().onFloatingBallFeatures(handler)
+}
+
+export function onLauncherRunPluginCommand(
+  handler: (command: { pluginId: string; commandId: string }) => void
+): () => void {
+  return api().onLauncherRunPluginCommand(handler)
 }
 
 export function onPluginRegistryChanged(

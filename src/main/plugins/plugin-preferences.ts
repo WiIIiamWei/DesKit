@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import process from "node:process"
 
-type PreferenceFile = Record<string, Record<string, unknown>>
+export type PreferenceFile = Record<string, Record<string, unknown>>
 
 /**
  * JSON-backed store for plugin preferences keyed by pluginId.
@@ -32,6 +32,17 @@ export class PluginPreferenceStore {
   get(pluginId: string): Record<string, unknown> {
     this.ensureLoaded()
     return { ...(this.data[pluginId] ?? {}) }
+  }
+
+  exportAll(): PreferenceFile {
+    this.ensureLoaded()
+    return clonePreferenceFile(this.data)
+  }
+
+  async importPreferences(preferences: PreferenceFile): Promise<void> {
+    this.ensureLoaded()
+    this.data = clonePreferenceFile({ ...this.data, ...preferences })
+    await this.save()
   }
 
   async set(pluginId: string, key: string, value: unknown): Promise<void> {
@@ -78,6 +89,14 @@ function normalizePreferenceFile(value: unknown): PreferenceFile {
   const result: PreferenceFile = {}
   for (const [pluginId, preferences] of Object.entries(value)) {
     if (!preferences || typeof preferences !== "object" || Array.isArray(preferences)) continue
+    result[pluginId] = { ...preferences }
+  }
+  return result
+}
+
+function clonePreferenceFile(value: PreferenceFile): PreferenceFile {
+  const result: PreferenceFile = {}
+  for (const [pluginId, preferences] of Object.entries(value)) {
     result[pluginId] = { ...preferences }
   }
   return result

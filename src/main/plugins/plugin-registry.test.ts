@@ -39,6 +39,15 @@ describe("pluginRegistry", () => {
     ])
   })
 
+  it("uses plugin icons as command search fallbacks", async () => {
+    const sandbox = fakeSandbox()
+    const registry = new PluginRegistry({ sandbox, now: () => 1 })
+
+    await registry.load([discovered({ icon: "lucide:puzzle" })])
+
+    expect(registry.searchCommands("run")[0]?.icon).toBe("lucide:puzzle")
+  })
+
   it("continues reload when unloading an old plugin fails", async () => {
     const sandbox = fakeSandbox()
     const registry = new PluginRegistry({ sandbox, now: () => 1 })
@@ -236,6 +245,7 @@ function discovered(
   overrides: {
     id?: string
     commandId?: string
+    icon?: string
     title?: string
     activationEvents?: PluginManifest["contributes"]["activationEvents"]
     permissions?: string[]
@@ -255,6 +265,7 @@ function manifest(
   overrides: {
     id?: string
     commandId?: string
+    icon?: string
     title?: string
     activationEvents?: PluginManifest["contributes"]["activationEvents"]
     permissions?: string[]
@@ -270,6 +281,7 @@ function manifest(
     description: "test",
     version: "0.1.0",
     author: "DesKit",
+    ...(overrides.icon ? { icon: overrides.icon } : {}),
     engines: { deskit: "^0.1.0" },
     main: "dist/index.js",
     contributes: {

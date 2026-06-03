@@ -25,7 +25,7 @@ export interface CopyAction {
   label?: LocalizedString
   /**
    * A plain string is treated as `{ type: "text", text: value }`.
-   * Use a `ClipboardContent` object for image and file clipboard entries.
+   * Use a `ClipboardContent` object for image clipboard entries.
    */
   value: ClipboardActionValue
   shortcut?: string
@@ -36,7 +36,7 @@ export interface PasteAction {
   label?: LocalizedString
   /**
    * A plain string is treated as `{ type: "text", text: value }`.
-   * Use a `ClipboardContent` object for image and file clipboard entries.
+   * Use a `ClipboardContent` object for image clipboard entries.
    */
   value: ClipboardActionValue
   shortcut?: string

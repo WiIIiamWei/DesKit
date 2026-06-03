@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { LauncherSettings } from "./launcher-settings"
@@ -10,45 +10,77 @@ vi.mock("react-i18next", () => ({
 }))
 
 type TestElectronApi = NonNullable<Window["electronAPI"]>
+type SettingsChangedHandler = (settings: DeskitUserSettings) => void
+
+type TestElectronApiHarness = TestElectronApi & {
+  emitSettingsChanged: (settings: Partial<DeskitUserSettings>) => void
+}
 
 function ok<T>(data: T): DeskitPluginIpcResult<T> {
   return { ok: true, data }
 }
 
-function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
+function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSettings {
+  return {
+    hotkey: "Control+Space",
+    themeMode: "system",
+    accent: "neutral",
+    floatingBallEnabled: false,
+    floatingBallFeatures: [],
+    lanEnabled: false,
+    ...overrides,
+  }
+}
+
+function installElectronApi(settings: Partial<DeskitUserSettings> = {}): TestElectronApiHarness {
+  let settingsChangedHandler: SettingsChangedHandler | null = null
+  const currentSettings = baseSettings(settings)
   const api = {
-    getSettings: vi.fn().mockResolvedValue(settings),
-    updateSettings: vi.fn().mockResolvedValue(settings),
+    getSettings: vi.fn().mockResolvedValue(currentSettings),
+    updateSettings: vi.fn().mockResolvedValue(currentSettings),
+    getSyncStatus: vi.fn().mockResolvedValue({
+      configured: false,
+      enabled: false,
+      loggedIn: false,
+      deviceId: "device",
+      rememberPassphrase: true,
+      hasSavedPassphrase: false,
+    }),
+    saveSyncClientId: vi.fn(),
+    saveSyncGistId: vi.fn(),
+    startGitHubLogin: vi.fn(),
+    pollGitHubLogin: vi.fn(),
+    configureSyncPassphrase: vi.fn(),
+    pushSync: vi.fn(),
+    pullSync: vi.fn(),
+    applyRemoteSync: vi.fn(),
+    applyLocalSync: vi.fn(),
+    disconnectSync: vi.fn(),
+    getLanStatus: vi.fn().mockResolvedValue({ enabled: false }),
+    listLanDevices: vi.fn().mockResolvedValue([]),
+    listLanPairings: vi.fn().mockResolvedValue([]),
+    pairLanDevice: vi.fn().mockResolvedValue({ id: "pair" }),
+    confirmLanPairing: vi.fn().mockResolvedValue([]),
+    rejectLanPairing: vi.fn().mockResolvedValue([]),
+    disconnectLanDevice: vi.fn().mockResolvedValue(undefined),
+    listLanTransfers: vi.fn().mockResolvedValue([]),
+    sendLanFile: vi.fn().mockResolvedValue(null),
+    resumeLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    acceptLanTransfer: vi.fn().mockResolvedValue(null),
+    rejectLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    removeLanTransferHistory: vi.fn().mockResolvedValue([]),
     refreshApps: vi.fn().mockResolvedValue([]),
     searchApps: vi.fn().mockResolvedValue([]),
     launchApp: vi.fn().mockResolvedValue(true),
     hideLauncher: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(true),
     writeClipboardContent: vi.fn().mockResolvedValue(true),
+    pasteClipboardContent: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
-    getLanStatus: vi.fn().mockResolvedValue({
-      enabled: false,
-      discovering: false,
-      localDeviceId: "local",
-      localDeviceName: "Desktop",
-      deviceCount: 0,
-    }),
-    listLanDevices: vi.fn().mockResolvedValue([]),
-    listLanPairings: vi.fn().mockResolvedValue([]),
-    pairLanDevice: vi.fn(),
-    confirmLanPairing: vi.fn(),
-    rejectLanPairing: vi.fn(),
-    disconnectLanDevice: vi.fn(),
-    listLanTransfers: vi.fn().mockResolvedValue([]),
-    sendLanFile: vi.fn(),
-    resumeLanTransfer: vi.fn(),
-    acceptLanTransfer: vi.fn(),
-    rejectLanTransfer: vi.fn(),
-    removeLanTransferHistory: vi.fn(),
     listPlugins: vi.fn().mockResolvedValue(ok([])),
     getPlugin: vi.fn().mockResolvedValue(ok(null)),
     setPluginEnabled: vi.fn().mockResolvedValue(ok(null)),
@@ -65,13 +97,22 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApi {
     onLauncherFocus: vi.fn(() => () => undefined),
     onFloatingBallMenuState: vi.fn(() => () => undefined),
     onFloatingBallFeatures: vi.fn(() => () => undefined),
+    onLauncherRunPluginCommand: vi.fn(() => () => undefined),
     onPluginRegistryChanged: vi.fn(() => () => undefined),
-    onSettingsChanged: vi.fn(() => () => undefined),
+    onSettingsChanged: vi.fn((handler: SettingsChangedHandler) => {
+      settingsChangedHandler = handler
+      return () => {
+        settingsChangedHandler = null
+      }
+    }),
     onLanDevicesChanged: vi.fn(() => () => undefined),
     onLanStatusChanged: vi.fn(() => () => undefined),
     onLanPairingsChanged: vi.fn(() => () => undefined),
     onLanTransfersChanged: vi.fn(() => () => undefined),
-  } satisfies TestElectronApi
+    emitSettingsChanged: (nextSettings: Partial<DeskitUserSettings>) => {
+      act(() => settingsChangedHandler?.(baseSettings(nextSettings)))
+    },
+  } satisfies TestElectronApiHarness
 
   window.electronAPI = api
   return api
@@ -89,14 +130,7 @@ describe("launcher settings", () => {
 
   beforeEach(() => {
     mockPlatform("Win32")
-    installElectronApi({
-      hotkey: "Control+Space",
-      themeMode: "system",
-      accent: "neutral",
-      floatingBallEnabled: false,
-      floatingBallFeatures: [],
-      lanEnabled: false,
-    })
+    installElectronApi()
   })
 
   afterEach(() => {
@@ -209,7 +243,7 @@ describe("launcher settings", () => {
     expect(input).toHaveValue("Control+Tab")
   })
 
-  it("captures the command key as an Electron macOS accelerator on macOS", async () => {
+  it("captures the command key as a portable accelerator on macOS", async () => {
     mockPlatform("MacIntel")
     const user = userEvent.setup()
     render(<LauncherSettings />)
@@ -218,7 +252,7 @@ describe("launcher settings", () => {
     await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
-    expect(input).toHaveValue("Command+K")
+    expect(input).toHaveValue("CommandOrControl+K")
   })
 
   it("cancels capture when the input loses focus", async () => {
@@ -242,7 +276,7 @@ describe("launcher settings", () => {
     expect(input).toHaveValue("Control+Space")
   })
 
-  it("keeps meta as the Windows key accelerator off macOS", async () => {
+  it("captures the Windows key as the Electron Super accelerator off macOS", async () => {
     const user = userEvent.setup()
     render(<LauncherSettings />)
 
@@ -250,6 +284,135 @@ describe("launcher settings", () => {
     await user.click(screen.getByRole("button", { name: "launcher.settings.capture" }))
     fireEvent.keyDown(input, { metaKey: true, code: "KeyK", key: "k" })
 
-    expect(input).toHaveValue("Meta+K")
+    expect(input).toHaveValue("Super+K")
+  })
+
+  it("syncs the hotkey input when a settings broadcast arrives without local edits", async () => {
+    const api = installElectronApi({
+      hotkey: "Control+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    api.emitSettingsChanged({
+      hotkey: "Alt+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+
+    expect(input).toHaveValue("Alt+Space")
+    expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeDisabled()
+  })
+
+  it("keeps a dirty hotkey draft when another settings broadcast changes the saved baseline", async () => {
+    const user = userEvent.setup()
+    const api = installElectronApi({
+      hotkey: "Control+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    await user.clear(input)
+    await user.type(input, "Alt+Space")
+    api.emitSettingsChanged({
+      hotkey: "Shift+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+
+    expect(input).toHaveValue("Alt+Space")
+    expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeEnabled()
+  })
+
+  it("uses the visible hotkey input value when reconciling settings broadcasts", async () => {
+    const api = installElectronApi({
+      hotkey: "Control+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    fireEvent.change(input, { target: { value: "Alt+Space" } })
+    api.emitSettingsChanged({
+      hotkey: "Shift+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+
+    expect(input).toHaveValue("Alt+Space")
+    expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeEnabled()
+  })
+
+  it("marks a dirty hotkey draft clean when a settings broadcast matches it", async () => {
+    const user = userEvent.setup()
+    const api = installElectronApi({
+      hotkey: "Control+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    await user.clear(input)
+    await user.type(input, "Alt+Space")
+    api.emitSettingsChanged({
+      hotkey: "Alt+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+
+    expect(input).toHaveValue("Alt+Space")
+    expect(screen.getByRole("button", { name: "launcher.settings.save" })).toBeDisabled()
+  })
+
+  it("clears the save status when a settings broadcast changes the saved hotkey", async () => {
+    const user = userEvent.setup()
+    const api = installElectronApi({
+      hotkey: "Control+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+    api.updateSettings = vi.fn().mockResolvedValue(baseSettings({ hotkey: "Alt+Space" }))
+    window.electronAPI = api
+    render(<LauncherSettings />)
+
+    const input = await screen.findByLabelText("launcher.settings.hotkeyLabel")
+    await user.clear(input)
+    await user.type(input, "Alt+Space")
+    await user.click(screen.getByRole("button", { name: "launcher.settings.save" }))
+    expect(await screen.findByRole("status")).toHaveTextContent("launcher.settings.saved")
+
+    api.emitSettingsChanged({
+      hotkey: "Shift+Space",
+      themeMode: "system",
+      accent: "neutral",
+      floatingBallEnabled: false,
+      floatingBallFeatures: [],
+    })
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument()
   })
 })

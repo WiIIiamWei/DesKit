@@ -1,6 +1,7 @@
 import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { MarketplaceEntry } from "./marketplace-registry"
 import type { PluginBridgeAdapters, PluginRuntimeSnapshot } from "./plugin-bridge"
+import type { PreferenceFile } from "./plugin-preferences"
 import type {
   PluginCommandResult,
   PluginInvokeRequest,
@@ -12,6 +13,7 @@ import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import { createElectronPluginAdapters } from "./electron-adapters"
+import { isLucideIcon, resolvePluginIconFile } from "./icon-paths"
 import { extractDeskitPackage } from "./install-from-package"
 import { loadPluginManifest } from "./manifest-loader"
 import {
@@ -73,6 +75,12 @@ export class PluginInstallError extends Error {
     this.name = "PluginInstallError"
     this.details = details
   }
+}
+
+export interface PluginPreferenceImportResult {
+  applied: number
+  pending: number
+  skipped: Array<{ pluginId: string; key: string; reason: string }>
 }
 
 function clipboardSnapshot(content: ClipboardContent): string {
@@ -164,6 +172,54 @@ export class PluginHost {
     }
 
     await this.preferences.set(pluginId, key, value)
+    this.registry.emit("changed", this.registry.list())
+  }
+
+  exportPreferences(): PreferenceFile {
+    return this.preferences.exportAll()
+  }
+
+  async importSyncedPreferences(
+    preferences: PreferenceFile
+  ): Promise<PluginPreferenceImportResult> {
+    const next: PreferenceFile = {}
+    const skipped: PluginPreferenceImportResult["skipped"] = []
+    let applied = 0
+    let pending = 0
+
+    for (const [pluginId, pluginPreferences] of Object.entries(preferences)) {
+      const entry = this.registry.get(pluginId)
+      if (!entry?.manifest) {
+        next[pluginId] = { ...pluginPreferences }
+        pending += Object.keys(pluginPreferences).length
+        continue
+      }
+
+      const declared = entry.manifest.contributes.preferences ?? []
+      const valid: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(pluginPreferences)) {
+        const preference = declared.find((item) => item.id === key)
+        if (!preference) {
+          skipped.push({ pluginId, key, reason: "unknown preference" })
+          continue
+        }
+        try {
+          validatePreferenceValue(pluginId, key, value, preference)
+          valid[key] = value
+          applied += 1
+        } catch (err) {
+          skipped.push({
+            pluginId,
+            key,
+            reason: err instanceof Error ? err.message : "invalid preference",
+          })
+        }
+      }
+      if (Object.keys(valid).length > 0) next[pluginId] = valid
+    }
+
+    await this.preferences.importPreferences(next)
+    return { applied, pending, skipped }
   }
 
   // Implemented in a later stage (folder install + chokidar hot reload).
@@ -455,7 +511,44 @@ async function validateInstallSource(sourceDir: string): Promise<PluginManifest>
   if (!mainStat.isFile()) {
     throw new PluginInstallError("Plugin main file is missing.", { pluginId: manifest.id })
   }
+  await validatePluginIconFiles(sourceDir, manifest)
   return manifest
+}
+
+async function validatePluginIconFiles(sourceDir: string, manifest: PluginManifest): Promise<void> {
+  const iconPaths = new Set<string>()
+  if (manifest.icon && !isLucideIcon(manifest.icon)) iconPaths.add(manifest.icon)
+  for (const command of manifest.contributes.commands) {
+    if (command.icon && !isLucideIcon(command.icon)) iconPaths.add(command.icon)
+  }
+
+  for (const iconPath of iconPaths) {
+    const filePath = resolvePluginIconFile(sourceDir, iconPath)
+    if (!filePath) {
+      throw new PluginInstallError("Plugin icon file path is invalid.", {
+        pluginId: manifest.id,
+        icon: iconPath,
+      })
+    }
+    let iconStat
+    try {
+      iconStat = await fs.stat(filePath)
+    } catch (err) {
+      if (isFileNotFound(err)) {
+        throw new PluginInstallError("Plugin icon file is missing.", {
+          pluginId: manifest.id,
+          icon: iconPath,
+        })
+      }
+      throw err
+    }
+    if (!iconStat.isFile()) {
+      throw new PluginInstallError("Plugin icon file is missing.", {
+        pluginId: manifest.id,
+        icon: iconPath,
+      })
+    }
+  }
 }
 
 async function copyPluginDirectory(sourceDir: string, targetDir: string): Promise<void> {
@@ -617,6 +710,11 @@ function validatePreferenceValue(
           key,
           `${key} must be one of the declared select options`
         )
+      }
+      return
+    case "shortcut":
+      if (typeof value !== "string") {
+        throw new PluginPreferenceTypeError(pluginId, key, `${key} must be an accelerator string`)
       }
   }
 }

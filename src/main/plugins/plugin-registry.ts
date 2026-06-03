@@ -43,6 +43,7 @@ export interface PluginRegistryOptions {
 interface CommandIndexEntry {
   pluginId: string
   command: ManifestCommand
+  pluginIcon?: string
 }
 
 export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
@@ -134,7 +135,7 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
         commandId: indexed.command.id,
         title: indexed.command.title,
         subtitle: indexed.command.subtitle,
-        icon: indexed.command.icon,
+        icon: indexed.command.icon ?? indexed.pluginIcon,
         mode: indexed.command.mode,
         score: match.score,
         matches: match.matches,
@@ -256,6 +257,7 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
       this.commandIndex.set(commandIndexKey(entry.pluginId, command.id), {
         pluginId: entry.pluginId,
         command,
+        pluginIcon: entry.manifest.icon,
       })
     }
   }

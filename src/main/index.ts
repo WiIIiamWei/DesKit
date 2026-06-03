@@ -1,7 +1,14 @@
 import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { IpcMainInvokeEvent } from "electron"
 import type { LanDevice, LanPairing, LanStatus, LanTransfer } from "./lan/types"
+import type { PluginRegistryEntry } from "./plugins/types"
 import type { SearchWindowDeps } from "./search-window"
+import type { FloatingBallFeature } from "./settings/settings"
+import type {
+  DeskitSyncPayload,
+  PullSyncResult,
+  PushSyncResult,
+} from "./sync/settings-sync-service"
 import { Buffer } from "node:buffer"
 import * as path from "node:path"
 import process from "node:process"
@@ -20,6 +27,8 @@ import {
   session,
   shell,
 } from "electron"
+import { defaultAppIcon } from "./app-icon"
+import { pruneUnavailableFloatingBallFeatures } from "./floating-ball-features"
 import {
   destroyFloatingBallWindow,
   hideFloatingBallWindow,
@@ -40,6 +49,8 @@ import {
 } from "./lan/dev-simulation"
 import { LanService } from "./lan/lan-service"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
+import { collectPluginShortcutBindings } from "./plugin-shortcuts"
+import { resolvePluginIconFile } from "./plugins/icon-paths"
 import { PluginHost } from "./plugins/plugin-host"
 import { getContentType, resolveStaticPath } from "./protocol/resolve-static-path"
 import {
@@ -49,13 +60,37 @@ import {
   markSearchWindowReady,
   setSearchWindowQuitting,
   showSearchWindow,
+  showSearchWindowForPluginCommand,
   toggleSearchWindow,
 } from "./search-window"
-import { bindGlobalShortcut, unbindGlobalShortcut } from "./shortcut"
+import {
+  bindGlobalShortcut,
+  currentBinding,
+  unbindAllGlobalShortcuts,
+  unbindGlobalShortcut,
+} from "./shortcut"
+import { DEFAULT_GITHUB_OAUTH_CLIENT_ID } from "./sync/defaults"
+import { GitHubGistClient, GitHubGistClientError } from "./sync/gist-client"
+import { SettingsSyncService } from "./sync/settings-sync-service"
+import { syncStateFilePath, SyncStateStore } from "./sync/sync-store"
+import { pasteClipboardIntoActiveApp } from "./system-paste"
 import { createTray, defaultTrayIcon, destroyTray, refreshTrayMenu } from "./tray"
 import { attachWindowSecurity } from "./window-security"
 
 const isDev = !app.isPackaged
+// electron-vite injects this in dev (Vite dev server URL). Undefined in prod.
+const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
+
+// Custom scheme used for the production renderer. Loading the renderer at
+// `app://app/index.html` makes absolute asset paths (`/assets/...`) resolve
+// to `app://app/assets/...`, which the handler maps to files under
+// `out/renderer/`. Loading via `file://` would make the same paths resolve
+// to the filesystem root and 404 every asset.
+const APP_SCHEME = "app"
+const APP_ORIGIN = `${APP_SCHEME}://app`
+const PLUGIN_ICON_PATH_PREFIX = "/plugin-icons/"
+const LAUNCHER_SHORTCUT_ID = "launcher"
+
 const lanSimulation = resolveDevLanSimulation({
   defaultUserDataDir: app.getPath("userData"),
   isPackaged: app.isPackaged,
@@ -67,16 +102,6 @@ if (lanSimulation) {
     `[deskit] LAN simulation profile "${lanSimulation.profile}" uses ${lanSimulation.userDataDir}`
   )
 }
-// electron-vite injects this in dev (Vite dev server URL). Undefined in prod.
-const rendererDevUrl = process.env.ELECTRON_RENDERER_URL
-
-// Custom scheme used for the production renderer. Loading the renderer at
-// `app://app/index.html` makes absolute asset paths (`/assets/...`) resolve
-// to `app://app/assets/...`, which the handler maps to files under
-// `out/renderer/`. Loading via `file://` would make the same paths resolve
-// to the filesystem root and 404 every asset.
-const APP_SCHEME = "app"
-const APP_ORIGIN = `${APP_SCHEME}://app`
 
 // Must be called *before* app is ready. Marking the scheme `standard` and
 // `secure` makes its origin behave like https for CORS, cookies, and CSP.
@@ -103,7 +128,7 @@ function devCsp(devOrigin: string): string {
     `default-src 'self' ${devOrigin} ${ws}; ` +
     `script-src 'self' 'unsafe-inline' 'unsafe-eval' ${devOrigin}; ` +
     `style-src 'self' 'unsafe-inline' ${devOrigin}; ` +
-    `img-src 'self' data: blob: ${devOrigin}; ` +
+    `img-src 'self' data: blob: ${devOrigin} ${APP_ORIGIN}; ` +
     `font-src 'self' data: ${devOrigin}; ` +
     `connect-src 'self' ${devOrigin} ${ws}`
   )
@@ -121,6 +146,21 @@ function applyCsp(): void {
   })
 }
 
+const launcher = new LauncherService()
+let plugins: PluginHost
+let lan: LanService
+let syncState: SyncStateStore
+let syncService: SettingsSyncService
+let syncUploadTimer: NodeJS.Timeout | undefined
+let sessionPassphrase: string | undefined
+let pendingSyncConflict: DeskitSyncPayload | undefined
+let mainWindow: BrowserWindow | null = null
+let pluginShortcutIds = new Set<string>()
+// Tracks whether quit was explicitly requested through the tray menu, so
+// the main-window close handler can distinguish "user clicked X" (hide)
+// from "user picked Quit" (let the close go through).
+let quitRequested = false
+
 function registerStaticProtocol(): void {
   // electron-vite emits the renderer bundle to out/renderer/, which sits
   // next to out/main/index.js after build.
@@ -128,6 +168,10 @@ function registerStaticProtocol(): void {
 
   protocol.handle(APP_SCHEME, async (request) => {
     const url = new URL(request.url)
+    if (url.pathname.startsWith(PLUGIN_ICON_PATH_PREFIX)) {
+      return servePluginIcon(url)
+    }
+
     const resolved = resolveStaticPath(url.pathname, root)
 
     if (resolved.kind === "forbidden") {
@@ -152,14 +196,57 @@ function registerStaticProtocol(): void {
   })
 }
 
-const launcher = new LauncherService()
-let plugins: PluginHost
-let lan: LanService
-let mainWindow: BrowserWindow | null = null
-// Tracks whether quit was explicitly requested through the tray menu, so
-// the main-window close handler can distinguish "user clicked X" (hide)
-// from "user picked Quit" (let the close go through).
-let quitRequested = false
+async function servePluginIcon(url: URL): Promise<Response> {
+  const pluginId = parsePluginIconRequestPluginId(url)
+  const iconPath = url.searchParams.get("path")
+  if (!pluginId || !iconPath) {
+    return new Response("Forbidden", { status: 403 })
+  }
+
+  const entry = plugins?.get(pluginId)
+  if (!entry?.manifest || !isDeclaredPluginIcon(entry, iconPath)) {
+    return new Response("Not Found", { status: 404 })
+  }
+
+  const filePath = resolvePluginIconFile(entry.rootDir, iconPath)
+  if (!filePath) {
+    return new Response("Forbidden", { status: 403 })
+  }
+
+  try {
+    const response = await net.fetch(pathToFileURL(filePath).toString(), {
+      bypassCustomProtocolHandlers: true,
+    })
+    if (!response.ok) return response
+    const headers = new Headers(response.headers)
+    headers.set("content-type", getContentType(filePath))
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers,
+    })
+  } catch {
+    return new Response("Not Found", { status: 404 })
+  }
+}
+
+function parsePluginIconRequestPluginId(url: URL): string | null {
+  const encoded = url.pathname.slice(PLUGIN_ICON_PATH_PREFIX.length)
+  if (!encoded || encoded.includes("/")) return null
+  let pluginId: string
+  try {
+    pluginId = decodeURIComponent(encoded)
+  } catch {
+    return null
+  }
+  if (!/^[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$/.test(pluginId)) return null
+  return pluginId
+}
+
+function isDeclaredPluginIcon(entry: PluginRegistryEntry, iconPath: string): boolean {
+  if (entry.manifest?.icon === iconPath) return true
+  return entry.manifest?.contributes.commands.some((command) => command.icon === iconPath) ?? false
+}
 
 function registerIpc(): void {
   ipcMain.handle("launcher:search", (_event, query: unknown) => {
@@ -198,6 +285,13 @@ function registerIpc(): void {
     return true
   })
 
+  ipcMain.handle("system:paste-clipboard", async (event, content: unknown) => {
+    if (!isTrustedIpcSender(event) || !isClipboardContent(content)) return false
+    writeClipboardContent(content)
+    hideSearchWindow()
+    return pasteClipboardIntoActiveApp()
+  })
+
   ipcMain.on("launcher:ready", (event) => {
     markSearchWindowReady(event.sender)
   })
@@ -207,7 +301,7 @@ function registerIpc(): void {
   })
 
   ipcMain.handle("floating-ball:open-feature", (_event, feature: unknown) => {
-    if (feature === "appLauncher") {
+    if (isFloatingBallFeature(feature)) {
       openFloatingBallFeature(feature)
     }
   })
@@ -239,12 +333,110 @@ function registerIpc(): void {
     refreshTrayMenu(trayActions())
     syncFloatingBallWindow(floatingBallDeps())
     broadcastSettingsChanged(next)
+    markSyncLocalChanged()
     return next
+  })
+
+  ipcMain.handle("sync:get-status", () => syncStatus())
+
+  ipcMain.handle("sync:save-client-id", async (_event, clientId: unknown) => {
+    await syncState.update({ githubOAuthClientId: requireString(clientId, "clientId") })
+    return syncStatus()
+  })
+
+  ipcMain.handle("sync:save-gist-id", async (_event, gistId: unknown) => {
+    await syncState.update({ gistId: requireString(gistId, "gistId") })
+    return syncStatus()
+  })
+
+  ipcMain.handle("sync:github-login-start", async () => {
+    const state = syncState.get()
+    if (!state.githubOAuthClientId) throw new Error("GitHub OAuth client ID is not configured")
+    return githubSyncClient().startDeviceAuthorization(state.githubOAuthClientId)
+  })
+
+  ipcMain.handle("sync:github-login-poll", async (_event, deviceCode: unknown) => {
+    const state = syncState.get()
+    if (!state.githubOAuthClientId) throw new Error("GitHub OAuth client ID is not configured")
+    try {
+      const token = await githubSyncClient().pollDeviceToken(
+        state.githubOAuthClientId,
+        requireString(deviceCode, "deviceCode")
+      )
+      const user = await githubSyncClient().getAuthenticatedUser(token.accessToken)
+      await syncState.update({
+        encryptedAccessToken: encryptLocalSecret(token.accessToken),
+        githubUserLogin: user.login,
+      })
+      return { status: "authenticated", login: user.login }
+    } catch (err) {
+      if (err instanceof GitHubGistClientError && err.code) {
+        if (err.code === "authorization_pending") return { status: "pending" }
+        if (err.code === "slow_down") return { status: "slow_down" }
+        if (err.code === "expired_token") return { status: "expired" }
+        if (err.code === "access_denied") return { status: "denied" }
+      }
+      throw err
+    }
+  })
+
+  ipcMain.handle("sync:configure-passphrase", async (_event, payload: unknown) => {
+    const value = requireRecord(payload, "sync passphrase payload")
+    const passphrase = requireString(value.passphrase, "passphrase")
+    const rememberPassphrase = Boolean(value.rememberPassphrase)
+    sessionPassphrase = passphrase
+    await syncState.update({
+      enabled: true,
+      rememberPassphrase,
+      encryptedPassphrase: rememberPassphrase ? encryptLocalSecret(passphrase) : undefined,
+    })
+    void pullSyncWithSavedCredentials().catch((err) =>
+      console.warn("[deskit] initial sync pull failed", err)
+    )
+    return syncStatus()
+  })
+
+  ipcMain.handle("sync:push", async (_event, passphrase: unknown) => {
+    if (pendingSyncConflict) throw new Error("Resolve the pending sync conflict before pushing")
+    return syncRunResult(
+      await syncService.push(requireAccessToken(), requirePassphrase(passphrase))
+    )
+  })
+
+  ipcMain.handle("sync:pull", async (_event, passphrase: unknown) =>
+    syncRunResult(await pullSyncWithPassphrase(requirePassphrase(passphrase)))
+  )
+
+  ipcMain.handle("sync:use-remote", async () => {
+    if (!pendingSyncConflict) throw new Error("No sync conflict is pending")
+    await syncService.applyRemote(pendingSyncConflict)
+    pendingSyncConflict = undefined
+    afterSyncedStateApplied()
+    return syncStatus()
+  })
+
+  ipcMain.handle("sync:use-local", async (_event, passphrase: unknown) => {
+    const result = await syncService.applyLocal(requireAccessToken(), requirePassphrase(passphrase))
+    pendingSyncConflict = undefined
+    return syncRunResult(result)
+  })
+
+  ipcMain.handle("sync:disconnect", async () => {
+    sessionPassphrase = undefined
+    pendingSyncConflict = undefined
+    await syncState.update({
+      enabled: false,
+      encryptedAccessToken: undefined,
+      encryptedPassphrase: undefined,
+      githubUserLogin: undefined,
+    })
+    return syncStatus()
   })
 
   registerPluginIpc(ipcMain, plugins, {
     isTrustedSender: isTrustedIpcSender,
-    onRegistryChanged: broadcastPluginRegistryChanged,
+    onRegistryChanged: handlePluginRegistryChanged,
+    onPreferencesChanged: markSyncLocalChanged,
   })
   registerLanIpc(ipcMain, lan, {
     isTrustedSender: isTrustedIpcSender,
@@ -284,9 +476,6 @@ function isClipboardContent(value: unknown): value is ClipboardContent {
   if (record.type === "image") {
     return typeof record.dataUrl === "string" && typeof record.mimeType === "string"
   }
-  if (record.type === "file") {
-    return Array.isArray(record.paths) && record.paths.every((item) => typeof item === "string")
-  }
   return false
 }
 
@@ -297,26 +486,64 @@ function writeClipboardContent(content: ClipboardContent): void {
   }
   if (content.type === "image") {
     clipboard.writeImage(nativeImage.createFromDataURL(content.dataUrl))
+  }
+}
+
+function handlePluginRegistryChanged(entries: unknown): void {
+  if (isPluginRegistryEntries(entries)) {
+    void pruneFloatingBallFeaturesForPlugins(entries).catch((err) =>
+      console.error("[floating-ball] failed to prune unavailable plugin features", err)
+    )
+  }
+  syncPluginShortcuts()
+  broadcastPluginRegistryChanged(entries)
+}
+
+function isPluginRegistryEntries(entries: unknown): entries is PluginRegistryEntry[] {
+  return (
+    Array.isArray(entries) &&
+    entries.every(
+      (entry) =>
+        Boolean(entry) &&
+        typeof entry === "object" &&
+        typeof (entry as PluginRegistryEntry).pluginId === "string" &&
+        typeof (entry as PluginRegistryEntry).status === "string"
+    )
+  )
+}
+
+async function pruneFloatingBallFeaturesForPlugins(entries: PluginRegistryEntry[]): Promise<void> {
+  const current = launcher.getSettings().floatingBallFeatures
+  const next = pruneUnavailableFloatingBallFeatures(current, entries)
+  if (
+    next.length === current.length &&
+    next.every((feature, index) => feature === current[index])
+  ) {
     return
   }
-  clipboard.writeText(content.paths.join("\n"))
+
+  const settings = await launcher.updateSettings({ floatingBallFeatures: next })
+  refreshTrayMenu(trayActions())
+  syncFloatingBallWindow(floatingBallDeps())
+  broadcastSettingsChanged(settings)
+  markSyncLocalChanged()
 }
 
 function broadcastPluginRegistryChanged(entries: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send("plugins:registry-changed", entries)
-    }
-  }
+  broadcast("plugins:registry-changed", entries)
 }
 
 function broadcastSettingsChanged(settings: ReturnType<typeof launcher.getSettings>): void {
+  broadcast("settings:changed", settings)
+}
+
+function broadcast(channel: string, payload: unknown): void {
   // Notify every renderer (main shell + long-lived launcher window) so
   // they can re-apply theme/hotkey state without reloading. Skip
   // destroyed windows defensively to avoid sending to torn-down webContents.
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      win.webContents.send("settings:changed", settings)
+      win.webContents.send(channel, payload)
     }
   }
 }
@@ -337,20 +564,12 @@ function broadcastLanTransfersChanged(transfers: LanTransfer[]): void {
   broadcast("lan:transfers-changed", transfers)
 }
 
-function broadcast(channel: string, payload: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send(channel, payload)
-    }
-  }
-}
-
 function coercePatch(value: unknown): Partial<{
   hotkey: string
   themeMode: "light" | "dark" | "system"
   accent: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled: boolean
-  floatingBallFeatures: "appLauncher"[]
+  floatingBallFeatures: FloatingBallFeature[]
   lanEnabled: boolean
 }> {
   if (!value || typeof value !== "object") return {}
@@ -371,9 +590,7 @@ function coercePatch(value: unknown): Partial<{
   }
   if (typeof v.floatingBallEnabled === "boolean") out.floatingBallEnabled = v.floatingBallEnabled
   if (Array.isArray(v.floatingBallFeatures)) {
-    out.floatingBallFeatures = v.floatingBallFeatures.filter(
-      (feature): feature is "appLauncher" => feature === "appLauncher"
-    )
+    out.floatingBallFeatures = v.floatingBallFeatures.filter(isFloatingBallFeature)
   }
   if (typeof v.lanEnabled === "boolean") out.lanEnabled = v.lanEnabled
   return out
@@ -396,8 +613,215 @@ async function syncLanEnabled(
   }
 }
 
+function isFloatingBallFeature(value: unknown): value is FloatingBallFeature {
+  return (
+    typeof value === "string" && (value === "appLauncher" || isPluginFloatingBallFeature(value))
+  )
+}
+
+function isPluginFloatingBallFeature(value: string): value is `plugin:${string}:${string}` {
+  return /^plugin:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+:[a-z0-9][a-z0-9-]*(?:\.[a-z0-9][a-z0-9-]*)+$/.test(
+    value
+  )
+}
+
+function createSyncService(): SettingsSyncService {
+  return new SettingsSyncService({
+    stateStore: syncState,
+    gistClient: githubSyncClient(),
+    getSettings: () => launcher.getSettings(),
+    updateSettings: applySyncedSettings,
+    exportPluginPreferences: () => plugins.exportPreferences(),
+    importPluginPreferences: (preferences) => plugins.importSyncedPreferences(preferences),
+  })
+}
+
+function githubSyncClient(): GitHubGistClient {
+  return new GitHubGistClient({
+    fetch: (url, init) => net.fetch(url instanceof URL ? url.toString() : url, init),
+  })
+}
+
+async function applySyncedSettings(patch: Partial<ReturnType<typeof launcher.getSettings>>) {
+  const previous = launcher.getSettings()
+  const requested = coercePatch(patch)
+  if (requested.hotkey && requested.hotkey !== previous.hotkey && !rebindHotkey(requested.hotkey)) {
+    delete requested.hotkey
+  }
+  let next = await launcher.updateSettings(requested)
+  if (next.lanEnabled !== previous.lanEnabled) {
+    next = await syncLanEnabled(next, previous)
+  }
+  afterSyncedStateApplied()
+  return next
+}
+
+function afterSyncedStateApplied(): void {
+  refreshTrayMenu(trayActions())
+  syncFloatingBallWindow(floatingBallDeps())
+  broadcastSettingsChanged(launcher.getSettings())
+  broadcastPluginRegistryChanged(plugins.list())
+}
+
+function markSyncLocalChanged(): void {
+  if (!syncService) return
+  void syncService
+    .markLocalChanged()
+    .then(scheduleSyncUpload)
+    .catch((err) => console.warn("[deskit] failed to mark sync local change", err))
+}
+
+function scheduleSyncUpload(): void {
+  if (pendingSyncConflict) {
+    clearScheduledSyncUpload()
+    return
+  }
+  if (syncUploadTimer) clearTimeout(syncUploadTimer)
+  syncUploadTimer = setTimeout(() => {
+    syncUploadTimer = undefined
+    void pushSyncWithSavedCredentials().catch((err) =>
+      console.warn("[deskit] background sync upload failed", err)
+    )
+  }, 3000)
+}
+
+function clearScheduledSyncUpload(): void {
+  if (!syncUploadTimer) return
+  clearTimeout(syncUploadTimer)
+  syncUploadTimer = undefined
+}
+
+async function pushSyncWithSavedCredentials(): Promise<PushSyncResult | undefined> {
+  if (pendingSyncConflict) return undefined
+  const state = syncState.get()
+  if (!state.enabled || !state.encryptedAccessToken) return undefined
+  const passphrase = savedPassphrase()
+  if (!passphrase) return undefined
+  return syncService.push(decryptLocalSecret(state.encryptedAccessToken), passphrase)
+}
+
+async function pullSyncWithSavedCredentials(): Promise<PullSyncResult | undefined> {
+  const state = syncState.get()
+  if (!state.enabled || !state.encryptedAccessToken) return undefined
+  const passphrase = savedPassphrase()
+  if (!passphrase) return undefined
+  return pullSyncWithPassphrase(passphrase)
+}
+
+async function pullSyncWithPassphrase(passphrase: string): Promise<PullSyncResult> {
+  const result = await syncService.pull(requireAccessToken(), passphrase)
+  if (result.status === "conflict") {
+    pendingSyncConflict = result.payload
+    clearScheduledSyncUpload()
+  }
+  if (result.status === "applied") {
+    pendingSyncConflict = undefined
+    afterSyncedStateApplied()
+  }
+  return result
+}
+
+function syncRunResult(
+  result: PullSyncResult | PushSyncResult
+):
+  | { status: "empty" | "created" | "updated" | "applied" }
+  | { status: "conflict"; conflict: { updatedAt: string; deviceId: string } } {
+  if (result.status === "conflict") {
+    return {
+      status: "conflict",
+      conflict: {
+        updatedAt: result.payload.updatedAt,
+        deviceId: result.payload.deviceId,
+      },
+    }
+  }
+  return { status: result.status }
+}
+
+function syncStatus() {
+  const state = syncState.get()
+  return {
+    configured: Boolean(state.githubOAuthClientId),
+    enabled: state.enabled,
+    loggedIn: Boolean(state.encryptedAccessToken),
+    githubUserLogin: state.githubUserLogin,
+    gistId: state.gistId,
+    deviceId: state.deviceId,
+    lastSyncedAt: state.lastSyncedAt,
+    lastRemoteUpdatedAt: state.lastRemoteUpdatedAt,
+    lastLocalUpdatedAt: state.lastLocalUpdatedAt,
+    rememberPassphrase: state.rememberPassphrase,
+    hasSavedPassphrase: Boolean(state.encryptedPassphrase || sessionPassphrase),
+    pendingConflict: pendingSyncConflict
+      ? { updatedAt: pendingSyncConflict.updatedAt, deviceId: pendingSyncConflict.deviceId }
+      : undefined,
+  }
+}
+
+function requireAccessToken(): string {
+  const state = syncState.get()
+  if (!state.encryptedAccessToken) throw new Error("GitHub is not connected")
+  return decryptLocalSecret(state.encryptedAccessToken)
+}
+
+function requirePassphrase(value: unknown): string {
+  if (typeof value === "string" && value.trim()) {
+    sessionPassphrase = value.trim()
+    return sessionPassphrase
+  }
+  const saved = savedPassphrase()
+  if (!saved) throw new Error("Sync passphrase is required")
+  return saved
+}
+
+function savedPassphrase(): string | undefined {
+  const state = syncState.get()
+  if (sessionPassphrase) return sessionPassphrase
+  if (!state.encryptedPassphrase) return undefined
+  sessionPassphrase = decryptLocalSecret(state.encryptedPassphrase)
+  return sessionPassphrase
+}
+
+function encryptLocalSecret(value: string): string {
+  ensureSafeStorageEncryptionAvailable()
+  return safeStorage.encryptString(value).toString("base64")
+}
+
+function decryptLocalSecret(value: string): string {
+  ensureSafeStorageEncryptionAvailable()
+  return safeStorage.decryptString(Buffer.from(value, "base64"))
+}
+
+function ensureSafeStorageEncryptionAvailable(): void {
+  if (!safeStorage.isEncryptionAvailable()) {
+    throw new Error("Electron safeStorage encryption is not available")
+  }
+}
+
+function requireRecord(value: unknown, name: string): Record<string, unknown> {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error(`${name} must be an object`)
+  }
+  return value as Record<string, unknown>
+}
+
+function requireString(value: unknown, name: string): string {
+  if (typeof value !== "string" || !value.trim()) throw new Error(`${name} is required`)
+  return value.trim()
+}
+
 function searchWindowDeps(): SearchWindowDeps {
   return { rendererDevUrl, appOrigin: APP_ORIGIN }
+}
+
+async function initLan(enabled: boolean): Promise<void> {
+  try {
+    await lan.init(enabled)
+  } catch (err) {
+    if (!lanSimulation || !(err instanceof LanCredentialLoadError)) throw err
+    await resetDevLanSimulationCredentials(lanSimulation)
+    await lan.init(enabled)
+  }
 }
 
 function createPluginHost(): PluginHost {
@@ -428,13 +852,28 @@ function floatingBallDeps() {
     appOrigin: APP_ORIGIN,
     getSettings: () => launcher.getSettings(),
     getLocale: () => app.getLocale(),
-    onOpenFeature: (feature: "appLauncher") => {
-      if (feature === "appLauncher") showSearchWindow(searchWindowDeps())
+    onOpenFeature: (feature: FloatingBallFeature) => {
+      if (feature === "appLauncher") {
+        showSearchWindow(searchWindowDeps())
+        return
+      }
+      const command = parseFloatingBallPluginCommand(feature)
+      if (!command) return
+      showSearchWindowForPluginCommand(searchWindowDeps(), command)
     },
     onDisable: () => {
       void disableFloatingBall()
     },
   }
+}
+
+function parseFloatingBallPluginCommand(
+  feature: FloatingBallFeature
+): { pluginId: string; commandId: string } | null {
+  if (!feature.startsWith("plugin:")) return null
+  const [, pluginId, commandId] = feature.split(":")
+  if (!pluginId || !commandId) return null
+  return { pluginId, commandId }
 }
 
 async function disableFloatingBall(): Promise<void> {
@@ -453,6 +892,7 @@ function createMainWindow(): BrowserWindow {
     title: lanSimulation ? `DesKit - ${lanSimulation.deviceName}` : "DesKit",
     show: false, // launcher app stays in tray; window is shown on demand
     backgroundColor: "#0a0a0a",
+    icon: defaultAppIcon(),
     webPreferences: {
       preload: path.join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -493,11 +933,42 @@ function showMainWindow(): void {
 }
 
 function rebindHotkey(accelerator: string): boolean {
-  const ok = bindGlobalShortcut(accelerator, () => toggleSearchWindow(searchWindowDeps()))
+  const ok = bindGlobalShortcut(LAUNCHER_SHORTCUT_ID, accelerator, () =>
+    toggleSearchWindow(searchWindowDeps())
+  )
   if (!ok) {
     console.warn(`[deskit] failed to register global shortcut: ${accelerator}`)
   }
   return ok
+}
+
+function syncPluginShortcuts(): void {
+  if (!plugins) return
+
+  const bindings = collectPluginShortcutBindings(plugins.list())
+  const nextIds = new Set(bindings.map((binding) => binding.id))
+  for (const id of pluginShortcutIds) {
+    if (!nextIds.has(id)) unbindGlobalShortcut(id)
+  }
+
+  for (const binding of bindings) {
+    const ok = bindGlobalShortcut(binding.id, binding.accelerator, () => {
+      showSearchWindowForPluginCommand(searchWindowDeps(), {
+        pluginId: binding.pluginId,
+        commandId: binding.commandId,
+      })
+    })
+    if (!ok) {
+      console.warn(
+        `[deskit] failed to register plugin shortcut: ${binding.pluginId}.${binding.commandId} (${binding.accelerator})`
+      )
+      if (!currentBinding(binding.id)) {
+        nextIds.delete(binding.id)
+      }
+    }
+  }
+
+  pluginShortcutIds = nextIds
 }
 
 function trayActions() {
@@ -515,17 +986,6 @@ function trayActions() {
     getHotkey: () => launcher.getSettings().hotkey,
     shouldIgnoreOpenSearch: consumeSearchWindowTrayOpenSuppression,
     getLocale: () => app.getLocale(),
-  }
-}
-
-async function initLan(enabled: boolean): Promise<void> {
-  try {
-    await lan.init(enabled)
-  } catch (err) {
-    if (!lanSimulation || !(err instanceof LanCredentialLoadError)) throw err
-    console.warn("[deskit] resetting unreadable LAN simulation credentials", err)
-    await resetDevLanSimulationCredentials(lanSimulation)
-    await lan.init(enabled)
   }
 }
 
@@ -572,6 +1032,14 @@ if (!gotLock) {
         decrypt: (encryptedText) => safeStorage.decryptString(Buffer.from(encryptedText, "base64")),
       },
     })
+    syncState = new SyncStateStore(syncStateFilePath(app.getPath("userData")))
+    await syncState.load()
+    const defaultClientId =
+      process.env.DESKIT_GITHUB_OAUTH_CLIENT_ID || DEFAULT_GITHUB_OAUTH_CLIENT_ID
+    if (!syncState.get().githubOAuthClientId && defaultClientId) {
+      await syncState.update({ githubOAuthClientId: defaultClientId })
+    }
+    syncService = createSyncService()
     registerIpc()
 
     // Remove the default File/Edit/View… menu bar — the app uses a tray icon
@@ -579,6 +1047,7 @@ if (!gotLock) {
     Menu.setApplicationMenu(null)
 
     let settings = await launcher.init()
+    rebindHotkey(settings.hotkey)
     try {
       await initLan(settings.lanEnabled)
     } catch (err) {
@@ -586,6 +1055,9 @@ if (!gotLock) {
       settings = await launcher.updateSettings({ lanEnabled: false })
     }
     await plugins.init()
+    void pullSyncWithSavedCredentials().catch((err) =>
+      console.warn("[deskit] startup sync pull failed", err)
+    )
 
     // Pre-warm both the main window (so the first show is instant) and the
     // app cache (so the first launcher query has results).
@@ -595,7 +1067,7 @@ if (!gotLock) {
     void launcher.refreshApps()
 
     createTray(defaultTrayIcon(), trayActions())
-    rebindHotkey(settings.hotkey)
+    syncPluginShortcuts()
     syncFloatingBallWindow(floatingBallDeps())
     showStartupNotification({
       hotkey: settings.hotkey,
@@ -615,7 +1087,7 @@ if (!gotLock) {
     setSearchWindowQuitting(true)
     destroyFloatingBallWindow()
     void lan?.stop().catch((err) => console.error("[deskit] failed to stop LAN discovery", err))
-    unbindGlobalShortcut()
+    unbindAllGlobalShortcuts()
     destroyTray()
     plugins?.dispose()
   })

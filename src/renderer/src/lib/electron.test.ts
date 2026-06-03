@@ -1,11 +1,16 @@
 import type { ElectronIpcError } from "./electron"
 import { afterEach, describe, expect, it, vi } from "vitest"
 import {
+  applyLocalSync,
+  applyRemoteSync,
+  configureSyncPassphrase,
   disconnectLanDevice,
+  disconnectSync,
   disposePluginCommand,
   getLanStatus,
   getPlugin,
   getSettings,
+  getSyncStatus,
   hideFloatingBall,
   hideLauncher,
   installMarketplacePlugin,
@@ -21,23 +26,28 @@ import {
   notifyLauncherReady,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
-  onLanDevicesChanged,
-  onLanStatusChanged,
-  onLanTransfersChanged,
   onLauncherFocus,
+  onLauncherRunPluginCommand,
   onPluginRegistryChanged,
   onSettingsChanged,
   openExternalUrl,
   openFloatingBallFeature,
   pairLanDevice,
+  pasteClipboardContent,
+  pollGitHubLogin,
+  pullSync,
+  pushSync,
   refreshApps,
   reloadPlugin,
   removeLanTransferHistory,
+  saveSyncClientId,
+  saveSyncGistId,
   searchApps,
   searchPluginCommands,
   sendLanFile,
   setPluginEnabled,
   setPluginPreference,
+  startGitHubLogin,
   toggleFloatingBallMenu,
   uninstallPlugin,
   updateSettings,
@@ -56,6 +66,7 @@ function mockApi() {
     hideLauncher: vi.fn().mockResolvedValue(undefined),
     openExternalUrl: vi.fn().mockResolvedValue(true),
     writeClipboardContent: vi.fn().mockResolvedValue(true),
+    pasteClipboardContent: vi.fn().mockResolvedValue(true),
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
@@ -90,30 +101,49 @@ function mockApi() {
       floatingBallFeatures: ["appLauncher"],
       lanEnabled: false,
     }),
+    getSyncStatus: vi.fn().mockResolvedValue({
+      configured: true,
+      enabled: true,
+      loggedIn: true,
+      deviceId: "device",
+      rememberPassphrase: true,
+      hasSavedPassphrase: true,
+    }),
+    saveSyncClientId: vi.fn().mockResolvedValue({ configured: true }),
+    saveSyncGistId: vi.fn().mockResolvedValue({ gistId: "gist" }),
+    startGitHubLogin: vi.fn().mockResolvedValue({
+      deviceCode: "device-code",
+      userCode: "ABCD-EFGH",
+      verificationUri: "https://github.com/login/device",
+      expiresIn: 900,
+      interval: 5,
+    }),
+    pollGitHubLogin: vi.fn().mockResolvedValue({ status: "pending" }),
+    configureSyncPassphrase: vi.fn().mockResolvedValue({ enabled: true }),
+    pushSync: vi.fn().mockResolvedValue({ status: "updated" }),
+    pullSync: vi.fn().mockResolvedValue({ status: "applied" }),
+    applyRemoteSync: vi.fn().mockResolvedValue({ enabled: true }),
+    applyLocalSync: vi.fn().mockResolvedValue({ status: "updated" }),
+    disconnectSync: vi.fn().mockResolvedValue({ enabled: false }),
+    getLanStatus: vi.fn().mockResolvedValue({ enabled: false }),
+    listLanDevices: vi.fn().mockResolvedValue([]),
+    listLanPairings: vi.fn().mockResolvedValue([]),
+    pairLanDevice: vi.fn().mockResolvedValue({ id: "pair" }),
+    confirmLanPairing: vi.fn().mockResolvedValue([]),
+    rejectLanPairing: vi.fn().mockResolvedValue([]),
+    disconnectLanDevice: vi.fn().mockResolvedValue(undefined),
+    listLanTransfers: vi.fn().mockResolvedValue([]),
+    sendLanFile: vi.fn().mockResolvedValue(null),
+    resumeLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    acceptLanTransfer: vi.fn().mockResolvedValue(null),
+    rejectLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    removeLanTransferHistory: vi.fn().mockResolvedValue([]),
     onLauncherFocus: vi.fn().mockReturnValue(() => {}),
     onFloatingBallMenuState: vi.fn().mockReturnValue(() => {}),
     onFloatingBallFeatures: vi.fn().mockReturnValue(() => {}),
+    onLauncherRunPluginCommand: vi.fn().mockReturnValue(() => {}),
     onPluginRegistryChanged: vi.fn().mockReturnValue(() => {}),
     onSettingsChanged: vi.fn().mockReturnValue(() => {}),
-    getLanStatus: vi.fn().mockResolvedValue({
-      enabled: false,
-      discovering: false,
-      localDeviceId: "local",
-      localDeviceName: "Desktop",
-      deviceCount: 0,
-    }),
-    listLanDevices: vi.fn().mockResolvedValue([]),
-    listLanPairings: vi.fn().mockResolvedValue([]),
-    pairLanDevice: vi.fn(),
-    confirmLanPairing: vi.fn(),
-    rejectLanPairing: vi.fn(),
-    disconnectLanDevice: vi.fn(),
-    listLanTransfers: vi.fn().mockResolvedValue([]),
-    sendLanFile: vi.fn(),
-    resumeLanTransfer: vi.fn(),
-    acceptLanTransfer: vi.fn(),
-    rejectLanTransfer: vi.fn(),
-    removeLanTransferHistory: vi.fn(),
     onLanDevicesChanged: vi.fn().mockReturnValue(() => {}),
     onLanStatusChanged: vi.fn().mockReturnValue(() => {}),
     onLanPairingsChanged: vi.fn().mockReturnValue(() => {}),
@@ -183,6 +213,13 @@ describe("lib/electron", () => {
       expect(api.writeClipboardContent).toHaveBeenCalledWith(content)
     })
 
+    it("pasteClipboardContent forwards structured clipboard payloads", async () => {
+      const api = mockApi()
+      const content = { type: "text" as const, text: "hello" }
+      await expect(pasteClipboardContent(content)).resolves.toBe(true)
+      expect(api.pasteClipboardContent).toHaveBeenCalledWith(content)
+    })
+
     it("notifyLauncherReady calls notifyLauncherReady", () => {
       const api = mockApi()
       notifyLauncherReady()
@@ -225,39 +262,47 @@ describe("lib/electron", () => {
       expect(api.updateSettings).toHaveBeenCalledWith({ themeMode: "dark" })
     })
 
-    it("getLanStatus calls getLanStatus", async () => {
+    it("sync wrappers forward payloads", async () => {
+      const api = mockApi()
+      await getSyncStatus()
+      await saveSyncClientId("client")
+      await saveSyncGistId("gist")
+      await startGitHubLogin()
+      await pollGitHubLogin("device")
+      await configureSyncPassphrase("secret", true)
+      await pushSync("secret")
+      await pullSync("secret")
+      await applyRemoteSync()
+      await applyLocalSync("secret")
+      await disconnectSync()
+
+      expect(api.getSyncStatus).toHaveBeenCalled()
+      expect(api.saveSyncClientId).toHaveBeenCalledWith("client")
+      expect(api.saveSyncGistId).toHaveBeenCalledWith("gist")
+      expect(api.startGitHubLogin).toHaveBeenCalled()
+      expect(api.pollGitHubLogin).toHaveBeenCalledWith("device")
+      expect(api.configureSyncPassphrase).toHaveBeenCalledWith("secret", true)
+      expect(api.pushSync).toHaveBeenCalledWith("secret")
+      expect(api.pullSync).toHaveBeenCalledWith("secret")
+      expect(api.applyRemoteSync).toHaveBeenCalled()
+      expect(api.applyLocalSync).toHaveBeenCalledWith("secret")
+      expect(api.disconnectSync).toHaveBeenCalled()
+    })
+
+    it("lan wrappers forward device and transfer ids", async () => {
       const api = mockApi()
       await getLanStatus()
-      expect(api.getLanStatus).toHaveBeenCalled()
-    })
-
-    it("listLanDevices calls listLanDevices", async () => {
-      const api = mockApi()
       await listLanDevices()
-      expect(api.listLanDevices).toHaveBeenCalled()
-    })
-
-    it("pairLanDevice forwards device id", async () => {
-      const api = mockApi()
       await pairLanDevice("peer")
-      expect(api.pairLanDevice).toHaveBeenCalledWith("peer")
-    })
-
-    it("disconnectLanDevice forwards device id", async () => {
-      const api = mockApi()
       await disconnectLanDevice("peer")
-      expect(api.disconnectLanDevice).toHaveBeenCalledWith("peer")
-    })
-
-    it("sendLanFile forwards device id", async () => {
-      const api = mockApi()
       await sendLanFile("peer")
-      expect(api.sendLanFile).toHaveBeenCalledWith("peer")
-    })
-
-    it("removeLanTransferHistory forwards transfer id", async () => {
-      const api = mockApi()
       await removeLanTransferHistory("transfer")
+
+      expect(api.getLanStatus).toHaveBeenCalled()
+      expect(api.listLanDevices).toHaveBeenCalled()
+      expect(api.pairLanDevice).toHaveBeenCalledWith("peer")
+      expect(api.disconnectLanDevice).toHaveBeenCalledWith("peer")
+      expect(api.sendLanFile).toHaveBeenCalledWith("peer")
       expect(api.removeLanTransferHistory).toHaveBeenCalledWith("transfer")
     })
 
@@ -382,6 +427,13 @@ describe("lib/electron", () => {
       expect(api.onFloatingBallFeatures).toHaveBeenCalledWith(handler)
     })
 
+    it("onLauncherRunPluginCommand forwards handler", () => {
+      const api = mockApi()
+      const handler = vi.fn()
+      onLauncherRunPluginCommand(handler)
+      expect(api.onLauncherRunPluginCommand).toHaveBeenCalledWith(handler)
+    })
+
     it("onPluginRegistryChanged forwards handler", () => {
       const api = mockApi()
       const handler = vi.fn()
@@ -394,27 +446,6 @@ describe("lib/electron", () => {
       const handler = vi.fn()
       onSettingsChanged(handler)
       expect(api.onSettingsChanged).toHaveBeenCalledWith(handler)
-    })
-
-    it("onLanDevicesChanged forwards handler", () => {
-      const api = mockApi()
-      const handler = vi.fn()
-      onLanDevicesChanged(handler)
-      expect(api.onLanDevicesChanged).toHaveBeenCalledWith(handler)
-    })
-
-    it("onLanStatusChanged forwards handler", () => {
-      const api = mockApi()
-      const handler = vi.fn()
-      onLanStatusChanged(handler)
-      expect(api.onLanStatusChanged).toHaveBeenCalledWith(handler)
-    })
-
-    it("onLanTransfersChanged forwards handler", () => {
-      const api = mockApi()
-      const handler = vi.fn()
-      onLanTransfersChanged(handler)
-      expect(api.onLanTransfersChanged).toHaveBeenCalledWith(handler)
     })
   })
 })

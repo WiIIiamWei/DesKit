@@ -6,7 +6,7 @@ export {}
 
 declare global {
   type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
-  type DeskitFloatingBallFeature = "appLauncher"
+  type DeskitFloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
 
   interface LauncherAppEntry {
     id: string
@@ -43,20 +43,12 @@ declare global {
     name: string
     host: string
     addresses: string[]
-    port: number
     platform: DeskitLanPlatform
+    port: number
     capabilities: string[]
     lastSeenAt: number
     online: boolean
     paired: boolean
-  }
-
-  interface DeskitLanStatus {
-    enabled: boolean
-    discovering: boolean
-    localDeviceId: string
-    localDeviceName: string
-    deviceCount: number
   }
 
   type DeskitLanPairingDirection = "incoming" | "outgoing"
@@ -100,6 +92,50 @@ declare global {
     error?: string
   }
 
+  interface DeskitLanStatus {
+    enabled: boolean
+    discovering: boolean
+    localDeviceId: string
+    localDeviceName: string
+    deviceCount: number
+  }
+
+  interface DeskitSyncStatus {
+    configured: boolean
+    enabled: boolean
+    loggedIn: boolean
+    githubUserLogin?: string
+    gistId?: string
+    deviceId: string
+    lastSyncedAt?: string
+    lastRemoteUpdatedAt?: string
+    lastLocalUpdatedAt?: string
+    rememberPassphrase: boolean
+    hasSavedPassphrase: boolean
+    pendingConflict?: DeskitSyncConflict
+  }
+
+  interface DeskitSyncConflict {
+    updatedAt: string
+    deviceId: string
+  }
+
+  interface DeskitGitHubDeviceAuthorization {
+    deviceCode: string
+    userCode: string
+    verificationUri: string
+    expiresIn: number
+    interval: number
+  }
+
+  type DeskitGitHubLoginPollResult =
+    | { status: "pending" | "slow_down" | "expired" | "denied" }
+    | { status: "authenticated"; login: string }
+
+  type DeskitSyncRunResult =
+    | { status: "empty" | "created" | "updated" | "applied" }
+    | { status: "conflict"; conflict: DeskitSyncConflict }
+
   type DeskitLocalizedString = string | Record<string, string>
   type DeskitClipboardContent =
     | { type: "text"; text: string }
@@ -111,7 +147,6 @@ declare global {
         height?: number
         name?: string
       }
-    | { type: "file"; paths: string[] }
   type DeskitPluginSourceKind = "builtin" | "user" | "dev"
   type DeskitPluginRuntimeStatus = "active" | "disabled" | "invalid" | "crashed" | "shadowed"
   type DeskitPluginCommandMode = "view" | "no-view"
@@ -166,10 +201,11 @@ declare global {
       commands: DeskitManifestCommand[]
       preferences?: Array<{
         id: string
-        type: "text" | "number" | "checkbox" | "select"
+        type: "text" | "number" | "checkbox" | "select" | "shortcut"
         label: DeskitLocalizedString
         default?: unknown
         options?: Array<{ value: string; label: DeskitLocalizedString }>
+        command?: string
       }>
     }
     permissions: string[]
@@ -228,6 +264,7 @@ declare global {
       hideLauncher: () => Promise<void>
       openExternalUrl: (url: string) => Promise<boolean>
       writeClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
+      pasteClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
       notifyLauncherReady: () => void
       openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
       toggleFloatingBallMenu: () => Promise<void>
@@ -235,6 +272,20 @@ declare global {
       hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
       updateSettings: (patch: Partial<DeskitUserSettings>) => Promise<DeskitUserSettings>
+      getSyncStatus: () => Promise<DeskitSyncStatus>
+      saveSyncClientId: (clientId: string) => Promise<DeskitSyncStatus>
+      saveSyncGistId: (gistId: string) => Promise<DeskitSyncStatus>
+      startGitHubLogin: () => Promise<DeskitGitHubDeviceAuthorization>
+      pollGitHubLogin: (deviceCode: string) => Promise<DeskitGitHubLoginPollResult>
+      configureSyncPassphrase: (
+        passphrase: string,
+        rememberPassphrase: boolean
+      ) => Promise<DeskitSyncStatus>
+      pushSync: (passphrase?: string) => Promise<DeskitSyncRunResult>
+      pullSync: (passphrase?: string) => Promise<DeskitSyncRunResult>
+      applyRemoteSync: () => Promise<DeskitSyncStatus>
+      applyLocalSync: (passphrase?: string) => Promise<DeskitSyncRunResult>
+      disconnectSync: () => Promise<DeskitSyncStatus>
       getLanStatus: () => Promise<DeskitLanStatus>
       listLanDevices: () => Promise<DeskitLanDevice[]>
       listLanPairings: () => Promise<DeskitLanPairing[]>
@@ -295,6 +346,9 @@ declare global {
       onFloatingBallMenuState: (handler: (expanded: boolean) => void) => () => void
       onFloatingBallFeatures: (
         handler: (features: DeskitFloatingBallFeature[]) => void
+      ) => () => void
+      onLauncherRunPluginCommand: (
+        handler: (command: { pluginId: string; commandId: string }) => void
       ) => () => void
       onPluginRegistryChanged: (
         handler: (plugins: DeskitPluginRegistryEntry[]) => void

@@ -32,7 +32,7 @@ export interface ManifestCommand {
   icon?: string
 }
 
-export type ManifestPreferenceType = "text" | "number" | "checkbox" | "select"
+export type ManifestPreferenceType = "text" | "number" | "checkbox" | "select" | "shortcut"
 
 export interface ManifestPreferenceOption {
   value: string
@@ -45,6 +45,7 @@ export interface ManifestPreference {
   label: LocalizedString
   default?: unknown
   options?: ManifestPreferenceOption[]
+  command?: string
 }
 
 export interface PluginManifest {
