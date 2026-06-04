@@ -198,7 +198,7 @@ export function FloatingBallPanel() {
         onPointerCancel={onPointerUp}
         onLostPointerCapture={onPointerUp}
         title={t("floatingBall.title")}
-        className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white shadow-xl transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-popover"
+        className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-popover"
       >
         <img src={logoUrl} alt="" draggable={false} className="size-8" aria-hidden />
         <span className="sr-only">{t("floatingBall.title")}</span>
