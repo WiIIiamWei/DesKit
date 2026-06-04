@@ -96,7 +96,9 @@ export function getAnnotatorInitialBounds(imagePath: string): { width: number; h
   const maxWidth = Math.max(minWidth, Math.round(workArea.width * 0.82))
   const maxHeight = Math.max(minHeight, Math.round(workArea.height * 0.82))
   const maxImageHeight = Math.max(80, maxHeight - ANNOTATOR_TOOLBAR_STACK_HEIGHT)
-  const scale = Math.min(1, maxWidth / size.width, maxImageHeight / size.height)
+  const minScale = Math.max(1, minWidth / size.width, minHeight / size.height)
+  const maxScale = Math.min(maxWidth / size.width, maxImageHeight / size.height)
+  const scale = Math.min(minScale, maxScale)
   const imageWidth = Math.round(size.width * scale)
   const imageHeight = Math.round(size.height * scale)
 

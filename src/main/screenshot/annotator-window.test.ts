@@ -11,11 +11,11 @@ describe("screenshot annotator window", () => {
     } as ReturnType<typeof screen.getPrimaryDisplay>)
   })
 
-  it("reserves space for the toolbar when the screenshot is small", () => {
+  it("keeps the original minimum image area while reserving toolbar space", () => {
     vi.mocked(nativeImage.createFromPath).mockReturnValue(createImageSize(153, 231))
 
     expect(getAnnotatorInitialBounds("/tmp/small.png")).toEqual({
-      height: 295,
+      height: 487,
       width: 760,
     })
   })
