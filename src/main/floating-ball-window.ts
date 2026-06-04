@@ -39,6 +39,7 @@ let restoreCollapsedBoundsAfterMenu: Electron.Rectangle | null = null
 let pendingExpandedBounds: Electron.Rectangle | null = null
 let pendingCollapsedBounds: Electron.Rectangle | null = null
 let pendingMenuTransitionFallback: ReturnType<typeof setTimeout> | null = null
+let expandedMenuMovedAfterOpen = false
 
 export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserWindow {
   currentDeps = deps
@@ -116,6 +117,7 @@ export function destroyFloatingBallWindow(): void {
   restoreCollapsedBoundsAfterMenu = null
   pendingExpandedBounds = null
   pendingCollapsedBounds = null
+  expandedMenuMovedAfterOpen = false
   clearPendingMenuTransitionFallback()
   finishFloatingBallDrag()
   if (win) win.destroy()
@@ -127,6 +129,7 @@ export function expandFloatingBallMenu(): void {
 
   clearPendingMenuTransitionFallback()
   restoreCollapsedBoundsAfterMenu = null
+  expandedMenuMovedAfterOpen = false
   pendingExpandedBounds = getPreparedExpandedFloatingBallWindowBounds(win)
   menuPhase = "expanding"
   sendFloatingBallWindowState(win, "expanding")
@@ -208,8 +211,14 @@ export function moveFloatingBallDrag(): void {
 
 export function finishFloatingBallDrag(): void {
   const win = getFloatingBallWindow()
-  if (win && dragState?.moved && menuPhase === "collapsed") {
-    applyFloatingBallEdgeSnap(win)
+  if (win && dragState?.moved) {
+    if (menuPhase === "collapsed") {
+      applyFloatingBallEdgeSnap(win)
+    } else if (menuPhase === "expanded") {
+      expandedMenuMovedAfterOpen = true
+      restoreCollapsedBoundsAfterMenu = null
+      snappedEdge = "none"
+    }
   }
   dragState = null
 }
@@ -287,11 +296,25 @@ function getPreparedExpandedFloatingBallWindowBounds(win: BrowserWindow): Electr
 }
 
 function getCollapsedFloatingBallWindowBounds(win: BrowserWindow): Electron.Rectangle {
+  if (expandedMenuMovedAfterOpen) {
+    expandedMenuMovedAfterOpen = false
+    restoreCollapsedBoundsAfterMenu = null
+    return getCollapsedBoundsAfterExpandedMenuDrag(win.getBounds())
+  }
+
   const restoreBounds = restoreCollapsedBoundsAfterMenu
   restoreCollapsedBoundsAfterMenu = null
   if (restoreBounds) return restoreBounds
 
   return getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(win.getBounds()))
+}
+
+function getCollapsedBoundsAfterExpandedMenuDrag(bounds: Electron.Rectangle): Electron.Rectangle {
+  const workArea = screen.getDisplayMatching(bounds).workArea
+  const collapsedBounds = getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(bounds))
+  const target = getExpandedMenuEdgeSnapBounds(collapsedBounds, bounds, workArea)
+  snappedEdge = target.edge
+  return target.bounds
 }
 
 function scheduleMenuTransitionFallback(callback: () => void): void {
@@ -340,6 +363,25 @@ function getEdgeSnapBounds(
   return {
     edge,
     bounds: getSnappedCollapsedBounds(bounds, workArea, edge),
+  }
+}
+
+function getExpandedMenuEdgeSnapBounds(
+  collapsedBounds: Electron.Rectangle,
+  expandedBounds: Electron.Rectangle,
+  workArea: Electron.Rectangle
+): { edge: "none" | "left" | "right"; bounds: Electron.Rectangle } {
+  const leftDistance = expandedBounds.x - workArea.x
+  const rightDistance = workArea.x + workArea.width - (expandedBounds.x + expandedBounds.width)
+
+  if (leftDistance > SNAP_EDGE_DISTANCE && rightDistance > SNAP_EDGE_DISTANCE) {
+    return { edge: "none", bounds: clampBounds(collapsedBounds, workArea) }
+  }
+
+  const edge = leftDistance <= rightDistance ? "left" : "right"
+  return {
+    edge,
+    bounds: getSnappedCollapsedBounds(collapsedBounds, workArea, edge),
   }
 }
 
