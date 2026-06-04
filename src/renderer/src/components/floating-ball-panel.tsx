@@ -38,6 +38,7 @@ export function FloatingBallPanel() {
   const { t, i18n } = useTranslation()
   const isMenuView = isFloatingBallMenuView()
   const [expanded, setExpanded] = useState(false)
+  const [suppressMenuOpenTransition, setSuppressMenuOpenTransition] = useState(false)
   const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([
     APP_LAUNCHER_FEATURE,
     SCREENSHOT_FEATURE,
@@ -52,6 +53,7 @@ export function FloatingBallPanel() {
     moved: boolean
   } | null>(null)
   const suppressNextClickRef = useRef(false)
+  const menuOpenTransitionFrameRef = useRef<number | null>(null)
 
   useEffect(() => {
     const html = document.documentElement
@@ -75,17 +77,42 @@ export function FloatingBallPanel() {
   }, [])
 
   useEffect(() => {
+    const clearMenuOpenTransitionFrame = (): void => {
+      if (menuOpenTransitionFrameRef.current === null) return
+      window.cancelAnimationFrame(menuOpenTransitionFrameRef.current)
+      menuOpenTransitionFrameRef.current = null
+    }
+
+    const onMenuStateChange = (nextExpanded: boolean): void => {
+      clearMenuOpenTransitionFrame()
+      if (isMenuView && nextExpanded) {
+        setSuppressMenuOpenTransition(true)
+        setExpanded(true)
+        menuOpenTransitionFrameRef.current = window.requestAnimationFrame(() => {
+          menuOpenTransitionFrameRef.current = window.requestAnimationFrame(() => {
+            menuOpenTransitionFrameRef.current = null
+            setSuppressMenuOpenTransition(false)
+          })
+        })
+        return
+      }
+
+      setSuppressMenuOpenTransition(false)
+      setExpanded(nextExpanded)
+    }
+
     void getSettings().then((settings) => setFeatures(settings.floatingBallFeatures))
     void listPlugins()
       .then(setPlugins)
       .catch((err) => console.error("listPlugins failed", err))
     return mergeCleanups(
-      onFloatingBallMenuState(setExpanded),
+      onFloatingBallMenuState(onMenuStateChange),
       onFloatingBallFeatures(setFeatures),
       onPluginRegistryChanged(setPlugins),
-      onSettingsChanged((settings) => setFeatures(settings.floatingBallFeatures))
+      onSettingsChanged((settings) => setFeatures(settings.floatingBallFeatures)),
+      clearMenuOpenTransitionFrame
     )
-  }, [])
+  }, [isMenuView])
 
   const menuItems = useMemo(
     () =>
@@ -165,7 +192,8 @@ export function FloatingBallPanel() {
         <div
           className={cn(
             "absolute left-1/2 top-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/95 shadow-[0_6px_16px_-10px_rgba(15,23,42,0.14)] ring-1 ring-black/5 transition-[opacity,transform] duration-150 dark:bg-popover/95 dark:ring-white/10",
-            expanded ? "opacity-100" : "pointer-events-none opacity-0"
+            expanded ? "opacity-100" : "pointer-events-none opacity-0",
+            suppressMenuOpenTransition && "transition-none"
           )}
           data-floating-ball-menu="true"
           aria-hidden={!expanded}
