@@ -13,6 +13,7 @@ export const SNAP_EDGE_DISTANCE = 96
 export const COLLAPSE_MENU_RESIZE_DELAY_MS = 150
 
 const EDGE_MARGIN = 24
+const DRAG_THRESHOLD = 4
 const FLOATING_BALL_HASH = "floating-ball"
 
 export interface FloatingBallWindowDeps {
@@ -27,7 +28,12 @@ export interface FloatingBallWindowDeps {
 let floatingBallWindow: BrowserWindow | null = null
 let currentDeps: FloatingBallWindowDeps | null = null
 let menuExpanded = false
-let dragState: { cursor: Electron.Point; bounds: Electron.Rectangle } | null = null
+let dragState: {
+  cursor: Electron.Point
+  bounds: Electron.Rectangle
+  moved: boolean
+} | null = null
+let snappedEdge: "none" | "left" | "right" = "none"
 let restoreCollapsedBoundsAfterMenu: Electron.Rectangle | null = null
 let pendingCollapseResize: ReturnType<typeof setTimeout> | null = null
 
@@ -103,6 +109,7 @@ export function destroyFloatingBallWindow(): void {
   floatingBallWindow = null
   currentDeps = null
   menuExpanded = false
+  snappedEdge = "none"
   restoreCollapsedBoundsAfterMenu = null
   clearPendingCollapseResize()
   finishFloatingBallDrag()
@@ -148,6 +155,7 @@ export function startFloatingBallDrag(): void {
   dragState = {
     cursor: screen.getCursorScreenPoint(),
     bounds: fixedSizeBounds(win.getBounds()),
+    moved: false,
   }
 }
 
@@ -155,6 +163,10 @@ export function moveFloatingBallDrag(): void {
   const win = getFloatingBallWindow()
   if (!win || !dragState) return
   const cursor = screen.getCursorScreenPoint()
+  dragState.moved =
+    dragState.moved ||
+    Math.abs(cursor.x - dragState.cursor.x) >= DRAG_THRESHOLD ||
+    Math.abs(cursor.y - dragState.cursor.y) >= DRAG_THRESHOLD
   const next = {
     x: dragState.bounds.x + cursor.x - dragState.cursor.x,
     y: dragState.bounds.y + cursor.y - dragState.cursor.y,
@@ -165,6 +177,10 @@ export function moveFloatingBallDrag(): void {
 }
 
 export function finishFloatingBallDrag(): void {
+  const win = getFloatingBallWindow()
+  if (win && dragState?.moved && !menuExpanded) {
+    applyFloatingBallEdgeSnap(win)
+  }
   dragState = null
 }
 
@@ -195,6 +211,10 @@ export function syncFloatingBallWindow(deps: FloatingBallWindowDeps): void {
 
 export function getFloatingBallWindow(): BrowserWindow | null {
   return floatingBallWindow && !floatingBallWindow.isDestroyed() ? floatingBallWindow : null
+}
+
+export function getFloatingBallSnappedEdge(): "none" | "left" | "right" {
+  return snappedEdge
 }
 
 function moveFloatingBallToDefaultPosition(win: BrowserWindow): void {
@@ -254,6 +274,62 @@ function clearPendingCollapseResize(): void {
   if (!pendingCollapseResize) return
   clearTimeout(pendingCollapseResize)
   pendingCollapseResize = null
+}
+
+function applyFloatingBallEdgeSnap(win: BrowserWindow): void {
+  const bounds = fixedCollapsedBounds(win.getBounds())
+  const workArea = screen.getDisplayMatching(bounds).workArea
+  const target = getEdgeSnapBounds(bounds, workArea)
+  snappedEdge = target.edge
+  if (target.edge === "none") return
+  win.setBounds(target.bounds)
+}
+
+function getEdgeSnapBounds(
+  bounds: Electron.Rectangle,
+  workArea: Electron.Rectangle
+): { edge: "none" | "left" | "right"; bounds: Electron.Rectangle } {
+  const visualBounds = getFloatingBallVisualBounds(bounds)
+  const leftDistance = visualBounds.x - workArea.x
+  const rightDistance = workArea.x + workArea.width - (visualBounds.x + visualBounds.width)
+
+  if (leftDistance > SNAP_EDGE_DISTANCE && rightDistance > SNAP_EDGE_DISTANCE) {
+    return { edge: "none", bounds }
+  }
+
+  const edge = leftDistance <= rightDistance ? "left" : "right"
+  return {
+    edge,
+    bounds: getSnappedCollapsedBounds(bounds, workArea, edge),
+  }
+}
+
+function getSnappedCollapsedBounds(
+  bounds: Electron.Rectangle,
+  workArea: Electron.Rectangle,
+  edge: "left" | "right"
+): Electron.Rectangle {
+  const visualInset = (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2
+  const x =
+    edge === "left"
+      ? workArea.x - EDGE_VISIBLE_BALL_WIDTH - visualInset
+      : workArea.x + workArea.width - EDGE_VISIBLE_BALL_WIDTH - visualInset
+  return {
+    x: Math.round(x),
+    y: clamp(bounds.y, workArea.y, workArea.y + workArea.height - bounds.height),
+    width: COLLAPSED_WINDOW_SIZE,
+    height: COLLAPSED_WINDOW_SIZE,
+  }
+}
+
+function getFloatingBallVisualBounds(bounds: Electron.Rectangle): Electron.Rectangle {
+  const visualInset = (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2
+  return {
+    x: bounds.x + visualInset,
+    y: bounds.y + visualInset,
+    width: BALL_SIZE,
+    height: BALL_SIZE,
+  }
 }
 
 function fixedCollapsedBounds(bounds: Electron.Rectangle): Electron.Rectangle {
