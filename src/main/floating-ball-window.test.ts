@@ -5,9 +5,15 @@ import process from "node:process"
 import { BrowserWindow, screen } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  clampBoundsToWorkArea,
+  COLLAPSED_WINDOW_SIZE,
   destroyFloatingBallWindow,
   ensureFloatingBallWindow,
+  EXPANDED_WINDOW_SIZE,
   finishFloatingBallDrag,
+  getCollapsedFloatingBallBounds,
+  getExpandedFloatingBallBounds,
+  getFloatingBallVisualCenter,
   moveFloatingBallDrag,
   startFloatingBallDrag,
 } from "./floating-ball-window"
@@ -41,6 +47,47 @@ function latestWindow(): MockBrowserWindow {
   if (!win) throw new Error("Expected a BrowserWindow to be created")
   return win
 }
+
+describe("floating ball bounds helpers", () => {
+  it("calculates the visual center from the current window bounds", () => {
+    expect(getFloatingBallVisualCenter({ x: 100, y: 200, width: 72, height: 72 })).toEqual({
+      x: 136,
+      y: 236,
+    })
+  })
+
+  it("builds collapsed bounds from the visual center", () => {
+    expect(getCollapsedFloatingBallBounds({ x: 300, y: 420 })).toEqual({
+      x: 264,
+      y: 384,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+  })
+
+  it("builds expanded bounds from the visual center", () => {
+    expect(getExpandedFloatingBallBounds({ x: 300, y: 420 })).toEqual({
+      x: 300 - EXPANDED_WINDOW_SIZE / 2,
+      y: 420 - EXPANDED_WINDOW_SIZE / 2,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+  })
+
+  it("clamps a full window inside the work area", () => {
+    expect(
+      clampBoundsToWorkArea(
+        { x: 1330, y: -50, width: 240, height: 240 },
+        { x: 0, y: 0, width: 1440, height: 900 }
+      )
+    ).toEqual({
+      x: 1200,
+      y: 0,
+      width: 240,
+      height: 240,
+    })
+  })
+})
 
 describe("floating ball window dragging", () => {
   beforeEach(() => {

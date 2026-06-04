@@ -5,7 +5,13 @@ import { BrowserWindow, Menu, screen } from "electron"
 import { defaultAppIcon } from "./app-icon"
 import { attachWindowSecurity } from "./window-security"
 
-const MENU_SIZE = process.platform === "darwin" ? 320 : 240
+export const EXPANDED_WINDOW_SIZE = process.platform === "darwin" ? 320 : 240
+export const BALL_SIZE = 56
+export const COLLAPSED_WINDOW_SIZE = 72
+export const EDGE_VISIBLE_BALL_WIDTH = BALL_SIZE / 2
+export const SNAP_EDGE_DISTANCE = 96
+
+const MENU_SIZE = EXPANDED_WINDOW_SIZE
 const EDGE_MARGIN = 24
 const FLOATING_BALL_HASH = "floating-ball"
 
@@ -201,11 +207,42 @@ function fixedSizeBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   }
 }
 
-function clampBounds(bounds: Electron.Rectangle, workArea: Electron.Rectangle): Electron.Rectangle {
+export function getFloatingBallVisualCenter(bounds: Electron.Rectangle): Electron.Point {
+  return {
+    x: Math.round(bounds.x + bounds.width / 2),
+    y: Math.round(bounds.y + bounds.height / 2),
+  }
+}
+
+export function getExpandedFloatingBallBounds(center: Electron.Point): Electron.Rectangle {
+  return getCenteredBounds(center, EXPANDED_WINDOW_SIZE)
+}
+
+export function getCollapsedFloatingBallBounds(center: Electron.Point): Electron.Rectangle {
+  return getCenteredBounds(center, COLLAPSED_WINDOW_SIZE)
+}
+
+export function clampBoundsToWorkArea(
+  bounds: Electron.Rectangle,
+  workArea: Electron.Rectangle
+): Electron.Rectangle {
   return {
     ...bounds,
     x: clamp(bounds.x, workArea.x, workArea.x + workArea.width - bounds.width),
     y: clamp(bounds.y, workArea.y, workArea.y + workArea.height - bounds.height),
+  }
+}
+
+function clampBounds(bounds: Electron.Rectangle, workArea: Electron.Rectangle): Electron.Rectangle {
+  return clampBoundsToWorkArea(bounds, workArea)
+}
+
+function getCenteredBounds(center: Electron.Point, size: number): Electron.Rectangle {
+  return {
+    x: Math.round(center.x - size / 2),
+    y: Math.round(center.y - size / 2),
+    width: size,
+    height: size,
   }
 }
 
