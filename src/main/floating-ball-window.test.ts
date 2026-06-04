@@ -4,6 +4,7 @@ import type { FloatingBallWindowDeps } from "./floating-ball-window"
 import { BrowserWindow, screen } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
+  BALL_SIZE,
   clampBoundsToWorkArea,
   COLLAPSE_MENU_RESIZE_DELAY_MS,
   COLLAPSED_WINDOW_SIZE,
@@ -15,6 +16,7 @@ import {
   finishFloatingBallDrag,
   getCollapsedFloatingBallBounds,
   getExpandedFloatingBallBounds,
+  getFloatingBallSnappedEdge,
   getFloatingBallVisualCenter,
   moveFloatingBallBy,
   moveFloatingBallDrag,
@@ -165,6 +167,84 @@ describe("floating ball window dragging", () => {
       width: COLLAPSED_WINDOW_SIZE,
       height: COLLAPSED_WINDOW_SIZE,
     })
+  })
+
+  it("snaps to the left edge after a drag release near the left work area edge", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 100, y: 410, width: 72, height: 72 })
+    win.setBounds.mockClear()
+    vi.mocked(screen.getCursorScreenPoint)
+      .mockReturnValueOnce({ x: 120, y: 430 })
+      .mockReturnValueOnce({ x: 40, y: 430 })
+
+    startFloatingBallDrag()
+    moveFloatingBallDrag()
+    win.getBounds.mockReturnValue({ x: 20, y: 410, width: 72, height: 72 })
+    finishFloatingBallDrag()
+
+    expect(getFloatingBallSnappedEdge()).toBe("left")
+    expect(win.setBounds).toHaveBeenLastCalledWith({
+      x: -(BALL_SIZE / 2) - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+  })
+
+  it("snaps to the right edge after a drag release near the right work area edge", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 1250, y: 410, width: 72, height: 72 })
+    win.setBounds.mockClear()
+    vi.mocked(screen.getCursorScreenPoint)
+      .mockReturnValueOnce({ x: 1270, y: 430 })
+      .mockReturnValueOnce({ x: 1370, y: 430 })
+
+    startFloatingBallDrag()
+    moveFloatingBallDrag()
+    win.getBounds.mockReturnValue({ x: 1350, y: 410, width: 72, height: 72 })
+    finishFloatingBallDrag()
+
+    expect(getFloatingBallSnappedEdge()).toBe("right")
+    expect(win.setBounds).toHaveBeenLastCalledWith({
+      x: 1440 - BALL_SIZE / 2 - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+  })
+
+  it("does not snap after a drag release away from both work area edges", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 500, y: 410, width: 72, height: 72 })
+    win.setBounds.mockClear()
+    vi.mocked(screen.getCursorScreenPoint)
+      .mockReturnValueOnce({ x: 520, y: 430 })
+      .mockReturnValueOnce({ x: 620, y: 430 })
+
+    startFloatingBallDrag()
+    moveFloatingBallDrag()
+    win.setBounds.mockClear()
+    win.getBounds.mockReturnValue({ x: 600, y: 410, width: 72, height: 72 })
+    finishFloatingBallDrag()
+
+    expect(getFloatingBallSnappedEdge()).toBe("none")
+    expect(win.setBounds).not.toHaveBeenCalled()
+  })
+
+  it("does not snap a click near the work area edge", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 20, y: 410, width: 72, height: 72 })
+    win.setBounds.mockClear()
+    vi.mocked(screen.getCursorScreenPoint).mockReturnValueOnce({ x: 40, y: 430 })
+
+    startFloatingBallDrag()
+    finishFloatingBallDrag()
+
+    expect(win.setBounds).not.toHaveBeenCalled()
   })
 
   it("expands immediately around the ball center when the menu fits in the work area", () => {
