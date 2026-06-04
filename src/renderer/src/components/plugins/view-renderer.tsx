@@ -1,4 +1,5 @@
-import type { KeyboardEvent } from "react"
+import type { LucideProps } from "lucide-react"
+import type { ComponentType, KeyboardEvent } from "react"
 import type {
   LocalizedString,
   PluginAction,
@@ -27,6 +28,8 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+
+type LucideIconComponent = ComponentType<LucideProps>
 
 interface ViewRendererProps {
   view: RenderablePluginView
@@ -235,9 +238,11 @@ function ListPluginView({
                       </span>
                     )}
                   </span>
-                  {item.accessory && (
-                    <span className="max-w-28 truncate text-xs text-muted-foreground">
-                      {item.accessory}
+                  {(item.accessoryIcon || item.accessory) && (
+                    <span className="flex max-w-32 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      {item.accessoryIcon &&
+                        accessoryIcon(item.accessoryIcon, item.accessoryIconActive === true)}
+                      {item.accessory && <span className="truncate">{item.accessory}</span>}
                     </span>
                   )}
                   {selected && !!item.actions?.length && (
@@ -408,19 +413,29 @@ function PluginItemIcon({ icon }: { icon?: string }) {
   )
 }
 
+const ACTION_ICON_OVERRIDES: Record<string, LucideIconComponent> = {
+  "lucide:copy": Copy,
+  "lucide:star": Star,
+}
+
+const ACCESSORY_ICON_OVERRIDES: Record<string, LucideIconComponent> = {
+  "lucide:check": Check,
+  "lucide:star": Star,
+}
+
+function accessoryIcon(icon: string, active: boolean) {
+  const className = cn("size-3.5", active && "fill-current")
+  const Override = ACCESSORY_ICON_OVERRIDES[icon]
+  if (Override) return <Override className={className} />
+  return <PluginIcon icon={icon} className={className} fallback={Check} />
+}
+
 function actionIcon(action: PluginAction) {
-  if (action.icon === "lucide:copy") return <Copy className="size-4" />
-  if (action.icon === "lucide:star") {
-    return <Star className={cn("size-4", action.active && "fill-current")} />
-  }
+  const className = cn("size-4", action.active && "fill-current")
+  const Override = action.icon ? ACTION_ICON_OVERRIDES[action.icon] : undefined
+  if (Override) return <Override className={className} />
   if (action.icon) {
-    return (
-      <PluginIcon
-        icon={action.icon}
-        className={cn("size-4", action.active && "fill-current")}
-        fallback={Check}
-      />
-    )
+    return <PluginIcon icon={action.icon} className={className} fallback={Check} />
   }
   if (action.type === "copy" || action.type === "paste") return <Clipboard className="size-4" />
   if (action.type === "open-url" || action.type === "open-path")

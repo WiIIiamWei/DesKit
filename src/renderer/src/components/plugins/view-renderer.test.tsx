@@ -67,13 +67,45 @@ describe("viewRenderer", () => {
       ],
     }
 
-    render(<ViewRenderer view={view} onAction={onAction} />)
+    const { container } = render(<ViewRenderer view={view} onAction={onAction} />)
 
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
     expect(screen.getByRole("button", { name: "Star" })).toBeInTheDocument()
+    expect(container.querySelector(".fill-current")).toBeInTheDocument()
     await user.hover(screen.getByRole("button", { name: /second item/i }))
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
     expect(screen.queryByRole("button", { name: "Star" })).not.toBeInTheDocument()
+  })
+
+  it("renders list accessory icons without text glyph markers", () => {
+    const onAction = vi.fn()
+    const view: RenderablePluginView = {
+      type: "list",
+      items: [
+        {
+          id: "favorite",
+          title: "Favorite item",
+          accessory: "just now",
+          accessoryIcon: "lucide:star",
+          accessoryIconActive: true,
+          actions: [{ type: "custom", id: "copy-item", label: "Copy" }],
+        },
+        {
+          id: "selected-filter",
+          title: "Text only",
+          accessoryIcon: "lucide:check",
+          accessoryIconActive: true,
+          actions: [{ type: "custom", id: "set-filter", label: "Select" }],
+        },
+      ],
+    }
+
+    const { container } = render(<ViewRenderer view={view} onAction={onAction} />)
+
+    expect(screen.getByText("just now")).toBeInTheDocument()
+    expect(screen.queryByText("★")).not.toBeInTheDocument()
+    expect(screen.queryByText("✓")).not.toBeInTheDocument()
+    expect(container.querySelectorAll(".fill-current")).toHaveLength(2)
   })
 
   it("submits form values through the submit action", async () => {
