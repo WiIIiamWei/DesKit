@@ -211,9 +211,7 @@ function ListPluginView({
                 item.accessoryIcon &&
                 !statusActions.some((action) => action.icon === item.accessoryIcon) &&
                 !(selected && item.accessoryIcon === "lucide:check")
-              const actionBarActions = item.actions?.filter(
-                (action) => !statusActions.includes(action)
-              )
+              const actionBarActions = compactActionBarActions(item.actions, statusActions)
               return (
                 <div
                   key={item.id}
@@ -246,6 +244,14 @@ function ListPluginView({
                       </span>
                     )}
                   </span>
+                  {selected && actionBarActions.length > 0 && (
+                    <ActionBar
+                      actions={actionBarActions}
+                      locale={locale}
+                      onAction={(action) => onAction(action, { item })}
+                      compact
+                    />
+                  )}
                   {(item.accessory ||
                     showAccessoryIcon ||
                     statusActions.length > 0 ||
@@ -273,14 +279,6 @@ function ListPluginView({
                       ))}
                       {selected && <Check className="size-3.5 text-primary" aria-hidden />}
                     </span>
-                  )}
-                  {selected && !!actionBarActions?.length && (
-                    <ActionBar
-                      actions={actionBarActions}
-                      locale={locale}
-                      onAction={(action) => onAction(action, { item })}
-                      compact
-                    />
                   )}
                 </div>
               )
@@ -457,15 +455,28 @@ function activeIconActions(actions?: PluginAction[]): PluginAction[] {
   return (actions ?? []).filter((action) => action.active && action.icon)
 }
 
+function compactActionBarActions(
+  actions: PluginAction[] | undefined,
+  statusActions: PluginAction[]
+): PluginAction[] {
+  return (actions ?? []).filter(
+    (action) => !statusActions.includes(action) && hasCompactActionIcon(action)
+  )
+}
+
+function hasCompactActionIcon(action: PluginAction): boolean {
+  return action.type !== "custom" || !!action.icon
+}
+
 function accessoryIcon(icon: string, active: boolean) {
-  const className = cn("size-3.5", active && "fill-current")
+  const className = cn("size-3.5", active && shouldFillIcon(icon) && "fill-current")
   const Override = ACCESSORY_ICON_OVERRIDES[icon]
   if (Override) return <Override className={className} />
   return <PluginIcon icon={icon} className={className} fallback={Check} />
 }
 
 function actionIcon(action: PluginAction) {
-  const className = cn("size-4", action.active && "fill-current")
+  const className = cn("size-4", action.active && shouldFillIcon(action.icon) && "fill-current")
   const Override = action.icon ? ACTION_ICON_OVERRIDES[action.icon] : undefined
   if (Override) return <Override className={className} />
   if (action.icon) {
@@ -478,6 +489,10 @@ function actionIcon(action: PluginAction) {
   if (action.type === "close") return <X className="size-4" />
   if (action.type === "custom") return <Check className="size-4" />
   return <Play className="size-4" />
+}
+
+function shouldFillIcon(icon: string | undefined): boolean {
+  return icon === "lucide:star"
 }
 
 function actionLabel(action: PluginAction, locale: string): string {
