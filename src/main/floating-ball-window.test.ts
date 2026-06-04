@@ -5,6 +5,7 @@ import { BrowserWindow, screen } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   clampBoundsToWorkArea,
+  COLLAPSE_MENU_RESIZE_DELAY_MS,
   COLLAPSED_WINDOW_SIZE,
   collapseFloatingBallMenu,
   destroyFloatingBallWindow,
@@ -24,6 +25,9 @@ import { defaultSettings } from "./settings/settings"
 type MockBrowserWindow = ElectronBrowserWindow & {
   getBounds: Mock
   setBounds: Mock
+  webContents: ElectronBrowserWindow["webContents"] & {
+    send: Mock
+  }
 }
 
 const deps: FloatingBallWindowDeps = {
@@ -197,28 +201,40 @@ describe("floating ball window dragging", () => {
     expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", true)
   })
 
-  it("restores the collapsed ball position after closing a menu that was moved to fit", () => {
-    ensureFloatingBallWindow(deps)
-    const win = latestWindow()
-    win.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
-    win.setBounds.mockClear()
+  it("hides the renderer menu before restoring the collapsed window position", () => {
+    vi.useFakeTimers()
+    try {
+      ensureFloatingBallWindow(deps)
+      const win = latestWindow()
+      win.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
+      win.setBounds.mockClear()
 
-    expandFloatingBallMenu()
-    win.getBounds.mockReturnValue({
-      x: 1440 - EXPANDED_WINDOW_SIZE,
-      y: 330,
-      width: EXPANDED_WINDOW_SIZE,
-      height: EXPANDED_WINDOW_SIZE,
-    })
-    collapseFloatingBallMenu()
+      expandFloatingBallMenu()
+      win.getBounds.mockReturnValue({
+        x: 1440 - EXPANDED_WINDOW_SIZE,
+        y: 330,
+        width: EXPANDED_WINDOW_SIZE,
+        height: EXPANDED_WINDOW_SIZE,
+      })
+      win.setBounds.mockClear()
+      win.webContents.send.mockClear()
 
-    expect(win.setBounds).toHaveBeenLastCalledWith({
-      x: 1344,
-      y: 414,
-      width: COLLAPSED_WINDOW_SIZE,
-      height: COLLAPSED_WINDOW_SIZE,
-    })
-    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
+      collapseFloatingBallMenu()
+
+      expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
+      expect(win.setBounds).not.toHaveBeenCalled()
+
+      vi.advanceTimersByTime(COLLAPSE_MENU_RESIZE_DELAY_MS)
+
+      expect(win.setBounds).toHaveBeenLastCalledWith({
+        x: 1344,
+        y: 414,
+        width: COLLAPSED_WINDOW_SIZE,
+        height: COLLAPSED_WINDOW_SIZE,
+      })
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it("clears the drag origin after finishing a drag", () => {
