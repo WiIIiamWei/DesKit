@@ -1,7 +1,6 @@
 import type { BrowserWindow as ElectronBrowserWindow } from "electron"
 import type { Mock } from "vitest"
 import type { FloatingBallWindowDeps } from "./floating-ball-window"
-import process from "node:process"
 import { BrowserWindow, screen } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
@@ -14,6 +13,7 @@ import {
   getCollapsedFloatingBallBounds,
   getExpandedFloatingBallBounds,
   getFloatingBallVisualCenter,
+  moveFloatingBallBy,
   moveFloatingBallDrag,
   startFloatingBallDrag,
 } from "./floating-ball-window"
@@ -23,8 +23,6 @@ type MockBrowserWindow = ElectronBrowserWindow & {
   getBounds: Mock
   setBounds: Mock
 }
-
-const MENU_SIZE = process.platform === "darwin" ? 320 : 240
 
 const deps: FloatingBallWindowDeps = {
   rendererDevUrl: undefined,
@@ -104,6 +102,29 @@ describe("floating ball window dragging", () => {
     destroyFloatingBallWindow()
   })
 
+  it("creates the floating window with the collapsed hit area size", () => {
+    ensureFloatingBallWindow(deps)
+
+    expect(vi.mocked(BrowserWindow)).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        width: COLLAPSED_WINDOW_SIZE,
+        height: COLLAPSED_WINDOW_SIZE,
+      })
+    )
+  })
+
+  it("places the collapsed window at the default right edge position", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+
+    expect(win.setBounds).toHaveBeenLastCalledWith({
+      x: 1440 - COLLAPSED_WINDOW_SIZE - 24,
+      y: 900 / 2 - COLLAPSED_WINDOW_SIZE / 2,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+  })
+
   it("moves from the OS cursor drag origin and keeps the floating window size fixed", () => {
     ensureFloatingBallWindow(deps)
     const win = latestWindow()
@@ -119,8 +140,24 @@ describe("floating ball window dragging", () => {
     expect(win.setBounds).toHaveBeenLastCalledWith({
       x: 1070,
       y: 440,
-      width: MENU_SIZE,
-      height: MENU_SIZE,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+  })
+
+  it("moves by renderer delta with the collapsed hit area size", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 1100, y: 410, width: 500, height: 500 })
+    win.setBounds.mockClear()
+
+    moveFloatingBallBy({ x: 12.4, y: -8.6 })
+
+    expect(win.setBounds).toHaveBeenLastCalledWith({
+      x: 1112,
+      y: 401,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
     })
   })
 
