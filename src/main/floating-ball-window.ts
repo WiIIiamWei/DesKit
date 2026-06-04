@@ -11,7 +11,6 @@ export const COLLAPSED_WINDOW_SIZE = 72
 export const EDGE_VISIBLE_BALL_WIDTH = BALL_SIZE / 2
 export const SNAP_EDGE_DISTANCE = 96
 
-const MENU_SIZE = EXPANDED_WINDOW_SIZE
 const EDGE_MARGIN = 24
 const FLOATING_BALL_HASH = "floating-ball"
 
@@ -34,8 +33,8 @@ export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserW
   if (floatingBallWindow && !floatingBallWindow.isDestroyed()) return floatingBallWindow
 
   floatingBallWindow = new BrowserWindow({
-    width: MENU_SIZE,
-    height: MENU_SIZE,
+    width: COLLAPSED_WINDOW_SIZE,
+    height: COLLAPSED_WINDOW_SIZE,
     show: false,
     frame: false,
     hasShadow: false,
@@ -148,8 +147,8 @@ export function moveFloatingBallDrag(): void {
   const next = {
     x: dragState.bounds.x + cursor.x - dragState.cursor.x,
     y: dragState.bounds.y + cursor.y - dragState.cursor.y,
-    width: MENU_SIZE,
-    height: MENU_SIZE,
+    width: getCurrentFloatingBallWindowSize(),
+    height: getCurrentFloatingBallWindowSize(),
   }
   win.setBounds(clampBounds(next, screen.getDisplayMatching(next).workArea))
 }
@@ -165,8 +164,8 @@ export function moveFloatingBallBy(delta: { x: number; y: number }): void {
   const next = {
     x: bounds.x + Math.round(delta.x),
     y: bounds.y + Math.round(delta.y),
-    width: MENU_SIZE,
-    height: MENU_SIZE,
+    width: getCurrentFloatingBallWindowSize(),
+    height: getCurrentFloatingBallWindowSize(),
   }
   win.setBounds(clampBounds(next, screen.getDisplayMatching(next).workArea))
 }
@@ -191,10 +190,10 @@ function moveFloatingBallToDefaultPosition(win: BrowserWindow): void {
   const display = screen.getPrimaryDisplay()
   const { x, y, width, height } = display.workArea
   win.setBounds({
-    x: Math.round(x + width - MENU_SIZE - EDGE_MARGIN),
-    y: Math.round(y + height / 2 - MENU_SIZE / 2),
-    width: MENU_SIZE,
-    height: MENU_SIZE,
+    x: Math.round(x + width - COLLAPSED_WINDOW_SIZE - EDGE_MARGIN),
+    y: Math.round(y + height / 2 - COLLAPSED_WINDOW_SIZE / 2),
+    width: COLLAPSED_WINDOW_SIZE,
+    height: COLLAPSED_WINDOW_SIZE,
   })
 }
 
@@ -202,9 +201,13 @@ function fixedSizeBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   return {
     x: bounds.x,
     y: bounds.y,
-    width: MENU_SIZE,
-    height: MENU_SIZE,
+    width: getCurrentFloatingBallWindowSize(),
+    height: getCurrentFloatingBallWindowSize(),
   }
+}
+
+function getCurrentFloatingBallWindowSize(): number {
+  return menuExpanded ? EXPANDED_WINDOW_SIZE : COLLAPSED_WINDOW_SIZE
 }
 
 export function getFloatingBallVisualCenter(bounds: Electron.Rectangle): Electron.Point {
