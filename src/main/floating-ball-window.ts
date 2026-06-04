@@ -27,6 +27,7 @@ let floatingBallWindow: BrowserWindow | null = null
 let currentDeps: FloatingBallWindowDeps | null = null
 let menuExpanded = false
 let dragState: { cursor: Electron.Point; bounds: Electron.Rectangle } | null = null
+let restoreCollapsedBoundsAfterMenu: Electron.Rectangle | null = null
 
 export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserWindow {
   currentDeps = deps
@@ -99,6 +100,8 @@ export function destroyFloatingBallWindow(): void {
   const win = getFloatingBallWindow()
   floatingBallWindow = null
   currentDeps = null
+  menuExpanded = false
+  restoreCollapsedBoundsAfterMenu = null
   finishFloatingBallDrag()
   if (win) win.destroy()
 }
@@ -107,6 +110,8 @@ export function expandFloatingBallMenu(): void {
   const win = getFloatingBallWindow()
   if (!win || menuExpanded) return
 
+  restoreCollapsedBoundsAfterMenu = null
+  expandFloatingBallWindow(win)
   menuExpanded = true
   win.webContents.send("floating-ball:menu-state", true)
 }
@@ -115,6 +120,7 @@ export function collapseFloatingBallMenu(): void {
   const win = getFloatingBallWindow()
   if (!win || !menuExpanded) return
 
+  collapseFloatingBallWindow(win)
   menuExpanded = false
   win.webContents.send("floating-ball:menu-state", false)
 }
@@ -210,6 +216,39 @@ function getCurrentFloatingBallWindowSize(): number {
   return menuExpanded ? EXPANDED_WINDOW_SIZE : COLLAPSED_WINDOW_SIZE
 }
 
+function expandFloatingBallWindow(win: BrowserWindow): void {
+  const collapsedBounds = fixedCollapsedBounds(win.getBounds())
+  const expandedBounds = getExpandedFloatingBallBounds(getFloatingBallVisualCenter(collapsedBounds))
+  const nextBounds = clampBoundsToWorkArea(
+    expandedBounds,
+    screen.getDisplayMatching(expandedBounds).workArea
+  )
+  if (boundsMoved(expandedBounds, nextBounds)) {
+    restoreCollapsedBoundsAfterMenu = collapsedBounds
+  }
+  win.setBounds(nextBounds)
+}
+
+function collapseFloatingBallWindow(win: BrowserWindow): void {
+  const restoreBounds = restoreCollapsedBoundsAfterMenu
+  restoreCollapsedBoundsAfterMenu = null
+  if (restoreBounds) {
+    win.setBounds(restoreBounds)
+    return
+  }
+
+  win.setBounds(getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(win.getBounds())))
+}
+
+function fixedCollapsedBounds(bounds: Electron.Rectangle): Electron.Rectangle {
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: COLLAPSED_WINDOW_SIZE,
+    height: COLLAPSED_WINDOW_SIZE,
+  }
+}
+
 export function getFloatingBallVisualCenter(bounds: Electron.Rectangle): Electron.Point {
   return {
     x: Math.round(bounds.x + bounds.width / 2),
@@ -247,6 +286,10 @@ function getCenteredBounds(center: Electron.Point, size: number): Electron.Recta
     width: size,
     height: size,
   }
+}
+
+function boundsMoved(before: Electron.Rectangle, after: Electron.Rectangle): boolean {
+  return before.x !== after.x || before.y !== after.y
 }
 
 function clamp(value: number, min: number, max: number): number {
