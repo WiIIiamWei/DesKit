@@ -84,6 +84,9 @@ const electronAPI = {
   startFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-start"),
   moveFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-move"),
   finishFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-end"),
+  finishFloatingBallExpandPreparation: () => ipcRenderer.invoke("floating-ball:expand-ready"),
+  finishFloatingBallCollapseTransition: () =>
+    ipcRenderer.invoke("floating-ball:collapse-transition-end"),
   moveFloatingBallBy: (delta: { x: number; y: number }) =>
     ipcRenderer.invoke("floating-ball:move-by", delta),
   hideFloatingBall: () => ipcRenderer.invoke("floating-ball:hide"),
@@ -169,6 +172,23 @@ const electronAPI = {
     const listener = (_event: IpcRendererEvent, expanded: boolean): void => handler(expanded)
     ipcRenderer.on("floating-ball:menu-state", listener)
     return () => ipcRenderer.removeListener("floating-ball:menu-state", listener)
+  },
+
+  onFloatingBallWindowState: (
+    handler: (state: {
+      phase: "collapsed" | "expanding" | "expanded" | "collapsing"
+      expandedSize: number
+    }) => void
+  ): (() => void) => {
+    const listener = (
+      _event: IpcRendererEvent,
+      state: {
+        phase: "collapsed" | "expanding" | "expanded" | "collapsing"
+        expandedSize: number
+      }
+    ): void => handler(state)
+    ipcRenderer.on("floating-ball:window-state", listener)
+    return () => ipcRenderer.removeListener("floating-ball:window-state", listener)
   },
 
   onFloatingBallFeatures: (handler: (features: FloatingBallFeature[]) => void): (() => void) => {

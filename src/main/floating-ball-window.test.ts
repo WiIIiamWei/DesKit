@@ -6,14 +6,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   BALL_SIZE,
   clampBoundsToWorkArea,
-  COLLAPSE_MENU_RESIZE_DELAY_MS,
   COLLAPSED_WINDOW_SIZE,
   collapseFloatingBallMenu,
   destroyFloatingBallWindow,
   ensureFloatingBallWindow,
   EXPANDED_WINDOW_SIZE,
   expandFloatingBallMenu,
+  finishFloatingBallCollapseTransition,
   finishFloatingBallDrag,
+  finishFloatingBallExpandPreparation,
+  FLOATING_BALL_MENU_TRANSITION_FALLBACK_MS,
   getCollapsedFloatingBallBounds,
   getExpandedFloatingBallBounds,
   getFloatingBallSnappedEdge,
@@ -247,13 +249,21 @@ describe("floating ball window dragging", () => {
     expect(win.setBounds).not.toHaveBeenCalled()
   })
 
-  it("expands immediately around the ball center when the menu fits in the work area", () => {
+  it("waits for renderer expand preparation before resizing the window", () => {
     ensureFloatingBallWindow(deps)
     const win = latestWindow()
     win.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
     win.setBounds.mockClear()
 
     expandFloatingBallMenu()
+
+    expect(win.setBounds).not.toHaveBeenCalled()
+    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:window-state", {
+      phase: "expanding",
+      expandedSize: EXPANDED_WINDOW_SIZE,
+    })
+
+    finishFloatingBallExpandPreparation()
 
     expect(win.setBounds).toHaveBeenLastCalledWith({
       x: 520,
@@ -264,13 +274,16 @@ describe("floating ball window dragging", () => {
     expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", true)
   })
 
-  it("moves the window before expanding only when the menu would exceed the work area", () => {
+  it("clamps the expanded window after renderer expand preparation", () => {
     ensureFloatingBallWindow(deps)
     const win = latestWindow()
     win.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
     win.setBounds.mockClear()
 
     expandFloatingBallMenu()
+    expect(win.setBounds).not.toHaveBeenCalled()
+
+    finishFloatingBallExpandPreparation()
 
     expect(win.setBounds).toHaveBeenLastCalledWith({
       x: 1440 - EXPANDED_WINDOW_SIZE,
@@ -281,7 +294,7 @@ describe("floating ball window dragging", () => {
     expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", true)
   })
 
-  it("hides the renderer menu before restoring the collapsed window position", () => {
+  it("restores the collapsed window position only after renderer collapse transition ends", () => {
     vi.useFakeTimers()
     try {
       ensureFloatingBallWindow(deps)
@@ -290,6 +303,7 @@ describe("floating ball window dragging", () => {
       win.setBounds.mockClear()
 
       expandFloatingBallMenu()
+      finishFloatingBallExpandPreparation()
       win.getBounds.mockReturnValue({
         x: 1440 - EXPANDED_WINDOW_SIZE,
         y: 330,
@@ -304,7 +318,7 @@ describe("floating ball window dragging", () => {
       expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
       expect(win.setBounds).not.toHaveBeenCalled()
 
-      vi.advanceTimersByTime(COLLAPSE_MENU_RESIZE_DELAY_MS)
+      finishFloatingBallCollapseTransition()
 
       expect(win.setBounds).toHaveBeenLastCalledWith({
         x: 1344,
@@ -312,6 +326,10 @@ describe("floating ball window dragging", () => {
         width: COLLAPSED_WINDOW_SIZE,
         height: COLLAPSED_WINDOW_SIZE,
       })
+
+      win.setBounds.mockClear()
+      vi.advanceTimersByTime(FLOATING_BALL_MENU_TRANSITION_FALLBACK_MS)
+      expect(win.setBounds).not.toHaveBeenCalled()
     } finally {
       vi.useRealTimers()
     }

@@ -12,12 +12,17 @@ vi.mock("react-i18next", () => ({
 
 type TestElectronApi = NonNullable<Window["electronAPI"]>
 type MenuStateHandler = (expanded: boolean) => void
+type WindowStateHandler = (state: {
+  phase: "collapsed" | "expanding" | "expanded" | "collapsing"
+  expandedSize: number
+}) => void
 type FeaturesHandler = (features: DeskitFloatingBallFeature[]) => void
 type SettingsChangedHandler = (settings: DeskitUserSettings) => void
 
 interface FloatingBallHarness {
   api: Partial<TestElectronApi>
   emitMenuState: MenuStateHandler
+  emitWindowState: WindowStateHandler
   emitFloatingBallFeatures: FeaturesHandler
   emitSettingsChanged: SettingsChangedHandler
 }
@@ -38,6 +43,7 @@ function baseSettings(features: DeskitFloatingBallFeature[] = []): DeskitUserSet
 
 function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
   let menuStateHandler: MenuStateHandler | null = null
+  let windowStateHandler: WindowStateHandler | null = null
   let featuresHandler: FeaturesHandler | null = null
   let settingsChangedHandler: SettingsChangedHandler | null = null
   const api = {
@@ -48,11 +54,19 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
     startFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
+    finishFloatingBallExpandPreparation: vi.fn().mockResolvedValue(undefined),
+    finishFloatingBallCollapseTransition: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     onFloatingBallMenuState: vi.fn((handler: MenuStateHandler) => {
       menuStateHandler = handler
       return () => {
         menuStateHandler = null
+      }
+    }),
+    onFloatingBallWindowState: vi.fn((handler: WindowStateHandler) => {
+      windowStateHandler = handler
+      return () => {
+        windowStateHandler = null
       }
     }),
     onFloatingBallFeatures: vi.fn((handler: FeaturesHandler) => {
@@ -75,6 +89,12 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
     api,
     emitMenuState: (expanded: boolean) => {
       act(() => menuStateHandler?.(expanded))
+    },
+    emitWindowState: (state: {
+      phase: "collapsed" | "expanding" | "expanded" | "collapsing"
+      expandedSize: number
+    }) => {
+      act(() => windowStateHandler?.(state))
     },
     emitFloatingBallFeatures: (features: DeskitFloatingBallFeature[]) => {
       act(() => featuresHandler?.(features))
@@ -129,6 +149,7 @@ function firePointerEvent(
 describe("floating ball panel", () => {
   afterEach(() => {
     cleanup()
+    vi.unstubAllGlobals()
     delete window.electronAPI
   })
 
@@ -184,5 +205,35 @@ describe("floating ball panel", () => {
     expect(api.moveFloatingBallDrag).not.toHaveBeenCalled()
     expect(api.finishFloatingBallDrag).toHaveBeenCalledTimes(1)
     expect(api.toggleFloatingBallMenu).toHaveBeenCalledTimes(1)
+  })
+
+  it("notifies main after applying the expanding window state", () => {
+    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
+      callback(0)
+      return 1
+    })
+    const { api, emitWindowState } = installElectronApi(baseSettings())
+    renderPanel()
+
+    emitWindowState({ phase: "expanding", expandedSize: 240 })
+
+    expect(api.finishFloatingBallExpandPreparation).toHaveBeenCalledTimes(1)
+  })
+
+  it("notifies main after the collapsing menu transition ends", () => {
+    const { api, emitMenuState, emitWindowState } = installElectronApi(
+      baseSettings(["appLauncher"])
+    )
+    renderPanel()
+    emitWindowState({ phase: "expanded", expandedSize: 240 })
+    emitMenuState(true)
+    const menu = document.querySelector('[data-floating-ball-menu="true"]')
+    if (!(menu instanceof HTMLElement)) throw new Error("Expected floating ball menu")
+
+    emitWindowState({ phase: "collapsing", expandedSize: 240 })
+    emitMenuState(false)
+    fireEvent.transitionEnd(menu, { propertyName: "opacity" })
+
+    expect(api.finishFloatingBallCollapseTransition).toHaveBeenCalledTimes(1)
   })
 })
