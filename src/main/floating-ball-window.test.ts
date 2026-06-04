@@ -12,10 +12,7 @@ import {
   ensureFloatingBallWindow,
   EXPANDED_WINDOW_SIZE,
   expandFloatingBallMenu,
-  finishFloatingBallCollapseTransition,
   finishFloatingBallDrag,
-  finishFloatingBallExpandPreparation,
-  FLOATING_BALL_MENU_TRANSITION_FALLBACK_MS,
   getCollapsedFloatingBallBounds,
   getExpandedFloatingBallBounds,
   getFloatingBallSnappedEdge,
@@ -29,6 +26,7 @@ import { defaultSettings } from "./settings/settings"
 type MockBrowserWindow = ElectronBrowserWindow & {
   getBounds: Mock
   setBounds: Mock
+  hide: Mock
   webContents: ElectronBrowserWindow["webContents"] & {
     send: Mock
   }
@@ -54,6 +52,26 @@ function latestWindow(): MockBrowserWindow {
   const win = results[results.length - 1]?.value
   if (!win) throw new Error("Expected a BrowserWindow to be created")
   return win
+}
+
+function createdWindows(): MockBrowserWindow[] {
+  return (
+    vi.mocked(BrowserWindow).mock.results as unknown as {
+      value: MockBrowserWindow
+    }[]
+  ).map((result) => result.value)
+}
+
+function hasBoundsCall(win: MockBrowserWindow, bounds: Electron.Rectangle): boolean {
+  return win.setBounds.mock.calls.some(([actual]) => {
+    const value = actual as Electron.Rectangle
+    return (
+      value.x === bounds.x &&
+      value.y === bounds.y &&
+      value.width === bounds.width &&
+      value.height === bounds.height
+    )
+  })
 }
 
 describe("floating ball bounds helpers", () => {
@@ -249,95 +267,172 @@ describe("floating ball window dragging", () => {
     expect(win.setBounds).not.toHaveBeenCalled()
   })
 
-  it("waits for renderer expand preparation before resizing the window", () => {
+  it("keeps the collapsed hit area stable while making the menu interaction area available", () => {
     ensureFloatingBallWindow(deps)
-    const win = latestWindow()
-    win.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
-    win.setBounds.mockClear()
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    ballWindow.setBounds.mockClear()
 
     expandFloatingBallMenu()
 
-    expect(win.setBounds).not.toHaveBeenCalled()
-    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:window-state", {
-      phase: "expanding",
-      expandedSize: EXPANDED_WINDOW_SIZE,
-    })
+    expect(ballWindow.setBounds).not.toHaveBeenCalledWith(
+      expect.objectContaining({
+        width: EXPANDED_WINDOW_SIZE,
+        height: EXPANDED_WINDOW_SIZE,
+      })
+    )
+    expect(
+      createdWindows().some((win) =>
+        hasBoundsCall(win, {
+          x: 520,
+          y: 330,
+          width: EXPANDED_WINDOW_SIZE,
+          height: EXPANDED_WINDOW_SIZE,
+        })
+      )
+    ).toBe(true)
+  })
 
-    finishFloatingBallExpandPreparation()
+  it("removes the menu interaction area after closing without resizing the collapsed hit area", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    ballWindow.setBounds.mockClear()
 
-    expect(win.setBounds).toHaveBeenLastCalledWith({
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
       x: 520,
       y: 330,
       width: EXPANDED_WINDOW_SIZE,
       height: EXPANDED_WINDOW_SIZE,
     })
-    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", true)
+    ballWindow.getBounds.mockReturnValue({
+      x: 604,
+      y: 414,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    ballWindow.setBounds.mockClear()
+    collapseFloatingBallMenu()
+
+    expect(ballWindow.setBounds).not.toHaveBeenCalled()
+    expect(createdWindows().some((win) => win.hide.mock.calls.length > 0)).toBe(true)
   })
 
-  it("clamps the expanded window after renderer expand preparation", () => {
+  it("moves a snapped collapsed hit area to the centered menu position while opening inside the primary work area", () => {
     ensureFloatingBallWindow(deps)
-    const win = latestWindow()
-    win.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
-    win.setBounds.mockClear()
+    const ballWindow = latestWindow()
+    const snappedBounds = {
+      x: -(BALL_SIZE / 2) - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    }
+    ballWindow.getBounds.mockReturnValue(snappedBounds)
+    ballWindow.setBounds.mockClear()
 
     expandFloatingBallMenu()
-    expect(win.setBounds).not.toHaveBeenCalled()
 
-    finishFloatingBallExpandPreparation()
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith({
+      x: 84,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    expect(
+      createdWindows().some((win) =>
+        hasBoundsCall(win, {
+          x: 0,
+          y: 326,
+          width: EXPANDED_WINDOW_SIZE,
+          height: EXPANDED_WINDOW_SIZE,
+        })
+      )
+    ).toBe(true)
+  })
 
-    expect(win.setBounds).toHaveBeenLastCalledWith({
+  it("clamps the menu interaction area inside the primary work area when opening near the edge", () => {
+    vi.mocked(screen.getDisplayMatching).mockReturnValue({
+      workArea: { x: 1440, y: 0, width: 1440, height: 900 },
+    } as Electron.Display)
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
+    ballWindow.setBounds.mockClear()
+
+    expandFloatingBallMenu()
+
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith({
+      x: 1284,
+      y: 414,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    expect(
+      createdWindows().some((win) =>
+        hasBoundsCall(win, {
+          x: 1440 - EXPANDED_WINDOW_SIZE,
+          y: 330,
+          width: EXPANDED_WINDOW_SIZE,
+          height: EXPANDED_WINDOW_SIZE,
+        })
+      )
+    ).toBe(true)
+  })
+
+  it("closes the menu interaction area without changing the collapsed hit area", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
+    ballWindow.setBounds.mockClear()
+
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
       x: 1440 - EXPANDED_WINDOW_SIZE,
       y: 330,
       width: EXPANDED_WINDOW_SIZE,
       height: EXPANDED_WINDOW_SIZE,
     })
-    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", true)
+    ballWindow.getBounds.mockReturnValue({
+      x: 1284,
+      y: 414,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    ballWindow.setBounds.mockClear()
+    ballWindow.webContents.send.mockClear()
+
+    collapseFloatingBallMenu()
+
+    expect(ballWindow.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith({
+      x: 1440 - BALL_SIZE / 2 - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
+      y: 414,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    expect(createdWindows().some((win) => win.hide.mock.calls.length > 0)).toBe(true)
   })
 
-  it("restores the collapsed window position only after renderer collapse transition ends", () => {
-    vi.useFakeTimers()
-    try {
-      ensureFloatingBallWindow(deps)
-      const win = latestWindow()
-      win.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
-      win.setBounds.mockClear()
+  it("replays the open menu state when the menu renderer finishes loading", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
 
-      expandFloatingBallMenu()
-      finishFloatingBallExpandPreparation()
-      win.getBounds.mockReturnValue({
-        x: 1440 - EXPANDED_WINDOW_SIZE,
-        y: 330,
-        width: EXPANDED_WINDOW_SIZE,
-        height: EXPANDED_WINDOW_SIZE,
-      })
-      win.setBounds.mockClear()
-      win.webContents.send.mockClear()
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.webContents.send.mockClear()
 
-      collapseFloatingBallMenu()
+    menuWindow.webContents.emit("did-finish-load")
 
-      expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
-      expect(win.setBounds).not.toHaveBeenCalled()
-
-      finishFloatingBallCollapseTransition()
-
-      expect(win.setBounds).toHaveBeenLastCalledWith({
-        x: 1344,
-        y: 414,
-        width: COLLAPSED_WINDOW_SIZE,
-        height: COLLAPSED_WINDOW_SIZE,
-      })
-
-      win.setBounds.mockClear()
-      vi.advanceTimersByTime(FLOATING_BALL_MENU_TRANSITION_FALLBACK_MS)
-      expect(win.setBounds).not.toHaveBeenCalled()
-    } finally {
-      vi.useRealTimers()
-    }
+    expect(menuWindow.webContents.send).toHaveBeenCalledWith("floating-ball:menu-state", true)
   })
 
   it("does not restore the pre-expand snapped edge after dragging the expanded menu away", () => {
     ensureFloatingBallWindow(deps)
-    const win = latestWindow()
+    const ballWindow = latestWindow()
     const leftSnappedBounds = {
       x: -(BALL_SIZE / 2) - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
       y: 410,
@@ -350,26 +445,32 @@ describe("floating ball window dragging", () => {
       .mockReturnValueOnce({ x: 120, y: 446 })
       .mockReturnValueOnce({ x: 620, y: 446 })
 
-    win.getBounds.mockReturnValue({ x: 100, y: 410, width: 72, height: 72 })
+    ballWindow.getBounds.mockReturnValue({ x: 100, y: 410, width: 72, height: 72 })
     startFloatingBallDrag()
     moveFloatingBallDrag()
-    win.getBounds.mockReturnValue({ x: 20, y: 410, width: 72, height: 72 })
+    ballWindow.getBounds.mockReturnValue({ x: 20, y: 410, width: 72, height: 72 })
     finishFloatingBallDrag()
     expect(getFloatingBallSnappedEdge()).toBe("left")
 
-    win.getBounds.mockReturnValue(leftSnappedBounds)
+    ballWindow.getBounds.mockReturnValue(leftSnappedBounds)
     expandFloatingBallMenu()
-    finishFloatingBallExpandPreparation()
-
-    win.getBounds.mockReturnValue({
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
       x: 0,
       y: 326,
       width: EXPANDED_WINDOW_SIZE,
       height: EXPANDED_WINDOW_SIZE,
     })
+
     startFloatingBallDrag()
     moveFloatingBallDrag()
-    win.getBounds.mockReturnValue({
+    ballWindow.getBounds.mockReturnValue({
+      x: 584,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    menuWindow.getBounds.mockReturnValue({
       x: 500,
       y: 326,
       width: EXPANDED_WINDOW_SIZE,
@@ -378,10 +479,9 @@ describe("floating ball window dragging", () => {
     finishFloatingBallDrag()
 
     collapseFloatingBallMenu()
-    finishFloatingBallCollapseTransition()
 
     expect(getFloatingBallSnappedEdge()).toBe("none")
-    expect(win.setBounds).toHaveBeenLastCalledWith({
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith({
       x: 584,
       y: 410,
       width: COLLAPSED_WINDOW_SIZE,
@@ -391,7 +491,7 @@ describe("floating ball window dragging", () => {
 
   it("snaps to the nearest edge when the expanded menu is dragged near an edge before closing", () => {
     ensureFloatingBallWindow(deps)
-    const win = latestWindow()
+    const ballWindow = latestWindow()
     const leftSnappedBounds = {
       x: -(BALL_SIZE / 2) - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
       y: 410,
@@ -404,26 +504,38 @@ describe("floating ball window dragging", () => {
       .mockReturnValueOnce({ x: 120, y: 446 })
       .mockReturnValueOnce({ x: 1320, y: 446 })
 
-    win.getBounds.mockReturnValue({ x: 100, y: 410, width: 72, height: 72 })
+    ballWindow.getBounds.mockReturnValue({ x: 100, y: 410, width: 72, height: 72 })
     startFloatingBallDrag()
     moveFloatingBallDrag()
-    win.getBounds.mockReturnValue({ x: 20, y: 410, width: 72, height: 72 })
+    ballWindow.getBounds.mockReturnValue({ x: 20, y: 410, width: 72, height: 72 })
     finishFloatingBallDrag()
     expect(getFloatingBallSnappedEdge()).toBe("left")
 
-    win.getBounds.mockReturnValue(leftSnappedBounds)
+    ballWindow.getBounds.mockReturnValue(leftSnappedBounds)
     expandFloatingBallMenu()
-    finishFloatingBallExpandPreparation()
-
-    win.getBounds.mockReturnValue({
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
       x: 0,
       y: 326,
       width: EXPANDED_WINDOW_SIZE,
       height: EXPANDED_WINDOW_SIZE,
     })
+
     startFloatingBallDrag()
     moveFloatingBallDrag()
-    win.getBounds.mockReturnValue({
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith({
+      x: 1284,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    ballWindow.getBounds.mockReturnValue({
+      x: 1284,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    menuWindow.getBounds.mockReturnValue({
       x: 1200,
       y: 326,
       width: EXPANDED_WINDOW_SIZE,
@@ -432,10 +544,9 @@ describe("floating ball window dragging", () => {
     finishFloatingBallDrag()
 
     collapseFloatingBallMenu()
-    finishFloatingBallCollapseTransition()
 
     expect(getFloatingBallSnappedEdge()).toBe("right")
-    expect(win.setBounds).toHaveBeenLastCalledWith({
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith({
       x: 1440 - BALL_SIZE / 2 - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
       y: 410,
       width: COLLAPSED_WINDOW_SIZE,

@@ -50,3 +50,13 @@ describe("preload screenshot IPC", () => {
     expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("pinned-image:close")
   })
 })
+
+describe("preload floating ball IPC", () => {
+  it("does not expose single-window resize handshakes", () => {
+    const api = exposedApi() as unknown as Record<string, unknown>
+
+    expect(api.finishFloatingBallExpandPreparation).toBeUndefined()
+    expect(api.finishFloatingBallCollapseTransition).toBeUndefined()
+    expect(api.onFloatingBallWindowState).toBeUndefined()
+  })
+})

@@ -18,10 +18,6 @@ export type AppEntry = LauncherAppEntry
 export type SearchResult = LauncherSearchResult
 export type UserSettings = DeskitUserSettings
 export type FloatingBallFeature = DeskitFloatingBallFeature
-export interface FloatingBallWindowState {
-  phase: "collapsed" | "expanding" | "expanded" | "collapsing"
-  expandedSize: number
-}
 export type PluginRegistryEntry = DeskitPluginRegistryEntry
 export type MarketplaceEntry = DeskitMarketplaceEntry
 export type MarketplaceInstallPreview = DeskitMarketplaceInstallPreview
@@ -108,14 +104,6 @@ export async function moveFloatingBallDrag(): Promise<void> {
 
 export async function finishFloatingBallDrag(): Promise<void> {
   await api().finishFloatingBallDrag()
-}
-
-export async function finishFloatingBallExpandPreparation(): Promise<void> {
-  await api().finishFloatingBallExpandPreparation()
-}
-
-export async function finishFloatingBallCollapseTransition(): Promise<void> {
-  await api().finishFloatingBallCollapseTransition()
 }
 
 export async function moveFloatingBallBy(delta: { x: number; y: number }): Promise<void> {
@@ -315,12 +303,6 @@ export function onLauncherFocus(handler: () => void): () => void {
 
 export function onFloatingBallMenuState(handler: (expanded: boolean) => void): () => void {
   return api().onFloatingBallMenuState(handler)
-}
-
-export function onFloatingBallWindowState(
-  handler: (state: FloatingBallWindowState) => void
-): () => void {
-  return api().onFloatingBallWindowState(handler)
 }
 
 export function onFloatingBallFeatures(

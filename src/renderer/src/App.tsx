@@ -13,6 +13,7 @@ type RendererRoute =
   | "shell"
   | "launcher"
   | "floating-ball"
+  | "floating-ball-menu"
   | "screenshot-overlay"
   | "screenshot-annotator"
   | "pinned-image"
@@ -25,6 +26,7 @@ function isLauncherRoute(): boolean {
 function getRendererRoute(): RendererRoute {
   if (typeof window === "undefined") return "shell"
   if (window.location.hash === "#floating-ball") return "floating-ball"
+  if (window.location.hash === "#floating-ball-menu") return "floating-ball-menu"
   if (window.location.hash === "#screenshot-overlay") return "screenshot-overlay"
   if (window.location.hash === "#screenshot-annotator") return "screenshot-annotator"
   if (window.location.hash === "#pinned-image") return "pinned-image"
@@ -48,7 +50,7 @@ export function App() {
       <TooltipProvider>
         {route === "launcher" ? (
           <LauncherPanel />
-        ) : route === "floating-ball" ? (
+        ) : route === "floating-ball" || route === "floating-ball-menu" ? (
           <FloatingBallPanel />
         ) : route === "screenshot-overlay" ? (
           <ScreenshotOverlayPage />

@@ -6,9 +6,7 @@ import {
   configureSyncPassphrase,
   disconnectSync,
   disposePluginCommand,
-  finishFloatingBallCollapseTransition,
   finishFloatingBallDrag,
-  finishFloatingBallExpandPreparation,
   getPlugin,
   getSettings,
   getSyncStatus,
@@ -28,7 +26,6 @@ import {
   notifyLauncherReady,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
-  onFloatingBallWindowState,
   onLauncherFocus,
   onLauncherRunPluginCommand,
   onPluginRegistryChanged,
@@ -75,8 +72,6 @@ function mockApi() {
     startFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
-    finishFloatingBallExpandPreparation: vi.fn().mockResolvedValue(undefined),
-    finishFloatingBallCollapseTransition: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
     listPlugins: vi.fn().mockResolvedValue(ok([])),
@@ -155,7 +150,6 @@ function mockApi() {
     disconnectSync: vi.fn().mockResolvedValue({ enabled: false }),
     onLauncherFocus: vi.fn().mockReturnValue(() => {}),
     onFloatingBallMenuState: vi.fn().mockReturnValue(() => {}),
-    onFloatingBallWindowState: vi.fn().mockReturnValue(() => {}),
     onFloatingBallFeatures: vi.fn().mockReturnValue(() => {}),
     onLauncherRunPluginCommand: vi.fn().mockReturnValue(() => {}),
     onPluginRegistryChanged: vi.fn().mockReturnValue(() => {}),
@@ -266,18 +260,6 @@ describe("lib/electron", () => {
       const api = mockApi()
       await finishFloatingBallDrag()
       expect(api.finishFloatingBallDrag).toHaveBeenCalled()
-    })
-
-    it("finishFloatingBallExpandPreparation calls finishFloatingBallExpandPreparation", async () => {
-      const api = mockApi()
-      await finishFloatingBallExpandPreparation()
-      expect(api.finishFloatingBallExpandPreparation).toHaveBeenCalled()
-    })
-
-    it("finishFloatingBallCollapseTransition calls finishFloatingBallCollapseTransition", async () => {
-      const api = mockApi()
-      await finishFloatingBallCollapseTransition()
-      expect(api.finishFloatingBallCollapseTransition).toHaveBeenCalled()
     })
 
     it("moveFloatingBallBy forwards delta", async () => {
@@ -455,13 +437,6 @@ describe("lib/electron", () => {
       const handler = vi.fn()
       onFloatingBallMenuState(handler)
       expect(api.onFloatingBallMenuState).toHaveBeenCalledWith(handler)
-    })
-
-    it("onFloatingBallWindowState forwards handler", () => {
-      const api = mockApi()
-      const handler = vi.fn()
-      onFloatingBallWindowState(handler)
-      expect(api.onFloatingBallWindowState).toHaveBeenCalledWith(handler)
     })
 
     it("onFloatingBallFeatures forwards handler", () => {

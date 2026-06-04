@@ -31,9 +31,7 @@ import { applyScreenshotColorProfileWorkaround } from "./chromium-color-profile"
 import { pruneUnavailableFloatingBallFeatures } from "./floating-ball-features"
 import {
   destroyFloatingBallWindow,
-  finishFloatingBallCollapseTransition,
   finishFloatingBallDrag,
-  finishFloatingBallExpandPreparation,
   hideFloatingBallWindow,
   moveFloatingBallBy,
   moveFloatingBallDrag,
@@ -334,14 +332,6 @@ function registerIpc(): void {
 
   ipcMain.handle("floating-ball:drag-end", () => {
     finishFloatingBallDrag()
-  })
-
-  ipcMain.handle("floating-ball:expand-ready", () => {
-    finishFloatingBallExpandPreparation()
-  })
-
-  ipcMain.handle("floating-ball:collapse-transition-end", () => {
-    finishFloatingBallCollapseTransition()
   })
 
   ipcMain.handle("floating-ball:move-by", (_event, delta: unknown) => {
