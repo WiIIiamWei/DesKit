@@ -206,6 +206,14 @@ function ListPluginView({
             {section.items.map((item) => {
               const primary = item.actions?.[0]
               const selected = item.id === effectiveSelectedId
+              const statusActions = activeIconActions(item.actions)
+              const showAccessoryIcon =
+                item.accessoryIcon &&
+                !statusActions.some((action) => action.icon === item.accessoryIcon) &&
+                !(selected && item.accessoryIcon === "lucide:check")
+              const actionBarActions = item.actions?.filter(
+                (action) => !statusActions.includes(action)
+              )
               return (
                 <div
                   key={item.id}
@@ -238,16 +246,37 @@ function ListPluginView({
                       </span>
                     )}
                   </span>
-                  {(item.accessoryIcon || item.accessory) && (
-                    <span className="flex max-w-32 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
-                      {item.accessoryIcon &&
-                        accessoryIcon(item.accessoryIcon, item.accessoryIconActive === true)}
+                  {(item.accessory ||
+                    showAccessoryIcon ||
+                    statusActions.length > 0 ||
+                    selected) && (
+                    <span className="flex max-w-36 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                       {item.accessory && <span className="truncate">{item.accessory}</span>}
+                      {showAccessoryIcon &&
+                        item.accessoryIcon &&
+                        accessoryIcon(item.accessoryIcon, item.accessoryIconActive === true)}
+                      {statusActions.map((action) => (
+                        <Button
+                          key={actionKey(action, locale)}
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          title={actionLabel(action, locale)}
+                          aria-label={actionLabel(action, locale)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onAction(action, { item })
+                          }}
+                        >
+                          {actionIcon(action)}
+                        </Button>
+                      ))}
+                      {selected && <Check className="size-3.5 text-primary" aria-hidden />}
                     </span>
                   )}
-                  {selected && !!item.actions?.length && (
+                  {selected && !!actionBarActions?.length && (
                     <ActionBar
-                      actions={item.actions}
+                      actions={actionBarActions}
                       locale={locale}
                       onAction={(action) => onAction(action, { item })}
                       compact
@@ -391,6 +420,7 @@ function ActionBar({
           size={compact ? "icon-xs" : "sm"}
           variant="secondary"
           title={actionLabel(action, locale)}
+          aria-label={compact ? actionLabel(action, locale) : undefined}
           onClick={(event) => {
             event.stopPropagation()
             onAction(action)
@@ -421,6 +451,10 @@ const ACTION_ICON_OVERRIDES: Record<string, LucideIconComponent> = {
 const ACCESSORY_ICON_OVERRIDES: Record<string, LucideIconComponent> = {
   "lucide:check": Check,
   "lucide:star": Star,
+}
+
+function activeIconActions(actions?: PluginAction[]): PluginAction[] {
+  return (actions ?? []).filter((action) => action.active && action.icon)
 }
 
 function accessoryIcon(icon: string, active: boolean) {
