@@ -1,9 +1,15 @@
+import { existsSync } from "node:fs"
 import * as path from "node:path"
 import process from "node:process"
 import { app } from "electron"
 
 const OCR_TIMEOUT_MS = 10_000
 const OCR_LANGUAGES = ["eng", "chi_sim"]
+const OCR_MODEL_DIRECTORIES = ["tessdata_best", "tessdata"]
+const OCR_PARAMETERS = {
+  preserve_interword_spaces: "1",
+  user_defined_dpi: "300",
+}
 
 type TesseractModule = typeof import("tesseract.js")
 type TesseractWorker = Awaited<ReturnType<TesseractModule["createWorker"]>>
@@ -41,9 +47,15 @@ export function isOcrWorkerReady(): boolean {
 }
 
 export function ocrLanguagePath(): string {
-  return app.isPackaged
-    ? path.join(process.resourcesPath, "ocr", "tessdata")
-    : path.join(app.getAppPath(), "resources", "ocr", "tessdata")
+  const basePath = app.isPackaged
+    ? path.join(process.resourcesPath, "ocr")
+    : path.join(app.getAppPath(), "resources", "ocr")
+
+  return (
+    OCR_MODEL_DIRECTORIES.map((directory) => path.join(basePath, directory)).find((candidate) =>
+      OCR_LANGUAGES.every((language) => existsSync(path.join(candidate, `${language}.traineddata`)))
+    ) ?? path.join(basePath, "tessdata")
+  )
 }
 
 async function getWorker(): Promise<TesseractWorker> {
@@ -65,13 +77,15 @@ async function getWorker(): Promise<TesseractWorker> {
 
 async function createWorker(): Promise<TesseractWorker> {
   const tesseract = (await import("tesseract.js")) as TesseractModule
-  return tesseract.createWorker(OCR_LANGUAGES, 1, {
+  const worker = await tesseract.createWorker(OCR_LANGUAGES, 1, {
     langPath: ocrLanguagePath(),
     cachePath: ocrLanguagePath(),
     cacheMethod: "readOnly",
     gzip: false,
     logger: () => {},
   })
+  await worker.setParameters(OCR_PARAMETERS)
+  return worker
 }
 
 async function resetWorker(): Promise<void> {
