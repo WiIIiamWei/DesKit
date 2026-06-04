@@ -39,7 +39,7 @@ describe("viewRenderer", () => {
     })
   })
 
-  it("renders custom action icons only for the selected list item", async () => {
+  it("renders active action icons persistently without duplicating compact actions", async () => {
     const user = userEvent.setup()
     const onAction = vi.fn()
     const view: RenderablePluginView = {
@@ -70,11 +70,11 @@ describe("viewRenderer", () => {
     const { container } = render(<ViewRenderer view={view} onAction={onAction} />)
 
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
-    expect(screen.getByRole("button", { name: "Star" })).toBeInTheDocument()
+    expect(screen.getAllByRole("button", { name: "Star" })).toHaveLength(1)
     expect(container.querySelector(".fill-current")).toBeInTheDocument()
     await user.hover(screen.getByRole("button", { name: /second item/i }))
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
-    expect(screen.queryByRole("button", { name: "Star" })).not.toBeInTheDocument()
+    expect(screen.getAllByRole("button", { name: "Star" })).toHaveLength(1)
   })
 
   it("renders list accessory icons without text glyph markers", () => {
@@ -106,6 +106,27 @@ describe("viewRenderer", () => {
     expect(screen.queryByText("★")).not.toBeInTheDocument()
     expect(screen.queryByText("✓")).not.toBeInTheDocument()
     expect(container.querySelectorAll(".fill-current")).toHaveLength(2)
+  })
+
+  it("renders selected row status without requiring accessory icons", () => {
+    const onAction = vi.fn()
+    const view: RenderablePluginView = {
+      type: "list",
+      items: [
+        {
+          id: "recent",
+          title: "Recent item",
+          accessory: "5 minutes ago",
+          actions: [{ type: "custom", id: "copy-item", label: "Copy", icon: "lucide:copy" }],
+        },
+      ],
+    }
+
+    const { container } = render(<ViewRenderer view={view} onAction={onAction} />)
+
+    expect(screen.getByText("5 minutes ago")).toBeInTheDocument()
+    expect(container.querySelector(".text-primary")).toBeInTheDocument()
+    expect(screen.queryByText("✓")).not.toBeInTheDocument()
   })
 
   it("submits form values through the submit action", async () => {
