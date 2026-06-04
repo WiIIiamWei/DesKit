@@ -92,6 +92,7 @@ export function macOSSelectionRect(selection: ScreenshotSelection): Rectangle {
   const display = screen
     .getAllDisplays()
     .find((candidate) => String(candidate.id) === selection.displayId)
+  const scaleFactor = display?.scaleFactor ?? selection.scaleFactor
   const bounds = display?.bounds ?? {
     x: 0,
     y: 0,
@@ -99,10 +100,10 @@ export function macOSSelectionRect(selection: ScreenshotSelection): Rectangle {
     height: selection.displayHeight,
   }
   return {
-    x: Math.round(bounds.x + selection.x),
-    y: Math.round(bounds.y + selection.y),
-    width: Math.round(selection.width),
-    height: Math.round(selection.height),
+    x: Math.round((bounds.x + selection.x) * scaleFactor),
+    y: Math.round((bounds.y + selection.y) * scaleFactor),
+    width: Math.round(selection.width * scaleFactor),
+    height: Math.round(selection.height * scaleFactor),
   }
 }
 
