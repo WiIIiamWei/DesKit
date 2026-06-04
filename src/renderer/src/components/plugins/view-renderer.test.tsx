@@ -68,16 +68,23 @@ describe("viewRenderer", () => {
     }
 
     const { container } = render(<ViewRenderer view={view} onAction={onAction} />)
+    const firstRow = screen.getByRole("button", { name: /first item/i })
 
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: "Star" })).toHaveLength(1)
+    expect(
+      Array.from(firstRow.querySelectorAll("button")).map((button) =>
+        button.getAttribute("aria-label")
+      )
+    ).toEqual(["Copy", "Star"])
     expect(container.querySelector(".fill-current")).toBeInTheDocument()
     await user.hover(screen.getByRole("button", { name: /second item/i }))
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: "Star" })).toHaveLength(1)
   })
 
-  it("renders list accessory icons without text glyph markers", () => {
+  it("renders list accessory icons without text glyph markers", async () => {
+    const user = userEvent.setup()
     const onAction = vi.fn()
     const view: RenderablePluginView = {
       type: "list",
@@ -105,7 +112,10 @@ describe("viewRenderer", () => {
     expect(screen.getByText("just now")).toBeInTheDocument()
     expect(screen.queryByText("★")).not.toBeInTheDocument()
     expect(screen.queryByText("✓")).not.toBeInTheDocument()
-    expect(container.querySelectorAll(".fill-current")).toHaveLength(2)
+    expect(container.querySelectorAll(".fill-current")).toHaveLength(1)
+    await user.hover(screen.getByRole("button", { name: /text only/i }))
+    expect(screen.queryByRole("button", { name: "Select" })).not.toBeInTheDocument()
+    expect(container.querySelectorAll(".fill-current")).toHaveLength(1)
   })
 
   it("renders selected row status without requiring accessory icons", () => {
