@@ -5,6 +5,8 @@ import { BrowserWindow as ElectronBrowserWindow, nativeImage, screen } from "ele
 import { attachWindowSecurity } from "../window-security"
 
 const ANNOTATOR_HASH = "screenshot-annotator"
+const ANNOTATOR_TOOLBAR_MIN_WIDTH = 760
+const ANNOTATOR_TOOLBAR_STACK_HEIGHT = 64
 
 export interface ScreenshotAnnotatorDeps {
   rendererDevUrl: string | undefined
@@ -84,7 +86,7 @@ export function openScreenshotAnnotator(
   })
 }
 
-function getAnnotatorInitialBounds(imagePath: string): { width: number; height: number } {
+export function getAnnotatorInitialBounds(imagePath: string): { width: number; height: number } {
   const size = nativeImage.createFromPath(imagePath).getSize()
   if (size.width <= 0 || size.height <= 0) return { width: 900, height: 640 }
 
@@ -93,13 +95,14 @@ function getAnnotatorInitialBounds(imagePath: string): { width: number; height: 
   const minHeight = 160
   const maxWidth = Math.max(minWidth, Math.round(workArea.width * 0.82))
   const maxHeight = Math.max(minHeight, Math.round(workArea.height * 0.82))
-  const minScale = Math.max(1, minWidth / size.width, minHeight / size.height)
-  const maxScale = Math.min(maxWidth / size.width, maxHeight / size.height)
-  const scale = Math.min(minScale, maxScale)
+  const maxImageHeight = Math.max(80, maxHeight - ANNOTATOR_TOOLBAR_STACK_HEIGHT)
+  const scale = Math.min(1, maxWidth / size.width, maxImageHeight / size.height)
+  const imageWidth = Math.round(size.width * scale)
+  const imageHeight = Math.round(size.height * scale)
 
   return {
-    width: Math.max(minWidth, Math.round(size.width * scale)),
-    height: Math.max(minHeight, Math.round(size.height * scale)),
+    width: Math.min(maxWidth, Math.max(minWidth, ANNOTATOR_TOOLBAR_MIN_WIDTH, imageWidth)),
+    height: Math.min(maxHeight, Math.max(minHeight, imageHeight + ANNOTATOR_TOOLBAR_STACK_HEIGHT)),
   }
 }
 

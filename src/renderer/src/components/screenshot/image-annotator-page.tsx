@@ -168,8 +168,8 @@ export function ImageAnnotatorPage() {
   }
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-transparent text-white [-webkit-app-region:drag]">
-      <div className="absolute left-1/2 top-2 z-10 flex -translate-x-1/2 items-center gap-2 rounded-md border border-white/15 bg-zinc-950/85 px-1.5 py-1 shadow-2xl backdrop-blur [-webkit-app-region:no-drag]">
+    <div className="flex h-screen w-screen flex-col items-center gap-2 overflow-hidden bg-transparent p-2 text-white [-webkit-app-region:drag]">
+      <div className="z-10 flex max-w-[calc(100vw-16px)] shrink-0 items-center gap-2 overflow-hidden rounded-md border border-white/15 bg-zinc-950/85 px-1.5 py-1 shadow-2xl backdrop-blur [-webkit-app-region:no-drag]">
         <div className="flex items-center gap-1">
           <ToolButton
             active={tool === "arrow"}
@@ -261,7 +261,7 @@ export function ImageAnnotatorPage() {
           </ToolButton>
         </div>
       </div>
-      <div className="grid h-full place-items-center overflow-hidden [-webkit-app-region:no-drag]">
+      <div className="grid min-h-0 flex-1 place-items-center overflow-hidden [-webkit-app-region:no-drag]">
         <canvas
           ref={canvasRef}
           className={cn(
