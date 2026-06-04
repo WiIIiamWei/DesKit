@@ -6,9 +6,11 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   clampBoundsToWorkArea,
   COLLAPSED_WINDOW_SIZE,
+  collapseFloatingBallMenu,
   destroyFloatingBallWindow,
   ensureFloatingBallWindow,
   EXPANDED_WINDOW_SIZE,
+  expandFloatingBallMenu,
   finishFloatingBallDrag,
   getCollapsedFloatingBallBounds,
   getExpandedFloatingBallBounds,
@@ -159,6 +161,64 @@ describe("floating ball window dragging", () => {
       width: COLLAPSED_WINDOW_SIZE,
       height: COLLAPSED_WINDOW_SIZE,
     })
+  })
+
+  it("expands immediately around the ball center when the menu fits in the work area", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    win.setBounds.mockClear()
+
+    expandFloatingBallMenu()
+
+    expect(win.setBounds).toHaveBeenLastCalledWith({
+      x: 520,
+      y: 330,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", true)
+  })
+
+  it("moves the window before expanding only when the menu would exceed the work area", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
+    win.setBounds.mockClear()
+
+    expandFloatingBallMenu()
+
+    expect(win.setBounds).toHaveBeenLastCalledWith({
+      x: 1440 - EXPANDED_WINDOW_SIZE,
+      y: 330,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", true)
+  })
+
+  it("restores the collapsed ball position after closing a menu that was moved to fit", () => {
+    ensureFloatingBallWindow(deps)
+    const win = latestWindow()
+    win.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
+    win.setBounds.mockClear()
+
+    expandFloatingBallMenu()
+    win.getBounds.mockReturnValue({
+      x: 1440 - EXPANDED_WINDOW_SIZE,
+      y: 330,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+    collapseFloatingBallMenu()
+
+    expect(win.setBounds).toHaveBeenLastCalledWith({
+      x: 1344,
+      y: 414,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    expect(win.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
   })
 
   it("clears the drag origin after finishing a drag", () => {
