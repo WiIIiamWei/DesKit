@@ -27,7 +27,6 @@ describe("capture bitmap", () => {
       {
         bounds: { x: 100, y: 200, width: 1440, height: 900 },
         id: "display-1",
-        scaleFactor: 2,
       } as unknown as Electron.Display,
     ])
     vi.mocked(nativeImage.createFromPath).mockReturnValue(createImage(600, 400))
@@ -38,12 +37,12 @@ describe("capture bitmap", () => {
     vi.clearAllMocks()
   })
 
-  it("converts macOS selections to physical global screen rectangles", () => {
+  it("converts macOS selections to global screen rectangles", () => {
     expect(macOSSelectionRect(selection)).toEqual({
-      x: 220,
-      y: 440,
-      width: 600,
-      height: 400,
+      x: 110,
+      y: 220,
+      width: 300,
+      height: 200,
     })
   })
 
@@ -63,7 +62,7 @@ describe("capture bitmap", () => {
       "-t",
       "png",
       "-R",
-      "220,440,600,400",
+      "110,220,300,200",
       expect.stringMatching(/capture-\d+\.png$/),
     ])
     expect(result).toMatchObject({ width: 600, height: 400 })
