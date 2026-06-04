@@ -23,6 +23,10 @@ export type Action =
 export interface CopyAction {
   type: "copy"
   label?: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
   /**
    * A plain string is treated as `{ type: "text", text: value }`.
    * Use a `ClipboardContent` object for image clipboard entries.
@@ -34,6 +38,10 @@ export interface CopyAction {
 export interface PasteAction {
   type: "paste"
   label?: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
   /**
    * A plain string is treated as `{ type: "text", text: value }`.
    * Use a `ClipboardContent` object for image clipboard entries.
@@ -45,6 +53,10 @@ export interface PasteAction {
 export interface OpenUrlAction {
   type: "open-url"
   label?: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
   /** Only `http(s)` URLs are honoured — host opens via `shell.openExternal`. */
   url: string
   shortcut?: string
@@ -53,6 +65,10 @@ export interface OpenUrlAction {
 export interface OpenPathAction {
   type: "open-path"
   label?: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
   path: string
   shortcut?: string
 }
@@ -60,6 +76,10 @@ export interface OpenPathAction {
 export interface RunCommandAction {
   type: "run-command"
   label?: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
   /** Plugin command id — typically owned by the same plugin. */
   commandId: string
   args?: unknown
@@ -68,16 +88,28 @@ export interface RunCommandAction {
 export interface SubmitAction {
   type: "submit"
   label?: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
 }
 
 export interface CloseAction {
   type: "close"
   label?: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
 }
 
 export interface CustomAction {
   type: "custom"
   label: LocalizedString
+  /** Optional `lucide:<icon-name>` override for host-rendered action buttons. */
+  icon?: string
+  /** Whether the action is currently active; host may render it highlighted/filled. */
+  active?: boolean
   /** Identifier the plugin sees in `onAction(actionId, payload, ctx)`. */
   id: string
   payload?: unknown

@@ -10,9 +10,10 @@ import type {
   PluginListView,
   RenderablePluginView,
 } from "@/components/plugins/view-types"
-import { Check, Clipboard, ExternalLink, File, Hash, Play, Send, X } from "lucide-react"
+import { Check, Clipboard, Copy, ExternalLink, File, Hash, Play, Send, Star, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -239,7 +240,7 @@ function ListPluginView({
                       {item.accessory}
                     </span>
                   )}
-                  {!!item.actions?.length && (
+                  {selected && !!item.actions?.length && (
                     <ActionBar
                       actions={item.actions}
                       locale={locale}
@@ -408,6 +409,19 @@ function PluginItemIcon({ icon }: { icon?: string }) {
 }
 
 function actionIcon(action: PluginAction) {
+  if (action.icon === "lucide:copy") return <Copy className="size-4" />
+  if (action.icon === "lucide:star") {
+    return <Star className={cn("size-4", action.active && "fill-current")} />
+  }
+  if (action.icon) {
+    return (
+      <PluginIcon
+        icon={action.icon}
+        className={cn("size-4", action.active && "fill-current")}
+        fallback={Check}
+      />
+    )
+  }
   if (action.type === "copy" || action.type === "paste") return <Clipboard className="size-4" />
   if (action.type === "open-url" || action.type === "open-path")
     return <ExternalLink className="size-4" />
