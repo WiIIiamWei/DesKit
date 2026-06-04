@@ -1,4 +1,4 @@
-import type { PointerEvent, TransitionEvent } from "react"
+import type { PointerEvent } from "react"
 import { ScanLine, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
@@ -7,15 +7,12 @@ import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
-  finishFloatingBallCollapseTransition,
   finishFloatingBallDrag,
-  finishFloatingBallExpandPreparation,
   getSettings,
   listPlugins,
   moveFloatingBallDrag,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
-  onFloatingBallWindowState,
   onPluginRegistryChanged,
   onSettingsChanged,
   openFloatingBallFeature,
@@ -28,9 +25,6 @@ const APP_LAUNCHER_FEATURE = "appLauncher"
 const SCREENSHOT_FEATURE = "screenshot"
 const MENU_SLOT_ANGLES = [30, 90, 150, 210, 270, 330] as const
 const DRAG_THRESHOLD = 4
-const DEFAULT_EXPANDED_WINDOW_SIZE = 240
-
-type FloatingBallWindowPhase = "collapsed" | "expanding" | "expanded" | "collapsing"
 
 interface FloatingBallMenuItem {
   id: DeskitFloatingBallFeature
@@ -42,13 +36,8 @@ interface FloatingBallMenuItem {
 
 export function FloatingBallPanel() {
   const { t, i18n } = useTranslation()
+  const isMenuView = isFloatingBallMenuView()
   const [expanded, setExpanded] = useState(false)
-  const [windowState, setWindowState] = useState<{
-    phase: FloatingBallWindowPhase
-    expandedSize: number
-  }>({ phase: "collapsed", expandedSize: DEFAULT_EXPANDED_WINDOW_SIZE })
-  const [collapseResizeLocked, setCollapseResizeLocked] = useState(false)
-  const collapseTransitionNotifiedRef = useRef(false)
   const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([
     APP_LAUNCHER_FEATURE,
     SCREENSHOT_FEATURE,
@@ -92,24 +81,11 @@ export function FloatingBallPanel() {
       .catch((err) => console.error("listPlugins failed", err))
     return mergeCleanups(
       onFloatingBallMenuState(setExpanded),
-      onFloatingBallWindowState(onWindowStateChange),
       onFloatingBallFeatures(setFeatures),
       onPluginRegistryChanged(setPlugins),
       onSettingsChanged((settings) => setFeatures(settings.floatingBallFeatures))
     )
   }, [])
-
-  useEffect(() => {
-    if (windowState.phase === "expanding") {
-      const frame = window.requestAnimationFrame(() => {
-        void finishFloatingBallExpandPreparation()
-      })
-      return () => window.cancelAnimationFrame(frame)
-    }
-    return undefined
-  }, [windowState.phase])
-
-  const resizeLocked = windowState.phase === "expanding" || collapseResizeLocked
 
   const menuItems = useMemo(
     () =>
@@ -180,84 +156,64 @@ export function FloatingBallPanel() {
     void toggleFloatingBallMenu()
   }
 
-  function onWindowStateChange(nextState: {
-    phase: FloatingBallWindowPhase
-    expandedSize: number
-  }) {
-    if (nextState.phase === "collapsing") {
-      collapseTransitionNotifiedRef.current = false
-    }
-    if (nextState.phase === "expanded" || nextState.phase === "collapsed") {
-      collapseTransitionNotifiedRef.current = false
-      setCollapseResizeLocked(false)
-    }
-    setWindowState(nextState)
-  }
-
-  function onMenuTransitionEnd(event: TransitionEvent<HTMLDivElement>) {
-    if (event.target !== event.currentTarget) return
-    if (windowState.phase !== "collapsing") return
-    if (collapseTransitionNotifiedRef.current) return
-    collapseTransitionNotifiedRef.current = true
-    setCollapseResizeLocked(true)
-    void finishFloatingBallCollapseTransition()
-  }
-
   return (
     <div
       className="relative h-screen w-screen select-none overflow-hidden bg-transparent"
       onDragStart={(event) => event.preventDefault()}
     >
-      <div
-        className={cn(
-          "absolute left-1/2 top-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/95 shadow-[0_6px_16px_-10px_rgba(15,23,42,0.14)] ring-1 ring-black/5 transition-[opacity,transform] duration-150 dark:bg-popover/95 dark:ring-white/10",
-          expanded ? "opacity-100" : "pointer-events-none opacity-0"
-        )}
-        onTransitionEnd={onMenuTransitionEnd}
-        data-floating-ball-menu="true"
-        aria-hidden={!expanded}
-      >
-        {menuItems.map(({ item, position }) => {
-          return (
-            <Tooltip key={item.id}>
-              <TooltipTrigger asChild>
-                <button
-                  type="button"
-                  onClick={() => void onFeatureClick(item.id)}
-                  className="absolute left-1/2 top-1/2 grid size-12 place-items-center rounded-full border border-border bg-popover text-popover-foreground shadow-lg transition hover:scale-110 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  style={{
-                    transform: `translate(${position.x}px, ${position.y}px) translate(-50%, -50%)`,
-                  }}
-                >
-                  <FeatureIcon item={item} />
-                  <span className="sr-only">{item.title}</span>
-                </button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{item.title}</TooltipContent>
-            </Tooltip>
-          )
-        })}
-      </div>
-
-      <button
-        type="button"
-        onClick={onBallClick}
-        onPointerDown={onPointerDown}
-        onPointerMove={onPointerMove}
-        onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
-        onLostPointerCapture={onPointerUp}
-        title={t("floatingBall.title")}
-        className={cn(
-          "absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-popover",
-          resizeLocked && "opacity-0 transition-none hover:scale-100"
-        )}
-      >
-        <img src={logoUrl} alt="" draggable={false} className="size-8" aria-hidden />
-        <span className="sr-only">{t("floatingBall.title")}</span>
-      </button>
+      {isMenuView ? (
+        <div
+          className={cn(
+            "absolute left-1/2 top-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/95 shadow-[0_6px_16px_-10px_rgba(15,23,42,0.14)] ring-1 ring-black/5 transition-[opacity,transform] duration-150 dark:bg-popover/95 dark:ring-white/10",
+            expanded ? "opacity-100" : "pointer-events-none opacity-0"
+          )}
+          data-floating-ball-menu="true"
+          aria-hidden={!expanded}
+        >
+          {expanded &&
+            menuItems.map(({ item, position }) => {
+              return (
+                <Tooltip key={item.id}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      onClick={() => void onFeatureClick(item.id)}
+                      className="absolute left-1/2 top-1/2 grid size-12 place-items-center rounded-full border border-border bg-popover text-popover-foreground shadow-lg transition hover:scale-110 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                      style={{
+                        transform: `translate(${position.x}px, ${position.y}px) translate(-50%, -50%)`,
+                      }}
+                    >
+                      <FeatureIcon item={item} />
+                      <span className="sr-only">{item.title}</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent side="top">{item.title}</TooltipContent>
+                </Tooltip>
+              )
+            })}
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={onBallClick}
+          onPointerDown={onPointerDown}
+          onPointerMove={onPointerMove}
+          onPointerUp={onPointerUp}
+          onPointerCancel={onPointerUp}
+          onLostPointerCapture={onPointerUp}
+          title={t("floatingBall.title")}
+          className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white shadow-[0_6px_14px_-8px_rgba(15,23,42,0.35)] transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-popover"
+        >
+          <img src={logoUrl} alt="" draggable={false} className="size-8" aria-hidden />
+          <span className="sr-only">{t("floatingBall.title")}</span>
+        </button>
+      )}
     </div>
   )
+}
+
+function isFloatingBallMenuView(): boolean {
+  return typeof window !== "undefined" && window.location.hash === "#floating-ball-menu"
 }
 
 function FeatureIcon({ item }: { item: FloatingBallMenuItem }) {

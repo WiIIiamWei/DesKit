@@ -12,17 +12,12 @@ vi.mock("react-i18next", () => ({
 
 type TestElectronApi = NonNullable<Window["electronAPI"]>
 type MenuStateHandler = (expanded: boolean) => void
-type WindowStateHandler = (state: {
-  phase: "collapsed" | "expanding" | "expanded" | "collapsing"
-  expandedSize: number
-}) => void
 type FeaturesHandler = (features: DeskitFloatingBallFeature[]) => void
 type SettingsChangedHandler = (settings: DeskitUserSettings) => void
 
 interface FloatingBallHarness {
   api: Partial<TestElectronApi>
   emitMenuState: MenuStateHandler
-  emitWindowState: WindowStateHandler
   emitFloatingBallFeatures: FeaturesHandler
   emitSettingsChanged: SettingsChangedHandler
 }
@@ -43,7 +38,6 @@ function baseSettings(features: DeskitFloatingBallFeature[] = []): DeskitUserSet
 
 function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
   let menuStateHandler: MenuStateHandler | null = null
-  let windowStateHandler: WindowStateHandler | null = null
   let featuresHandler: FeaturesHandler | null = null
   let settingsChangedHandler: SettingsChangedHandler | null = null
   const api = {
@@ -54,19 +48,11 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
     startFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
-    finishFloatingBallExpandPreparation: vi.fn().mockResolvedValue(undefined),
-    finishFloatingBallCollapseTransition: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     onFloatingBallMenuState: vi.fn((handler: MenuStateHandler) => {
       menuStateHandler = handler
       return () => {
         menuStateHandler = null
-      }
-    }),
-    onFloatingBallWindowState: vi.fn((handler: WindowStateHandler) => {
-      windowStateHandler = handler
-      return () => {
-        windowStateHandler = null
       }
     }),
     onFloatingBallFeatures: vi.fn((handler: FeaturesHandler) => {
@@ -89,12 +75,6 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
     api,
     emitMenuState: (expanded: boolean) => {
       act(() => menuStateHandler?.(expanded))
-    },
-    emitWindowState: (state: {
-      phase: "collapsed" | "expanding" | "expanded" | "collapsing"
-      expandedSize: number
-    }) => {
-      act(() => windowStateHandler?.(state))
     },
     emitFloatingBallFeatures: (features: DeskitFloatingBallFeature[]) => {
       act(() => featuresHandler?.(features))
@@ -150,10 +130,25 @@ describe("floating ball panel", () => {
   afterEach(() => {
     cleanup()
     vi.unstubAllGlobals()
+    window.location.hash = ""
     delete window.electronAPI
   })
 
-  it("keeps the dedicated floating ball feature event working", () => {
+  it("renders only the draggable ball in the collapsed hit area view", () => {
+    window.location.hash = "#floating-ball"
+    const api = installElectronApi(baseSettings(["appLauncher"]))
+    renderPanel()
+
+    api.emitMenuState(true)
+
+    expect(screen.getByRole("button", { name: "floatingBall.title" })).toBeVisible()
+    expect(
+      screen.queryByRole("button", { name: "floatingBall.features.appLauncher" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("renders only menu actions in the menu interaction view", () => {
+    window.location.hash = "#floating-ball-menu"
     const api = installElectronApi(baseSettings())
     renderPanel()
 
@@ -161,9 +156,21 @@ describe("floating ball panel", () => {
     api.emitFloatingBallFeatures(["appLauncher"])
 
     expect(screen.getByRole("button", { name: "floatingBall.features.appLauncher" })).toBeVisible()
+    expect(screen.queryByRole("button", { name: "floatingBall.title" })).not.toBeInTheDocument()
+  })
+
+  it("keeps menu actions hidden until main opens the menu interaction view", () => {
+    window.location.hash = "#floating-ball-menu"
+    installElectronApi(baseSettings(["appLauncher"]))
+    renderPanel()
+
+    expect(
+      screen.queryByRole("button", { name: "floatingBall.features.appLauncher" })
+    ).not.toBeInTheDocument()
   })
 
   it("updates menu features from the full settings broadcast fallback", () => {
+    window.location.hash = "#floating-ball-menu"
     const api = installElectronApi(baseSettings())
     renderPanel()
 
@@ -174,6 +181,7 @@ describe("floating ball panel", () => {
   })
 
   it("finishes a drag once when pointer up releases capture and suppresses the next click", () => {
+    window.location.hash = "#floating-ball"
     const { api } = installElectronApi(baseSettings())
     renderPanel()
     const ball = screen.getByRole("button", { name: "floatingBall.title" })
@@ -192,6 +200,7 @@ describe("floating ball panel", () => {
   })
 
   it("opens the floating ball menu after a click without dragging", () => {
+    window.location.hash = "#floating-ball"
     const { api } = installElectronApi(baseSettings())
     renderPanel()
     const ball = screen.getByRole("button", { name: "floatingBall.title" })
@@ -207,33 +216,19 @@ describe("floating ball panel", () => {
     expect(api.toggleFloatingBallMenu).toHaveBeenCalledTimes(1)
   })
 
-  it("notifies main after applying the expanding window state", () => {
-    vi.stubGlobal("requestAnimationFrame", (callback: FrameRequestCallback) => {
-      callback(0)
-      return 1
-    })
-    const { api, emitWindowState } = installElectronApi(baseSettings())
+  it("hides menu actions in the menu interaction view after the menu closes", () => {
+    window.location.hash = "#floating-ball-menu"
+    const { emitMenuState } = installElectronApi(baseSettings(["appLauncher"]))
     renderPanel()
-
-    emitWindowState({ phase: "expanding", expandedSize: 240 })
-
-    expect(api.finishFloatingBallExpandPreparation).toHaveBeenCalledTimes(1)
-  })
-
-  it("notifies main after the collapsing menu transition ends", () => {
-    const { api, emitMenuState, emitWindowState } = installElectronApi(
-      baseSettings(["appLauncher"])
-    )
-    renderPanel()
-    emitWindowState({ phase: "expanded", expandedSize: 240 })
     emitMenuState(true)
-    const menu = document.querySelector('[data-floating-ball-menu="true"]')
-    if (!(menu instanceof HTMLElement)) throw new Error("Expected floating ball menu")
 
-    emitWindowState({ phase: "collapsing", expandedSize: 240 })
+    const item = screen.getByRole("button", { name: "floatingBall.features.appLauncher" })
+    expect(item).toBeVisible()
+
     emitMenuState(false)
-    fireEvent.transitionEnd(menu, { propertyName: "opacity" })
 
-    expect(api.finishFloatingBallCollapseTransition).toHaveBeenCalledTimes(1)
+    expect(
+      screen.queryByRole("button", { name: "floatingBall.features.appLauncher" })
+    ).not.toBeInTheDocument()
   })
 })
