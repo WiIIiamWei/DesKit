@@ -168,8 +168,8 @@ export function ImageAnnotatorPage() {
   }
 
   return (
-    <div className="flex h-screen w-screen flex-col items-center gap-2 overflow-hidden bg-transparent p-2 text-white [-webkit-app-region:drag]">
-      <div className="z-10 flex max-w-[calc(100vw-16px)] shrink-0 items-center gap-2 overflow-hidden rounded-md border border-white/15 bg-zinc-950/85 px-1.5 py-1 shadow-2xl backdrop-blur [-webkit-app-region:no-drag]">
+    <div className="flex h-screen w-screen flex-col items-center gap-2 overflow-hidden bg-transparent pt-2 text-white [-webkit-app-region:drag]">
+      <div className="z-10 flex max-w-full shrink-0 items-center gap-2 overflow-hidden rounded-md border border-white/15 bg-zinc-950/85 px-1.5 py-1 shadow-2xl backdrop-blur [-webkit-app-region:no-drag]">
         <div className="flex items-center gap-1">
           <ToolButton
             active={tool === "arrow"}
