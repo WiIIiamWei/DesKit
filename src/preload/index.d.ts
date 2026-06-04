@@ -226,6 +226,8 @@ declare global {
       startFloatingBallDrag: () => Promise<void>
       moveFloatingBallDrag: () => Promise<void>
       finishFloatingBallDrag: () => Promise<void>
+      finishFloatingBallExpandPreparation: () => Promise<void>
+      finishFloatingBallCollapseTransition: () => Promise<void>
       moveFloatingBallBy: (delta: { x: number; y: number }) => Promise<void>
       hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
@@ -316,6 +318,12 @@ declare global {
       ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry>>
       onLauncherFocus: (handler: () => void) => () => void
       onFloatingBallMenuState: (handler: (expanded: boolean) => void) => () => void
+      onFloatingBallWindowState: (
+        handler: (state: {
+          phase: "collapsed" | "expanding" | "expanded" | "collapsing"
+          expandedSize: number
+        }) => void
+      ) => () => void
       onFloatingBallFeatures: (
         handler: (features: DeskitFloatingBallFeature[]) => void
       ) => () => void

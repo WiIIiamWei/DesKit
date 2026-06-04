@@ -10,11 +10,12 @@ export const BALL_SIZE = 56
 export const COLLAPSED_WINDOW_SIZE = 72
 export const EDGE_VISIBLE_BALL_WIDTH = BALL_SIZE / 2
 export const SNAP_EDGE_DISTANCE = 96
-export const COLLAPSE_MENU_RESIZE_DELAY_MS = 150
+export const FLOATING_BALL_MENU_TRANSITION_FALLBACK_MS = 250
 
 const EDGE_MARGIN = 24
 const DRAG_THRESHOLD = 4
 const FLOATING_BALL_HASH = "floating-ball"
+export type FloatingBallWindowPhase = "collapsed" | "expanding" | "expanded" | "collapsing"
 
 export interface FloatingBallWindowDeps {
   rendererDevUrl: string | undefined
@@ -27,7 +28,7 @@ export interface FloatingBallWindowDeps {
 
 let floatingBallWindow: BrowserWindow | null = null
 let currentDeps: FloatingBallWindowDeps | null = null
-let menuExpanded = false
+let menuPhase: FloatingBallWindowPhase = "collapsed"
 let dragState: {
   cursor: Electron.Point
   bounds: Electron.Rectangle
@@ -35,7 +36,9 @@ let dragState: {
 } | null = null
 let snappedEdge: "none" | "left" | "right" = "none"
 let restoreCollapsedBoundsAfterMenu: Electron.Rectangle | null = null
-let pendingCollapseResize: ReturnType<typeof setTimeout> | null = null
+let pendingExpandedBounds: Electron.Rectangle | null = null
+let pendingCollapsedBounds: Electron.Rectangle | null = null
+let pendingMenuTransitionFallback: ReturnType<typeof setTimeout> | null = null
 
 export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserWindow {
   currentDeps = deps
@@ -108,38 +111,65 @@ export function destroyFloatingBallWindow(): void {
   const win = getFloatingBallWindow()
   floatingBallWindow = null
   currentDeps = null
-  menuExpanded = false
+  menuPhase = "collapsed"
   snappedEdge = "none"
   restoreCollapsedBoundsAfterMenu = null
-  clearPendingCollapseResize()
+  pendingExpandedBounds = null
+  pendingCollapsedBounds = null
+  clearPendingMenuTransitionFallback()
   finishFloatingBallDrag()
   if (win) win.destroy()
 }
 
 export function expandFloatingBallMenu(): void {
   const win = getFloatingBallWindow()
-  if (!win || menuExpanded) return
+  if (!win || menuPhase !== "collapsed") return
 
-  clearPendingCollapseResize()
+  clearPendingMenuTransitionFallback()
   restoreCollapsedBoundsAfterMenu = null
-  expandFloatingBallWindow(win)
-  menuExpanded = true
+  pendingExpandedBounds = getPreparedExpandedFloatingBallWindowBounds(win)
+  menuPhase = "expanding"
+  sendFloatingBallWindowState(win, "expanding")
+  scheduleMenuTransitionFallback(finishFloatingBallExpandPreparation)
+}
+
+export function finishFloatingBallExpandPreparation(): void {
+  const win = getFloatingBallWindow()
+  if (!win || menuPhase !== "expanding" || !pendingExpandedBounds) return
+
+  clearPendingMenuTransitionFallback()
+  win.setBounds(pendingExpandedBounds)
+  pendingExpandedBounds = null
+  menuPhase = "expanded"
+  sendFloatingBallWindowState(win, "expanded")
   win.webContents.send("floating-ball:menu-state", true)
 }
 
 export function collapseFloatingBallMenu(): void {
   const win = getFloatingBallWindow()
-  if (!win || !menuExpanded) return
+  if (!win || menuPhase !== "expanded") return
 
-  const nextBounds = getCollapsedFloatingBallWindowBounds(win)
-  menuExpanded = false
+  pendingCollapsedBounds = getCollapsedFloatingBallWindowBounds(win)
+  menuPhase = "collapsing"
+  sendFloatingBallWindowState(win, "collapsing")
   win.webContents.send("floating-ball:menu-state", false)
-  scheduleCollapseResize(win, nextBounds)
+  scheduleMenuTransitionFallback(finishFloatingBallCollapseTransition)
+}
+
+export function finishFloatingBallCollapseTransition(): void {
+  const win = getFloatingBallWindow()
+  if (!win || menuPhase !== "collapsing" || !pendingCollapsedBounds) return
+
+  clearPendingMenuTransitionFallback()
+  win.setBounds(pendingCollapsedBounds)
+  pendingCollapsedBounds = null
+  menuPhase = "collapsed"
+  sendFloatingBallWindowState(win, "collapsed")
 }
 
 export function toggleFloatingBallMenu(): void {
-  if (menuExpanded) collapseFloatingBallMenu()
-  else expandFloatingBallMenu()
+  if (menuPhase === "expanded") collapseFloatingBallMenu()
+  else if (menuPhase === "collapsed") expandFloatingBallMenu()
 }
 
 export function openFloatingBallFeature(
@@ -178,7 +208,7 @@ export function moveFloatingBallDrag(): void {
 
 export function finishFloatingBallDrag(): void {
   const win = getFloatingBallWindow()
-  if (win && dragState?.moved && !menuExpanded) {
+  if (win && dragState?.moved && menuPhase === "collapsed") {
     applyFloatingBallEdgeSnap(win)
   }
   dragState = null
@@ -238,10 +268,12 @@ function fixedSizeBounds(bounds: Electron.Rectangle): Electron.Rectangle {
 }
 
 function getCurrentFloatingBallWindowSize(): number {
-  return menuExpanded ? EXPANDED_WINDOW_SIZE : COLLAPSED_WINDOW_SIZE
+  return menuPhase === "expanded" || menuPhase === "collapsing"
+    ? EXPANDED_WINDOW_SIZE
+    : COLLAPSED_WINDOW_SIZE
 }
 
-function expandFloatingBallWindow(win: BrowserWindow): void {
+function getPreparedExpandedFloatingBallWindowBounds(win: BrowserWindow): Electron.Rectangle {
   const collapsedBounds = fixedCollapsedBounds(win.getBounds())
   const expandedBounds = getExpandedFloatingBallBounds(getFloatingBallVisualCenter(collapsedBounds))
   const nextBounds = clampBoundsToWorkArea(
@@ -251,7 +283,7 @@ function expandFloatingBallWindow(win: BrowserWindow): void {
   if (boundsMoved(expandedBounds, nextBounds)) {
     restoreCollapsedBoundsAfterMenu = collapsedBounds
   }
-  win.setBounds(nextBounds)
+  return nextBounds
 }
 
 function getCollapsedFloatingBallWindowBounds(win: BrowserWindow): Electron.Rectangle {
@@ -262,18 +294,25 @@ function getCollapsedFloatingBallWindowBounds(win: BrowserWindow): Electron.Rect
   return getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(win.getBounds()))
 }
 
-function scheduleCollapseResize(win: BrowserWindow, bounds: Electron.Rectangle): void {
-  clearPendingCollapseResize()
-  pendingCollapseResize = setTimeout(() => {
-    pendingCollapseResize = null
-    if (!win.isDestroyed()) win.setBounds(bounds)
-  }, COLLAPSE_MENU_RESIZE_DELAY_MS)
+function scheduleMenuTransitionFallback(callback: () => void): void {
+  clearPendingMenuTransitionFallback()
+  pendingMenuTransitionFallback = setTimeout(() => {
+    pendingMenuTransitionFallback = null
+    callback()
+  }, FLOATING_BALL_MENU_TRANSITION_FALLBACK_MS)
 }
 
-function clearPendingCollapseResize(): void {
-  if (!pendingCollapseResize) return
-  clearTimeout(pendingCollapseResize)
-  pendingCollapseResize = null
+function clearPendingMenuTransitionFallback(): void {
+  if (!pendingMenuTransitionFallback) return
+  clearTimeout(pendingMenuTransitionFallback)
+  pendingMenuTransitionFallback = null
+}
+
+function sendFloatingBallWindowState(win: BrowserWindow, phase: FloatingBallWindowPhase): void {
+  win.webContents.send("floating-ball:window-state", {
+    phase,
+    expandedSize: EXPANDED_WINDOW_SIZE,
+  })
 }
 
 function applyFloatingBallEdgeSnap(win: BrowserWindow): void {
