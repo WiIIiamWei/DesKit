@@ -164,6 +164,7 @@ export function showFloatingBallWindow(deps: FloatingBallWindowDeps): void {
   const win = ensureFloatingBallWindow(deps)
   const menuWin = ensureFloatingBallMenuWindow(deps)
   prepareHiddenFloatingBallMenuWindow(menuWin, { show: true })
+  parentFloatingBallWindowToMenu(menuWin)
   if (!win.isVisible()) win.showInactive()
 }
 
@@ -208,7 +209,6 @@ export function expandFloatingBallMenu(): void {
     getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds))
   )
   requestFloatingBallMenuBounds(menuWin, menuBounds)
-  parentFloatingBallWindowToMenu(menuWin)
   pendingMenuReveal = true
   prepareHiddenFloatingBallMenuWindow(menuWin, { show: true })
   menuPhase = "expanded"
@@ -223,7 +223,6 @@ export function collapseFloatingBallMenu(): void {
   clearRevealBlurSuppression()
   pendingMenuReveal = false
   applyExpandedMenuClosePosition()
-  detachFloatingBallWindowFromMenu()
   menuPhase = "collapsed"
   sendFloatingBallMenuState(false)
   const menuWin = getFloatingBallMenuWindow()
@@ -441,17 +440,11 @@ function keepFloatingBallWindowAboveMenu(): void {
 }
 
 function parentFloatingBallWindowToMenu(menuWin: BrowserWindow): void {
+  if (floatingBallParentedToMenu) return
   const win = getFloatingBallWindow()
   if (!win || win.isDestroyed() || menuWin.isDestroyed()) return
   win.setParentWindow(menuWin)
   floatingBallParentedToMenu = true
-}
-
-function detachFloatingBallWindowFromMenu(): void {
-  const win = getFloatingBallWindow()
-  if (!win || win.isDestroyed() || !floatingBallParentedToMenu) return
-  win.setParentWindow(null)
-  floatingBallParentedToMenu = false
 }
 
 function prepareHiddenFloatingBallMenuWindow(win: BrowserWindow, options: { show: boolean }): void {
