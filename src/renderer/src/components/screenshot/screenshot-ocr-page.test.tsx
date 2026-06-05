@@ -20,7 +20,7 @@ vi.mock("sonner", () => ({
 vi.mock("@/lib/electron", () => ({
   closeScreenshotOcrWindow: vi.fn().mockResolvedValue(undefined),
   getScreenshotOcrState: vi.fn(),
-  recaptureScreenshotOcr: vi.fn().mockResolvedValue(true),
+  recaptureScreenshotOcr: vi.fn(),
   writeClipboardContent: vi.fn().mockResolvedValue(undefined),
 }))
 

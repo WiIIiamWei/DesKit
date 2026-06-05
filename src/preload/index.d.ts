@@ -262,7 +262,7 @@ declare global {
       closePinnedImage: () => void
       getScreenshotOcrState: () => Promise<DeskitScreenshotOcrState | null>
       closeScreenshotOcrWindow: () => void
-      recaptureScreenshotOcr: () => Promise<boolean>
+      recaptureScreenshotOcr: () => void
       onScreenshotOcrUpdated: (handler: () => void) => () => void
       listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
       getPlugin: (

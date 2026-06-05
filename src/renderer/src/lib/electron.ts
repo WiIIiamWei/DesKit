@@ -224,8 +224,8 @@ export async function closeScreenshotOcrWindow(): Promise<void> {
   api().closeScreenshotOcrWindow()
 }
 
-export async function recaptureScreenshotOcr(): Promise<boolean> {
-  return api().recaptureScreenshotOcr()
+export function recaptureScreenshotOcr(): void {
+  api().recaptureScreenshotOcr()
 }
 
 export async function listPlugins(): Promise<PluginRegistryEntry[]> {
