@@ -3,7 +3,7 @@ import * as os from "node:os"
 import * as path from "node:path"
 import { app } from "electron"
 import { beforeEach, describe, expect, it, vi } from "vitest"
-import { cleanOcrText, ocrLanguagePath } from "./ocr-engine"
+import { cleanOcrText, ocrLanguagePath, ocrLanguages } from "./ocr-engine"
 
 describe("screenshot OCR engine", () => {
   beforeEach(() => {
@@ -22,6 +22,7 @@ describe("screenshot OCR engine", () => {
     vi.mocked(app.getAppPath).mockReturnValue(process.cwd())
 
     expect(ocrLanguagePath()).toBe(path.join(process.cwd(), "resources", "ocr", "tessdata_best"))
+    expect(ocrLanguages()).toEqual(["eng", "chi_sim", "chi_tra"])
   })
 
   it("falls back to the compact OCR model when the higher accuracy model is incomplete", async () => {
@@ -33,5 +34,6 @@ describe("screenshot OCR engine", () => {
     vi.mocked(app.getAppPath).mockReturnValue(appPath)
 
     expect(ocrLanguagePath()).toBe(tessdataPath)
+    expect(ocrLanguages()).toEqual(["eng", "chi_sim"])
   })
 })
