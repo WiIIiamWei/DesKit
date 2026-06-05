@@ -1,0 +1,95 @@
+---
+title: API 速查
+description: 插件模块、上下文、视图和常用 action 的简明参考。
+---
+
+# API 速查
+
+这页不是完整类型定义，而是插件开发时最常用的结构速查。实际类型以 `@deskit/plugin-sdk` 为准。
+
+## PluginModule
+
+```ts
+interface PluginModule {
+  commands?: Record<string, PluginCommand>
+  events?: {
+    onClipboardChange?: (content: ClipboardContent, ctx: PluginContext) => void | Promise<void>
+  }
+}
+```
+
+## PluginCommand
+
+```ts
+interface PluginCommand {
+  run: (request: PluginRunRequest, ctx: PluginContext) => PluginView | Promise<PluginView>
+  onSearchChange?: (text: string, ctx: PluginContext) => PluginView | Promise<PluginView>
+  onAction?: (
+    action: PluginActionRequest,
+    ctx: PluginContext
+  ) => PluginView | void | Promise<PluginView | void>
+}
+```
+
+## PluginContext
+
+上下文提供当前 locale、剪贴板、存储、网络等能力。不要假设所有能力都可用；敏感能力需要 manifest 权限。
+
+常见用法：
+
+- 读取 `ctx.locale` 选择展示语言。
+- 使用 storage 保存历史或设置之外的运行数据。
+- 使用 clipboard API 复制结果。
+- 使用 network API 访问用户配置的远端服务。
+
+## ListView
+
+```ts
+interface ListView {
+  type: "list"
+  searchPlaceholder?: string
+  emptyText?: string
+  sections: Array<{
+    title?: string
+    items: ListItem[]
+  }>
+}
+```
+
+## ListItem
+
+```ts
+interface ListItem {
+  id: string
+  title: string
+  subtitle?: string
+  icon?: string
+  actions?: PluginAction[]
+}
+```
+
+## 常用 action
+
+复制文本：
+
+```ts
+{
+  type: "copy",
+  label: "Copy",
+  value: "text to copy"
+}
+```
+
+状态按钮：
+
+```ts
+{
+  type: "custom",
+  id: "favorite",
+  label: "Favorite",
+  icon: "lucide:star",
+  active: true
+}
+```
+
+给用户看的 action 要短。复杂流程更适合进入一个新的列表视图，而不是在一个按钮里做太多事。

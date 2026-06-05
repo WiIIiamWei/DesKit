@@ -1,0 +1,98 @@
+---
+title: Commands and Views
+description: Export commands, respond to live search input, and organize results with list views.
+---
+
+# Commands and Views
+
+Plugins enter the user flow through commands. A command can execute immediately, or it can return a view so the user can keep searching, selecting, copying, or triggering actions.
+
+## Export a command
+
+A plugin entry usually exports a `PluginModule`:
+
+```ts
+import type { PluginModule } from "@deskit/plugin-sdk"
+
+const plugin: PluginModule = {
+  commands: {
+    "calculator.evaluate": {
+      run({ initialQuery }, ctx) {
+        return makeView(initialQuery ?? "", ctx)
+      },
+      onSearchChange(text, ctx) {
+        return makeView(text, ctx)
+      },
+    },
+  },
+}
+
+export = plugin
+```
+
+`run` is called when the command opens. `onSearchChange` is called as the user keeps typing, which is ideal for calculators, timestamp converters, and filters.
+
+## List views
+
+The most common view is `list`:
+
+```ts
+return {
+  type: "list",
+  searchPlaceholder: "Type an expression...",
+  emptyText: "Type something to begin",
+  sections: [
+    {
+      title: "Result",
+      items: [
+        {
+          id: "result",
+          title: "42",
+          subtitle: "6 * 7",
+          icon: "lucide:calculator",
+          actions: [
+            {
+              type: "copy",
+              label: "Copy result",
+              value: "42",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+```
+
+Keep list items short and stable:
+
+- `id` should be stable to avoid UI jitter.
+- `title` should hold the most important result.
+- `subtitle` should explain the source or context.
+- `icon` helps users identify item type quickly.
+- `actions` should contain copy, select, favorite, or similar operations.
+
+## Live interaction
+
+The rule for live commands is simple: do not punish users while they are still typing.
+
+Recommended behavior:
+
+- Show usage when input is empty instead of an error.
+- For incomplete input, show a soft error row such as “keep typing the closing parenthesis”.
+- Offer copy actions only when there is a valid result.
+- Keep parsing fast; `onSearchChange` fires often.
+
+The calculator plugin follows this model: users type an expression, the result updates immediately, and the copy button copies only the current result.
+
+## Actions and semantic placement
+
+Actions can carry icons and active state. If an action needs a stable interaction position, prefer semantic placement instead of assuming the host will render buttons in a fixed order.
+
+Common patterns:
+
+- Copy: a normal action, usually shown in the action area.
+- Favorite state: use `active` with `lucide:star`.
+- Current selection: use `lucide:check`, only on the selected item.
+
+If an action is already a status indicator, avoid rendering another duplicate icon before the title. A persistent status icon on the right is easier to scan.

@@ -46,6 +46,7 @@ skills-lock.json
 # docs workspace
 /docs/.next/
 /docs/.source/
+/docs/out/
 /docs/next-env.d.ts
 
 # docs

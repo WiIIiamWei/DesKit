@@ -1,0 +1,41 @@
+---
+title: Permissions
+description: Why plugins declare permissions and what users see during installation.
+---
+
+# Permissions
+
+DesKit permissions exist so users know what a plugin can access before installing it. Permissions are not decorative metadata; if a plugin does not declare a permission, it should not receive that capability through the framework.
+
+## Why permissions matter
+
+Permissions solve two problems:
+
+- User trust: users can see whether a plugin reads clipboard, writes clipboard, or uses network.
+- Framework boundaries: DesKit can enforce checks before passing sensitive data to plugins.
+
+Marketplace and install dialogs show permission tags. The installed plugins page also keeps them visible so users can review them later.
+
+## Common permissions
+
+Common permissions include:
+
+- `clipboard:read`: read clipboard content or receive clipboard change events.
+- `clipboard:write`: write to the clipboard.
+- `network`: make network requests, for WebDAV, APIs, or sync.
+- `storage`: use plugin persistent storage.
+
+The SDK types and manifest schema are the source of truth. For example, a plugin that declares a background clipboard event but does not declare `clipboard:read` should not receive clipboard content.
+
+## Design advice
+
+Ask for less. A good plugin makes it obvious why each permission is necessary.
+
+Recommended:
+
+- Declare only the permissions used by the current version.
+- Explain sensitive permissions in README.
+- Do not request permissions “just in case”.
+- Network sync, clipboard reading, and background watching should have clear user settings.
+
+Permission prompts do not weaken plugins. They make plugins easier to trust.

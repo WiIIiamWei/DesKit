@@ -1,0 +1,72 @@
+---
+title: 提交到 Marketplace
+description: 发布 .deskit、计算 SHA256，并向 DesKit Marketplace 提交 listing。
+---
+
+# 提交到 Marketplace
+
+Marketplace 不保存插件源码，只保存插件 listing。插件源码在你自己的仓库，安装包来自 GitHub Release 的 `.deskit` 产物。
+
+## 发布插件 Release
+
+推荐流程：
+
+1. 确认 `package.json` 和 `deskit.json` 版本一致。
+2. 运行 `npm run check`。
+3. 推送 tag，例如 `v0.1.0`。
+4. 等待 GitHub Actions 生成 `.deskit` 和 `.sha256`。
+
+Release 产物 URL 应该类似：
+
+```text
+https://github.com/<owner>/<repo>/releases/download/v0.1.0/com.example.plugin-0.1.0.deskit
+```
+
+## Marketplace listing
+
+在 `DesKit-Marketplace` 仓库中添加 `plugins/<id>.json`：
+
+```json
+{
+  "id": "com.example.plugin",
+  "name": "plugin",
+  "displayName": {
+    "en": "Example Plugin",
+    "zh-CN": "示例插件"
+  },
+  "description": {
+    "en": "A short description.",
+    "zh-CN": "一句简短说明。"
+  },
+  "author": "Alice",
+  "homepage": "https://github.com/alice/deskit-plugin-example",
+  "version": "0.1.0",
+  "downloadUrl": "https://github.com/alice/deskit-plugin-example/releases/download/v0.1.0/com.example.plugin-0.1.0.deskit",
+  "sha256": "lowercase-hex-sha256",
+  "deskitEngine": "^0.2.0",
+  "icon": "lucide:puzzle",
+  "categories": ["utilities"]
+}
+```
+
+然后运行：
+
+```bash
+npm run build-registry
+npm run validate
+```
+
+提交 `plugins/<id>.json` 和重新生成的 `registry.json`，再按仓库 PR 模板发起 PR。
+
+## 审查重点
+
+Marketplace PR 通常会检查：
+
+- `id` 是否和插件 manifest 一致；
+- `version` 是否和插件 manifest 一致；
+- `downloadUrl` 是否指向 GitHub Release 的 `.deskit`；
+- `sha256` 是否匹配实际产物；
+- `icon` 是否可渲染；
+- 权限是否和功能相符。
+
+如果插件新增依赖、申请敏感权限或引入后台能力，请在 PR 说明里明确写出来。审查者不应该靠读源码猜你的意图。

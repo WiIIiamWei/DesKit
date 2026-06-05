@@ -1,0 +1,95 @@
+---
+title: API Reference
+description: A compact reference for plugin modules, context, views, and common actions.
+---
+
+# API Reference
+
+This is not a full type reference. It highlights the structures plugin authors use most often. The source of truth is `@deskit/plugin-sdk`.
+
+## PluginModule
+
+```ts
+interface PluginModule {
+  commands?: Record<string, PluginCommand>
+  events?: {
+    onClipboardChange?: (content: ClipboardContent, ctx: PluginContext) => void | Promise<void>
+  }
+}
+```
+
+## PluginCommand
+
+```ts
+interface PluginCommand {
+  run: (request: PluginRunRequest, ctx: PluginContext) => PluginView | Promise<PluginView>
+  onSearchChange?: (text: string, ctx: PluginContext) => PluginView | Promise<PluginView>
+  onAction?: (
+    action: PluginActionRequest,
+    ctx: PluginContext
+  ) => PluginView | void | Promise<PluginView | void>
+}
+```
+
+## PluginContext
+
+The context exposes locale, clipboard, storage, network, and similar capabilities. Do not assume every capability is available; sensitive capabilities require manifest permissions.
+
+Common uses:
+
+- read `ctx.locale` to choose display language;
+- use storage for history or runtime data;
+- use clipboard APIs to copy results;
+- use network APIs to access user-configured remote services.
+
+## ListView
+
+```ts
+interface ListView {
+  type: "list"
+  searchPlaceholder?: string
+  emptyText?: string
+  sections: Array<{
+    title?: string
+    items: ListItem[]
+  }>
+}
+```
+
+## ListItem
+
+```ts
+interface ListItem {
+  id: string
+  title: string
+  subtitle?: string
+  icon?: string
+  actions?: PluginAction[]
+}
+```
+
+## Common actions
+
+Copy text:
+
+```ts
+{
+  type: "copy",
+  label: "Copy",
+  value: "text to copy"
+}
+```
+
+Stateful button:
+
+```ts
+{
+  type: "custom",
+  id: "favorite",
+  label: "Favorite",
+  icon: "lucide:star",
+  active: true
+}
+```
+
+User-facing actions should stay short. If a flow becomes complex, return a new list view instead of hiding too much behind one button.

@@ -1,0 +1,98 @@
+---
+title: 命令与视图
+description: 如何导出命令、实时响应搜索输入，并用列表视图组织结果。
+---
+
+# 命令与视图
+
+插件通过命令进入用户流程。一个命令可以直接执行，也可以返回一个视图，让用户继续搜索、选择、复制或触发动作。
+
+## 导出命令
+
+插件入口通常导出一个 `PluginModule`：
+
+```ts
+import type { PluginModule } from "@deskit/plugin-sdk"
+
+const plugin: PluginModule = {
+  commands: {
+    "calculator.evaluate": {
+      run({ initialQuery }, ctx) {
+        return makeView(initialQuery ?? "", ctx)
+      },
+      onSearchChange(text, ctx) {
+        return makeView(text, ctx)
+      },
+    },
+  },
+}
+
+export = plugin
+```
+
+`run` 在命令打开时调用。`onSearchChange` 会在用户继续输入时调用，适合计算器、时间戳转换、过滤器这类实时工具。
+
+## 列表视图
+
+最常用的视图是 `list`：
+
+```ts
+return {
+  type: "list",
+  searchPlaceholder: "Type an expression...",
+  emptyText: "Type something to begin",
+  sections: [
+    {
+      title: "Result",
+      items: [
+        {
+          id: "result",
+          title: "42",
+          subtitle: "6 * 7",
+          icon: "lucide:calculator",
+          actions: [
+            {
+              type: "copy",
+              label: "Copy result",
+              value: "42",
+            },
+          ],
+        },
+      ],
+    },
+  ],
+}
+```
+
+列表项应该短而稳定：
+
+- `id` 要稳定，避免输入变化时 UI 抖动。
+- `title` 放最重要的结果。
+- `subtitle` 放来源、解释或上下文。
+- `icon` 用来帮助用户快速识别项目类型。
+- `actions` 放复制、选择、切换收藏等操作。
+
+## 实时交互
+
+实时命令的体验关键是“不打断用户输入”。
+
+建议：
+
+- 输入为空时显示用法提示，而不是错误。
+- 表达式不完整时显示温和的错误行，例如“继续输入右括号”。
+- 只有有效结果才提供复制动作。
+- 计算或解析逻辑要快；`onSearchChange` 会频繁触发。
+
+计算器插件就是这种模式：用户输入表达式，结果立即显示，复制按钮只复制当前结果。
+
+## Actions 与语义位置
+
+action 可以携带图标和状态。对于需要稳定交互的位置，推荐使用语义槽位，而不是假设 host 会按某个固定顺序渲染。
+
+常见设计：
+
+- 复制按钮：普通 action，通常只在 hover 或操作区出现。
+- 收藏状态：使用 `active`，图标用 `lucide:star`。
+- 当前选中状态：使用 `lucide:check`，只在选中项显示。
+
+如果一个 action 是状态提示，不要同时在标题前再渲染一个重复图标。让状态 icon 固定在右侧，用户更容易理解。

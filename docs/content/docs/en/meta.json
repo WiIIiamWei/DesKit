@@ -1,0 +1,15 @@
+{
+  "title": "DesKit Plugin Development",
+  "pages": [
+    "index",
+    "quick-start",
+    "manifest",
+    "commands-and-views",
+    "permissions",
+    "storage-and-preferences",
+    "clipboard-and-background",
+    "marketplace",
+    "api-reference",
+    "examples"
+  ]
+}

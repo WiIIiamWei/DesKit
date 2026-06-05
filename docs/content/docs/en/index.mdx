@@ -1,0 +1,39 @@
+---
+title: DesKit Plugin Development
+description: A practical guide for plugin authors, from the first command to Marketplace submission.
+---
+
+# DesKit Plugin Development
+
+A DesKit plugin is a small JavaScript package that can be invoked from the desktop launcher. You do not need to touch the Electron main process or understand DesKit internals; a plugin declares its capabilities, exports commands, and ships as a `.deskit` archive.
+
+This documentation is written for plugin authors. It focuses on three things:
+
+- creating and debugging a plugin from the template;
+- designing commands, views, actions, preferences, and permissions;
+- publishing a GitHub Release and submitting the plugin to the DesKit Marketplace.
+
+## Suggested path
+
+If this is your first plugin:
+
+1. Start with [Quick Start](./quick-start) and make sure the template builds.
+2. Read [Manifest](./manifest) to understand how DesKit discovers a plugin.
+3. Read [Commands and Views](./commands-and-views) to turn user input into interactive results.
+4. If your plugin needs clipboard, network, or background events, read [Permissions](./permissions) and [Clipboard and Background Tasks](./clipboard-and-background).
+5. When you are ready to publish, follow [Submit to Marketplace](./marketplace).
+
+## What works well today
+
+DesKit is currently a good fit for:
+
+- launcher utilities: calculator, timestamp conversion, encoders, formatters;
+- clipboard utilities: history, text transforms, image helpers;
+- small tools with preferences: shortcuts, toggles, text options;
+- independently released plugins distributed as GitHub Release assets.
+
+If your plugin needs long-running synchronization, a full account system, or heavy background work, keep the first version small. The plugin framework will keep growing, but the current priority is making plugins installable, runnable, and reviewable.
+
+## Languages
+
+This site is available in Chinese and English. Chinese is the default language; English lives under `/en/docs`.
