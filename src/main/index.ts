@@ -131,6 +131,8 @@ const APP_ORIGIN = `${APP_SCHEME}://app`
 const PLUGIN_ICON_PATH_PREFIX = "/plugin-icons/"
 const LAUNCHER_SHORTCUT_ID = "launcher"
 const SCREENSHOT_SHORTCUT_ID = "screenshot"
+const SMOKE_TEST_ENV = "DESKIT_SMOKE_TEST"
+const isSmokeTest = process.env[SMOKE_TEST_ENV] === "1"
 
 applyScreenshotColorProfileWorkaround()
 
@@ -1425,6 +1427,10 @@ if (!gotLock) {
       locale: app.getLocale(),
       iconPath: defaultNotificationIcon(),
     })
+    if (isSmokeTest) {
+      console.log("[deskit] smoke test bootstrap completed")
+      setTimeout(() => app.quit(), 1000)
+    }
 
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) {

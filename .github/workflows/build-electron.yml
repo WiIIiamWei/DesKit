@@ -148,15 +148,13 @@ jobs:
             exit 1
           fi
           echo "Smoke-testing $BIN"
-          # timeout exits 124 when it kills the process — that's the success
-          # path here (app stayed alive long enough to render).
           set +e
-          dbus-run-session -- \
+          DESKIT_SMOKE_TEST=1 dbus-run-session -- \
             xvfb-run --auto-servernum --server-args="-screen 0 1280x720x24" \
-              timeout --preserve-status 12s "$BIN" --no-sandbox --disable-dev-shm-usage --disable-gpu --in-process-gpu
+              timeout --kill-after=5s 20s "$BIN" --no-sandbox --disable-dev-shm-usage --disable-gpu --in-process-gpu
           code=$?
           set -e
-          if [ "$code" != "124" ] && [ "$code" != "143" ] && [ "$code" != "0" ]; then
+          if [ "$code" != "0" ]; then
             echo "::error::App crashed during smoke test with exit code $code"
             exit 1
           fi
