@@ -12,7 +12,7 @@ export const EDGE_VISIBLE_BALL_WIDTH = BALL_SIZE / 2
 export const SNAP_EDGE_DISTANCE = 96
 
 const EDGE_MARGIN = 24
-const DRAG_THRESHOLD = 4 // 拖拽阈值。鼠标移动小于改阈值会被当成点击，超过才当成拖拽
+const DRAG_THRESHOLD = 4 // 拖拽阈值。鼠标移动小于该阈值会被当成点击，超过才当成拖拽
 const BOUNDS_NORMALIZATION_TOLERANCE = 2 //  窗口 bounds 容差。避免因为微小误差反复 setBounds，导致漂移或重绘。
 const FLOATING_BALL_HASH = "floating-ball"
 const FLOATING_BALL_MENU_HASH = "floating-ball-menu"
@@ -252,7 +252,7 @@ export function moveFloatingBallDrag(): void {
         width: EXPANDED_WINDOW_SIZE,
         height: EXPANDED_WINDOW_SIZE,
       },
-      getPrimaryWorkArea()
+      screen.getDisplayMatching(dragState.menuBounds).workArea
     )
     requestFloatingBallMenuBounds(menuWin, nextMenu)
     requestFloatingBallBounds(
@@ -340,7 +340,7 @@ function moveFloatingBallToDefaultPosition(win: BrowserWindow): void {
 function getPreparedExpandedFloatingBallWindowBounds(win: BrowserWindow): Electron.Rectangle {
   const collapsedBounds = getCurrentFloatingBallBounds(win)
   const expandedBounds = getExpandedFloatingBallBounds(getFloatingBallVisualCenter(collapsedBounds))
-  return clampBoundsToWorkArea(expandedBounds, getPrimaryWorkArea())
+  return clampBoundsToWorkArea(expandedBounds, screen.getDisplayMatching(collapsedBounds).workArea)
 }
 
 function applyExpandedMenuClosePosition(): void {
@@ -348,7 +348,7 @@ function applyExpandedMenuClosePosition(): void {
   const menuBounds = getCurrentFloatingBallMenuBounds(getFloatingBallMenuWindow())
   if (!win || !menuBounds) return
 
-  const workArea = getPrimaryWorkArea()
+  const workArea = screen.getDisplayMatching(menuBounds).workArea
   const collapsedBounds = getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds))
   const target = getExpandedMenuEdgeSnapBounds(collapsedBounds, menuBounds, workArea)
   snappedEdge = target.edge
@@ -391,10 +391,6 @@ function applyFloatingBallEdgeSnap(win: BrowserWindow): void {
   snappedEdge = target.edge
   if (target.edge === "none") return
   requestFloatingBallBounds(win, target.bounds)
-}
-
-function getPrimaryWorkArea(): Electron.Rectangle {
-  return screen.getPrimaryDisplay().workArea
 }
 
 function getEdgeSnapBounds(
