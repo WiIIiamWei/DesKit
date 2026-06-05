@@ -67,9 +67,7 @@ export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserW
     collapseFloatingBallMenuAfterFocusSettles()
   })
 
-  floatingBallWindow.webContents.on("context-menu", () => {
-    showFloatingBallContextMenu()
-  })
+  attachFloatingBallContextMenu(floatingBallWindow)
 
   moveFloatingBallToDefaultPosition(floatingBallWindow)
 
@@ -97,6 +95,8 @@ function ensureFloatingBallMenuWindow(deps: FloatingBallWindowDeps): BrowserWind
   menuWin.on("blur", () => {
     collapseFloatingBallMenuAfterFocusSettles()
   })
+
+  attachFloatingBallContextMenu(menuWin)
 
   menuWin.webContents.on("did-finish-load", () => {
     if (menuPhase === "expanded") {
@@ -663,10 +663,19 @@ function clamp(value: number, min: number, max: number): number {
   return Math.min(Math.max(value, min), max)
 }
 
-function showFloatingBallContextMenu(): void {
+function attachFloatingBallContextMenu(win: BrowserWindow): void {
+  win.webContents.on("context-menu", () => {
+    showFloatingBallContextMenu(win)
+  })
+}
+
+function showFloatingBallContextMenu(ownerWindow: BrowserWindow | null): void {
   const deps = currentDeps
   if (!deps) return
   const s = floatingBallStrings(deps.getLocale())
+  const popupWindow =
+    ownerWindow && !ownerWindow.isDestroyed() ? ownerWindow : getFloatingBallWindow()
+  keepFloatingBallWindowAboveMenu()
   Menu.buildFromTemplate([
     {
       label: s.close,
@@ -675,7 +684,12 @@ function showFloatingBallContextMenu(): void {
         deps.onDisable()
       },
     },
-  ]).popup({ window: getFloatingBallWindow() ?? undefined })
+  ]).popup({
+    window: popupWindow ?? undefined,
+    callback: () => {
+      keepFloatingBallWindowAboveMenu()
+    },
+  })
 }
 
 interface FloatingBallStrings {
