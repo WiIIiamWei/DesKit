@@ -4,9 +4,11 @@ import {
   applyLocalSync,
   applyRemoteSync,
   configureSyncPassphrase,
+  disconnectLanDevice,
   disconnectSync,
   disposePluginCommand,
   finishFloatingBallDrag,
+  getLanStatus,
   getPlugin,
   getSettings,
   getSyncStatus,
@@ -19,6 +21,7 @@ import {
   invokePluginCommand,
   isElectron,
   launchApp,
+  listLanDevices,
   listMarketplacePlugins,
   listPlugins,
   moveFloatingBallBy,
@@ -33,6 +36,7 @@ import {
   onSettingsChanged,
   openExternalUrl,
   openFloatingBallFeature,
+  pairLanDevice,
   pasteClipboardContent,
   pollGitHubLogin,
   previewMarketplacePluginInstall,
@@ -40,10 +44,12 @@ import {
   pushSync,
   refreshApps,
   reloadPlugin,
+  removeLanTransferHistory,
   saveSyncClientId,
   saveSyncGistId,
   searchApps,
   searchPluginCommands,
+  sendLanFile,
   setPluginEnabled,
   setPluginPreference,
   startFloatingBallDrag,
@@ -105,6 +111,7 @@ function mockApi() {
       accent: "blue",
       floatingBallEnabled: true,
       floatingBallFeatures: ["appLauncher"],
+      lanEnabled: false,
     }),
     updateSettings: vi.fn().mockResolvedValue({
       hotkeys: {
@@ -115,6 +122,7 @@ function mockApi() {
       accent: "blue",
       floatingBallEnabled: true,
       floatingBallFeatures: ["appLauncher"],
+      lanEnabled: false,
     }),
     completeScreenshotSelection: vi.fn().mockResolvedValue(undefined),
     cancelScreenshotSelection: vi.fn().mockResolvedValue(undefined),
@@ -154,12 +162,29 @@ function mockApi() {
     applyRemoteSync: vi.fn().mockResolvedValue({ enabled: true }),
     applyLocalSync: vi.fn().mockResolvedValue({ status: "updated" }),
     disconnectSync: vi.fn().mockResolvedValue({ enabled: false }),
+    getLanStatus: vi.fn().mockResolvedValue({ enabled: false }),
+    listLanDevices: vi.fn().mockResolvedValue([]),
+    listLanPairings: vi.fn().mockResolvedValue([]),
+    pairLanDevice: vi.fn().mockResolvedValue({ id: "pair" }),
+    confirmLanPairing: vi.fn().mockResolvedValue([]),
+    rejectLanPairing: vi.fn().mockResolvedValue([]),
+    disconnectLanDevice: vi.fn().mockResolvedValue(undefined),
+    listLanTransfers: vi.fn().mockResolvedValue([]),
+    sendLanFile: vi.fn().mockResolvedValue(null),
+    resumeLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    acceptLanTransfer: vi.fn().mockResolvedValue(null),
+    rejectLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    removeLanTransferHistory: vi.fn().mockResolvedValue([]),
     onLauncherFocus: vi.fn().mockReturnValue(() => {}),
     onFloatingBallMenuState: vi.fn().mockReturnValue(() => {}),
     onFloatingBallFeatures: vi.fn().mockReturnValue(() => {}),
     onLauncherRunPluginCommand: vi.fn().mockReturnValue(() => {}),
     onPluginRegistryChanged: vi.fn().mockReturnValue(() => {}),
     onSettingsChanged: vi.fn().mockReturnValue(() => {}),
+    onLanDevicesChanged: vi.fn().mockReturnValue(() => {}),
+    onLanStatusChanged: vi.fn().mockReturnValue(() => {}),
+    onLanPairingsChanged: vi.fn().mockReturnValue(() => {}),
+    onLanTransfersChanged: vi.fn().mockReturnValue(() => {}),
   }
   ;(window as unknown as { electronAPI: object }).electronAPI = api
   return api
@@ -323,6 +348,23 @@ describe("lib/electron", () => {
       expect(api.applyRemoteSync).toHaveBeenCalled()
       expect(api.applyLocalSync).toHaveBeenCalledWith("secret")
       expect(api.disconnectSync).toHaveBeenCalled()
+    })
+
+    it("lan wrappers forward device and transfer ids", async () => {
+      const api = mockApi()
+      await getLanStatus()
+      await listLanDevices()
+      await pairLanDevice("peer")
+      await disconnectLanDevice("peer")
+      await sendLanFile("peer")
+      await removeLanTransferHistory("transfer")
+
+      expect(api.getLanStatus).toHaveBeenCalled()
+      expect(api.listLanDevices).toHaveBeenCalled()
+      expect(api.pairLanDevice).toHaveBeenCalledWith("peer")
+      expect(api.disconnectLanDevice).toHaveBeenCalledWith("peer")
+      expect(api.sendLanFile).toHaveBeenCalledWith("peer")
+      expect(api.removeLanTransferHistory).toHaveBeenCalledWith("transfer")
     })
 
     it("listPlugins calls listPlugins", async () => {

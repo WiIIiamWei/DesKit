@@ -44,6 +44,8 @@ export interface UserSettings {
   floatingBallEnabled: boolean
   /** Features shown in the floating ball radial menu. */
   floatingBallFeatures: FloatingBallFeature[]
+  /** Whether DesKit advertises and browses devices on the local network. */
+  lanEnabled: boolean
 }
 
 export type UserSettingsPatch = Partial<Omit<UserSettings, "hotkeys">> & {
@@ -61,6 +63,7 @@ export const defaultSettings: UserSettings = {
   accent: "neutral",
   floatingBallEnabled: false,
   floatingBallFeatures: ["appLauncher", "screenshot"],
+  lanEnabled: false,
 }
 
 export function settingsFilePath(userDataDir: string): string {
@@ -90,6 +93,9 @@ export function normalizeSettings(raw: unknown): UserSettings {
         r.floatingBallFeatures,
         typeof r.settingsVersion === "number" ? r.settingsVersion : 1
       )
+    }
+    if (typeof r.lanEnabled === "boolean") {
+      next.lanEnabled = r.lanEnabled
     }
   }
   return next

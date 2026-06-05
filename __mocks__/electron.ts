@@ -65,6 +65,7 @@ export const ipcRenderer = { invoke: vi.fn(), send: vi.fn(), on: vi.fn() }
 export const ipcMain = { handle: vi.fn(), on: vi.fn() }
 export const dialog = {
   showOpenDialog: vi.fn(() => Promise.resolve({ canceled: true, filePaths: [] })),
+  showSaveDialog: vi.fn(() => Promise.resolve({ canceled: true })),
 }
 export const app = {
   whenReady: vi.fn(() => Promise.resolve()),
@@ -141,6 +142,11 @@ export const shell = {
   openExternal: vi.fn(() => Promise.resolve()),
   openPath: vi.fn(() => Promise.resolve("")),
 }
+export const safeStorage = {
+  isEncryptionAvailable: vi.fn(() => true),
+  encryptString: vi.fn((value: string) => Buffer.from(value)),
+  decryptString: vi.fn((value: Buffer) => value.toString("utf-8")),
+}
 export const clipboard = {
   readText: vi.fn(() => ""),
   writeText: vi.fn(),
@@ -186,6 +192,8 @@ export default {
   protocol,
   net,
   shell,
+  dialog,
+  safeStorage,
   clipboard,
   desktopCapturer,
   globalShortcut,

@@ -24,6 +24,7 @@ function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSe
     accent: "neutral",
     floatingBallEnabled: false,
     floatingBallFeatures: [],
+    lanEnabled: false,
     ...overrides,
   }
 }

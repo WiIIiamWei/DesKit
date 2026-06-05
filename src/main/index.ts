@@ -1,5 +1,6 @@
 import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { IpcMainInvokeEvent } from "electron"
+import type { LanDevice, LanPairing, LanStatus, LanTransfer } from "./lan/types"
 import type { PluginRegistryEntry } from "./plugins/types"
 import type { ScreenshotAction } from "./screenshot/types"
 import type { SearchWindowDeps } from "./search-window"
@@ -18,6 +19,7 @@ import {
   app,
   BrowserWindow,
   clipboard,
+  dialog,
   ipcMain,
   Menu,
   nativeImage,
@@ -42,9 +44,18 @@ import {
   syncFloatingBallWindow,
   toggleFloatingBallMenu,
 } from "./floating-ball-window"
+import { registerLanIpc } from "./ipc/lan"
 import { LauncherService } from "./ipc/launcher-service"
 import { registerPluginIpc } from "./ipc/plugins"
 import { isTrustedSenderUrl } from "./ipc/trusted-sender"
+import { BonjourLanDiscoveryAdapter } from "./lan/bonjour-discovery-adapter"
+import { LanCredentialLoadError } from "./lan/credential-store"
+import {
+  LAN_SIMULATION_PROFILE_ENV,
+  resetDevLanSimulationCredentials,
+  resolveDevLanSimulation,
+} from "./lan/dev-simulation"
+import { LanService } from "./lan/lan-service"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { collectPluginShortcutBindings } from "./plugin-shortcuts"
 import { createElectronPluginAdapters } from "./plugins/electron-adapters"
@@ -123,6 +134,18 @@ const SCREENSHOT_SHORTCUT_ID = "screenshot"
 
 applyScreenshotColorProfileWorkaround()
 
+const lanSimulation = resolveDevLanSimulation({
+  defaultUserDataDir: app.getPath("userData"),
+  isPackaged: app.isPackaged,
+  profile: process.env[LAN_SIMULATION_PROFILE_ENV],
+})
+if (lanSimulation) {
+  app.setPath("userData", lanSimulation.userDataDir)
+  console.warn(
+    `[deskit] LAN simulation profile "${lanSimulation.profile}" uses ${lanSimulation.userDataDir}`
+  )
+}
+
 // Must be called *before* app is ready. Marking the scheme `standard` and
 // `secure` makes its origin behave like https for CORS, cookies, and CSP.
 protocol.registerSchemesAsPrivileged([
@@ -168,6 +191,7 @@ function applyCsp(): void {
 
 const launcher = new LauncherService()
 let plugins: PluginHost
+let lan: LanService
 let syncState: SyncStateStore
 let syncService: SettingsSyncService
 let syncUploadTimer: NodeJS.Timeout | undefined
@@ -376,6 +400,9 @@ function registerIpc(): void {
         hotkeys: { ...next.hotkeys, screenshot: previous.hotkeys.screenshot },
       })
     }
+    if (next.lanEnabled !== previous.lanEnabled) {
+      next = await syncLanEnabled(next, previous)
+    }
 
     refreshTrayMenu(trayActions())
     syncFloatingBallWindow(floatingBallDeps())
@@ -579,6 +606,21 @@ function registerIpc(): void {
     onRegistryChanged: handlePluginRegistryChanged,
     onPreferencesChanged: markSyncLocalChanged,
   })
+  registerLanIpc(ipcMain, lan, {
+    isTrustedSender: isTrustedIpcSender,
+    onDevicesChanged: broadcastLanDevicesChanged,
+    onStatusChanged: broadcastLanStatusChanged,
+    onPairingsChanged: broadcastLanPairingsChanged,
+    onTransfersChanged: broadcastLanTransfersChanged,
+    selectSendFile: async () => {
+      const result = await dialog.showOpenDialog({ properties: ["openFile"] })
+      return result.canceled ? null : (result.filePaths[0] ?? null)
+    },
+    selectSaveFile: async (suggestedName) => {
+      const result = await dialog.showSaveDialog({ defaultPath: suggestedName })
+      return result.canceled ? null : (result.filePath ?? null)
+    },
+  })
 }
 
 function isTrustedIpcSender(event: IpcMainInvokeEvent): boolean {
@@ -651,22 +693,38 @@ async function pruneFloatingBallFeaturesForPlugins(entries: PluginRegistryEntry[
 }
 
 function broadcastPluginRegistryChanged(entries: unknown): void {
-  for (const win of BrowserWindow.getAllWindows()) {
-    if (!win.isDestroyed()) {
-      win.webContents.send("plugins:registry-changed", entries)
-    }
-  }
+  broadcast("plugins:registry-changed", entries)
 }
 
 function broadcastSettingsChanged(settings: ReturnType<typeof launcher.getSettings>): void {
+  broadcast("settings:changed", settings)
+}
+
+function broadcast(channel: string, payload: unknown): void {
   // Notify every renderer (main shell + long-lived launcher window) so
   // they can re-apply theme/hotkey state without reloading. Skip
   // destroyed windows defensively to avoid sending to torn-down webContents.
   for (const win of BrowserWindow.getAllWindows()) {
     if (!win.isDestroyed()) {
-      win.webContents.send("settings:changed", settings)
+      win.webContents.send(channel, payload)
     }
   }
+}
+
+function broadcastLanDevicesChanged(devices: LanDevice[]): void {
+  broadcast("lan:devices-changed", devices)
+}
+
+function broadcastLanStatusChanged(status: LanStatus): void {
+  broadcast("lan:status-changed", status)
+}
+
+function broadcastLanPairingsChanged(pairings: LanPairing[]): void {
+  broadcast("lan:pairings-changed", pairings)
+}
+
+function broadcastLanTransfersChanged(transfers: LanTransfer[]): void {
+  broadcast("lan:transfers-changed", transfers)
 }
 
 function coercePatch(value: unknown): UserSettingsPatch {
@@ -701,7 +759,25 @@ function coercePatch(value: unknown): UserSettingsPatch {
   if (Array.isArray(v.floatingBallFeatures)) {
     out.floatingBallFeatures = v.floatingBallFeatures.filter(isFloatingBallFeature)
   }
+  if (typeof v.lanEnabled === "boolean") out.lanEnabled = v.lanEnabled
   return out
+}
+
+async function syncLanEnabled(
+  next: ReturnType<typeof launcher.getSettings>,
+  previous: ReturnType<typeof launcher.getSettings>
+): Promise<ReturnType<typeof launcher.getSettings>> {
+  try {
+    if (next.lanEnabled) {
+      await lan.start()
+    } else {
+      await lan.stop()
+    }
+    return next
+  } catch (err) {
+    console.error("[deskit] failed to update LAN discovery state", err)
+    return launcher.updateSettings({ lanEnabled: previous.lanEnabled })
+  }
 }
 
 function isFloatingBallFeature(value: unknown): value is FloatingBallFeature {
@@ -755,7 +831,10 @@ async function applySyncedSettings(patch: Partial<ReturnType<typeof launcher.get
   if (requestedHotkeys && Object.keys(requestedHotkeys).length === 0) {
     delete requested.hotkeys
   }
-  const next = await launcher.updateSettings(requested)
+  let next = await launcher.updateSettings(requested)
+  if (next.lanEnabled !== previous.lanEnabled) {
+    next = await syncLanEnabled(next, previous)
+  }
   afterSyncedStateApplied()
   return next
 }
@@ -930,6 +1009,16 @@ function searchWindowDeps(): SearchWindowDeps {
   return { rendererDevUrl, appOrigin: APP_ORIGIN }
 }
 
+async function initLan(enabled: boolean): Promise<void> {
+  try {
+    await lan.init(enabled)
+  } catch (err) {
+    if (!lanSimulation || !(err instanceof LanCredentialLoadError)) throw err
+    await resetDevLanSimulationCredentials(lanSimulation)
+    await lan.init(enabled)
+  }
+}
+
 function createPluginHost(): PluginHost {
   const userDataDir = app.getPath("userData")
   const fetchWithNet: typeof fetch = (input, init) =>
@@ -1035,7 +1124,7 @@ function createMainWindow(): BrowserWindow {
     height: 720,
     minWidth: 640,
     minHeight: 480,
-    title: "DesKit",
+    title: lanSimulation ? `DesKit - ${lanSimulation.deviceName}` : "DesKit",
     show: false, // launcher app stays in tray; window is shown on demand
     backgroundColor: "#0a0a0a",
     icon: defaultAppIcon(),
@@ -1279,6 +1368,20 @@ if (!gotLock) {
     applyCsp()
     registerStaticProtocol()
     plugins = createPluginHost()
+    lan = new LanService({
+      userDataDir: app.getPath("userData"),
+      adapter: new BonjourLanDiscoveryAdapter(),
+      deviceName: lanSimulation?.deviceName,
+      protector: {
+        encrypt: (plainText) => {
+          if (!safeStorage.isEncryptionAvailable()) {
+            throw new Error("OS-backed encryption is unavailable for LAN credentials.")
+          }
+          return safeStorage.encryptString(plainText).toString("base64")
+        },
+        decrypt: (encryptedText) => safeStorage.decryptString(Buffer.from(encryptedText, "base64")),
+      },
+    })
     syncState = new SyncStateStore(syncStateFilePath(app.getPath("userData")))
     await syncState.load()
     const defaultClientId =
@@ -1293,7 +1396,13 @@ if (!gotLock) {
     // and sidebar navigation instead.
     Menu.setApplicationMenu(null)
 
-    const settings = await launcher.init()
+    let settings = await launcher.init()
+    try {
+      await initLan(settings.lanEnabled)
+    } catch (err) {
+      console.error("[deskit] failed to initialize LAN discovery", err)
+      settings = await launcher.updateSettings({ lanEnabled: false })
+    }
     await plugins.init()
     void pullSyncWithSavedCredentials().catch((err) =>
       console.warn("[deskit] startup sync pull failed", err)
@@ -1302,6 +1411,7 @@ if (!gotLock) {
     // Pre-warm both the main window (so the first show is instant) and the
     // app cache (so the first launcher query has results).
     mainWindow = createMainWindow()
+    if (lanSimulation) showMainWindow()
     ensureSearchWindow(searchWindowDeps())
     void launcher.refreshApps()
 
@@ -1327,6 +1437,7 @@ if (!gotLock) {
   app.on("will-quit", () => {
     setSearchWindowQuitting(true)
     destroyFloatingBallWindow()
+    void lan?.stop().catch((err) => console.error("[deskit] failed to stop LAN discovery", err))
     unbindAllGlobalShortcuts()
     destroyTray()
     plugins?.dispose()

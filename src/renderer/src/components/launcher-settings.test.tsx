@@ -13,7 +13,7 @@ type TestElectronApi = NonNullable<Window["electronAPI"]>
 type SettingsChangedHandler = (settings: DeskitUserSettings) => void
 
 type TestElectronApiHarness = TestElectronApi & {
-  emitSettingsChanged: SettingsChangedHandler
+  emitSettingsChanged: (settings: Partial<DeskitUserSettings>) => void
 }
 
 function ok<T>(data: T): DeskitPluginIpcResult<T> {
@@ -32,15 +32,17 @@ function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSe
     accent: "neutral",
     floatingBallEnabled: false,
     floatingBallFeatures: [],
+    lanEnabled: false,
     ...overrides,
   }
 }
 
-function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarness {
+function installElectronApi(settings: Partial<DeskitUserSettings> = {}): TestElectronApiHarness {
   let settingsChangedHandler: SettingsChangedHandler | null = null
+  const currentSettings = baseSettings(settings)
   const api = {
-    getSettings: vi.fn().mockResolvedValue(settings),
-    updateSettings: vi.fn().mockResolvedValue(settings),
+    getSettings: vi.fn().mockResolvedValue(currentSettings),
+    updateSettings: vi.fn().mockResolvedValue(currentSettings),
     getSyncStatus: vi.fn().mockResolvedValue({
       configured: false,
       enabled: false,
@@ -59,6 +61,19 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
     applyRemoteSync: vi.fn(),
     applyLocalSync: vi.fn(),
     disconnectSync: vi.fn(),
+    getLanStatus: vi.fn().mockResolvedValue({ enabled: false }),
+    listLanDevices: vi.fn().mockResolvedValue([]),
+    listLanPairings: vi.fn().mockResolvedValue([]),
+    pairLanDevice: vi.fn().mockResolvedValue({ id: "pair" }),
+    confirmLanPairing: vi.fn().mockResolvedValue([]),
+    rejectLanPairing: vi.fn().mockResolvedValue([]),
+    disconnectLanDevice: vi.fn().mockResolvedValue(undefined),
+    listLanTransfers: vi.fn().mockResolvedValue([]),
+    sendLanFile: vi.fn().mockResolvedValue(null),
+    resumeLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    acceptLanTransfer: vi.fn().mockResolvedValue(null),
+    rejectLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
+    removeLanTransferHistory: vi.fn().mockResolvedValue([]),
     refreshApps: vi.fn().mockResolvedValue([]),
     searchApps: vi.fn().mockResolvedValue([]),
     launchApp: vi.fn().mockResolvedValue(true),
@@ -115,8 +130,12 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
         settingsChangedHandler = null
       }
     }),
-    emitSettingsChanged: (nextSettings: DeskitUserSettings) => {
-      act(() => settingsChangedHandler?.(nextSettings))
+    onLanDevicesChanged: vi.fn(() => () => undefined),
+    onLanStatusChanged: vi.fn(() => () => undefined),
+    onLanPairingsChanged: vi.fn(() => () => undefined),
+    onLanTransfersChanged: vi.fn(() => () => undefined),
+    emitSettingsChanged: (nextSettings: Partial<DeskitUserSettings>) => {
+      act(() => settingsChangedHandler?.(baseSettings(nextSettings)))
     },
   } satisfies TestElectronApiHarness
 
@@ -136,7 +155,7 @@ describe("launcher settings", () => {
 
   beforeEach(() => {
     mockPlatform("Win32")
-    installElectronApi(baseSettings())
+    installElectronApi()
   })
 
   afterEach(() => {
@@ -375,11 +394,9 @@ describe("launcher settings", () => {
 
   it("clears the save status when a settings broadcast changes the saved hotkey", async () => {
     const user = userEvent.setup()
-    const api = installElectronApi(
-      baseSettings({
-        hotkey: "Control+Space",
-      })
-    )
+    const api = installElectronApi({
+      hotkey: "Control+Space",
+    })
     api.updateSettings = vi.fn().mockResolvedValue(
       baseSettings({
         hotkey: "Alt+Space",

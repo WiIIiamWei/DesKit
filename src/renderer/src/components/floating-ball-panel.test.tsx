@@ -35,6 +35,7 @@ function baseSettings(features: DeskitFloatingBallFeature[] = []): DeskitUserSet
     accent: "neutral",
     floatingBallEnabled: true,
     floatingBallFeatures: features,
+    lanEnabled: false,
   }
 }
 
