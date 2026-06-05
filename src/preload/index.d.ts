@@ -228,6 +228,7 @@ declare global {
       finishFloatingBallDrag: () => Promise<void>
       moveFloatingBallBy: (delta: { x: number; y: number }) => Promise<void>
       hideFloatingBall: () => Promise<void>
+      notifyFloatingBallMenuPainted: (expanded: boolean) => void
       getSettings: () => Promise<DeskitUserSettings>
       updateSettings: (patch: Partial<DeskitUserSettings>) => Promise<DeskitUserSettings>
       getSyncStatus: () => Promise<DeskitSyncStatus>

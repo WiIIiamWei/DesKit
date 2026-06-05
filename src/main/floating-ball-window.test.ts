@@ -17,6 +17,7 @@ import {
   getExpandedFloatingBallBounds,
   getFloatingBallSnappedEdge,
   getFloatingBallVisualCenter,
+  markFloatingBallMenuPainted,
   moveFloatingBallBy,
   moveFloatingBallDrag,
   openFloatingBallFeature,
@@ -30,6 +31,10 @@ type MockBrowserWindow = ElectronBrowserWindow & {
   setBounds: Mock
   hide: Mock
   showInactive: Mock
+  setOpacity: Mock
+  setIgnoreMouseEvents: Mock
+  setFocusable: Mock
+  focus: Mock
   isFocused: Mock
   moveTop: Mock
   webContents: ElectronBrowserWindow["webContents"] & {
@@ -416,6 +421,121 @@ describe("floating ball window dragging", () => {
     expect(ballWindow.moveTop.mock.invocationCallOrder[0]).toBeLessThan(menuStateSendOrder)
   })
 
+  it("keeps the collapsed menu window resident but transparent and mouse-transparent", () => {
+    showFloatingBallWindow(deps)
+    const [, menuWindow] = createdWindows()
+
+    expect(menuWindow.showInactive).toHaveBeenCalledTimes(1)
+    expect(menuWindow.setOpacity).toHaveBeenLastCalledWith(0)
+    expect(menuWindow.setIgnoreMouseEvents).toHaveBeenLastCalledWith(true)
+    expect(menuWindow.setFocusable).toHaveBeenLastCalledWith(false)
+    expect(menuWindow.hide).not.toHaveBeenCalled()
+  })
+
+  it("waits for the menu renderer paint acknowledgement before revealing interactions", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+
+    expect(menuWindow.setOpacity).not.toHaveBeenCalledWith(1)
+    expect(menuWindow.setIgnoreMouseEvents).not.toHaveBeenCalledWith(false)
+    expect(menuWindow.setFocusable).not.toHaveBeenCalledWith(true)
+  })
+
+  it("keeps the menu open when the ball window blurs during resident menu reveal", () => {
+    vi.useFakeTimers()
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
+      x: 640 - EXPANDED_WINDOW_SIZE / 2,
+      y: 450 - EXPANDED_WINDOW_SIZE / 2,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+    menuWindow.setOpacity.mockClear()
+
+    ballWindow.emit("blur")
+    vi.runOnlyPendingTimers()
+
+    expect(ballWindow.webContents.send).not.toHaveBeenLastCalledWith(
+      "floating-ball:menu-state",
+      false
+    )
+    expect(menuWindow.setOpacity).not.toHaveBeenCalledWith(0)
+  })
+
+  it("reveals the resident menu window after the menu renderer paints the open state", async () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.setOpacity.mockClear()
+    menuWindow.setIgnoreMouseEvents.mockClear()
+    menuWindow.setFocusable.mockClear()
+    const { markFloatingBallMenuPainted } = (await import("./floating-ball-window")) as unknown as {
+      markFloatingBallMenuPainted: (
+        sender: ElectronBrowserWindow["webContents"],
+        expanded: boolean
+      ) => void
+    }
+
+    markFloatingBallMenuPainted(menuWindow.webContents, true)
+
+    expect(menuWindow.setOpacity).toHaveBeenCalledWith(1)
+    expect(menuWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(false)
+    expect(menuWindow.setFocusable).toHaveBeenCalledWith(true)
+  })
+
+  it("focuses the resident menu window after revealing it so outside clicks can blur it", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.focus.mockClear()
+
+    markFloatingBallMenuPainted(menuWindow.webContents, true)
+
+    expect(menuWindow.focus).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the menu open when the ball window blurs immediately after resident menu reveal", () => {
+    vi.useFakeTimers()
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
+      x: 640 - EXPANDED_WINDOW_SIZE / 2,
+      y: 450 - EXPANDED_WINDOW_SIZE / 2,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+    markFloatingBallMenuPainted(menuWindow.webContents, true)
+    menuWindow.setOpacity.mockClear()
+
+    ballWindow.emit("blur")
+    vi.runOnlyPendingTimers()
+
+    expect(ballWindow.webContents.send).not.toHaveBeenLastCalledWith(
+      "floating-ball:menu-state",
+      false
+    )
+    expect(menuWindow.setOpacity).not.toHaveBeenCalledWith(0)
+  })
+
   it("does not restack the ball window when the menu takes focus", () => {
     ensureFloatingBallWindow(deps)
     const ballWindow = latestWindow()
@@ -427,6 +547,54 @@ describe("floating ball window dragging", () => {
     menuWindow.emit("focus")
 
     expect(ballWindow.moveTop).not.toHaveBeenCalled()
+  })
+
+  it("focuses and restacks the ball window when starting a drag with the menu expanded", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
+      x: 640 - EXPANDED_WINDOW_SIZE / 2,
+      y: 450 - EXPANDED_WINDOW_SIZE / 2,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+    ballWindow.focus.mockClear()
+    ballWindow.moveTop.mockClear()
+
+    startFloatingBallDrag()
+
+    expect(ballWindow.focus).toHaveBeenCalledTimes(1)
+    expect(ballWindow.moveTop).toHaveBeenCalledTimes(1)
+  })
+
+  it("keeps the ball window above the menu window while dragging the expanded menu", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    vi.mocked(screen.getCursorScreenPoint)
+      .mockReturnValueOnce({ x: 640, y: 450 })
+      .mockReturnValueOnce({ x: 700, y: 480 })
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    menuWindow.getBounds.mockReturnValue({
+      x: 640 - EXPANDED_WINDOW_SIZE / 2,
+      y: 450 - EXPANDED_WINDOW_SIZE / 2,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    })
+    ballWindow.moveTop.mockClear()
+
+    startFloatingBallDrag()
+    ballWindow.moveTop.mockClear()
+    moveFloatingBallDrag()
+
+    expect(ballWindow.moveTop).toHaveBeenCalledTimes(1)
+    expect(ballWindow.moveTop.mock.invocationCallOrder[0]).toBeGreaterThan(
+      ballWindow.setBounds.mock.invocationCallOrder.at(-1) ?? 0
+    )
   })
 
   it("removes the menu interaction area after closing without resizing the collapsed hit area", () => {
@@ -450,10 +618,16 @@ describe("floating ball window dragging", () => {
       height: COLLAPSED_WINDOW_SIZE,
     })
     ballWindow.setBounds.mockClear()
+    menuWindow.setOpacity.mockClear()
+    menuWindow.setIgnoreMouseEvents.mockClear()
+    menuWindow.setFocusable.mockClear()
     collapseFloatingBallMenu()
 
     expect(ballWindow.setBounds).not.toHaveBeenCalled()
-    expect(createdWindows().some((win) => win.hide.mock.calls.length > 0)).toBe(true)
+    expect(menuWindow.hide).not.toHaveBeenCalled()
+    expect(menuWindow.setOpacity).toHaveBeenCalledWith(0)
+    expect(menuWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(true)
+    expect(menuWindow.setFocusable).toHaveBeenCalledWith(false)
   })
 
   it("moves a snapped collapsed hit area to the centered menu position while opening inside the primary work area", () => {
@@ -548,6 +722,9 @@ describe("floating ball window dragging", () => {
     })
     ballWindow.setBounds.mockClear()
     ballWindow.webContents.send.mockClear()
+    menuWindow.setOpacity.mockClear()
+    menuWindow.setIgnoreMouseEvents.mockClear()
+    menuWindow.setFocusable.mockClear()
 
     collapseFloatingBallMenu()
 
@@ -558,7 +735,10 @@ describe("floating ball window dragging", () => {
       width: COLLAPSED_WINDOW_SIZE,
       height: COLLAPSED_WINDOW_SIZE,
     })
-    expect(createdWindows().some((win) => win.hide.mock.calls.length > 0)).toBe(true)
+    expect(menuWindow.hide).not.toHaveBeenCalled()
+    expect(menuWindow.setOpacity).toHaveBeenCalledWith(0)
+    expect(menuWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(true)
+    expect(menuWindow.setFocusable).toHaveBeenCalledWith(false)
   })
 
   it("replays the open menu state when the menu renderer finishes loading", () => {
@@ -640,14 +820,22 @@ describe("floating ball window dragging", () => {
       width: EXPANDED_WINDOW_SIZE,
       height: EXPANDED_WINDOW_SIZE,
     })
+    markFloatingBallMenuPainted(menuWindow.webContents, true)
+    vi.runOnlyPendingTimers()
     menuWindow.hide.mockClear()
+    menuWindow.setOpacity.mockClear()
+    menuWindow.setIgnoreMouseEvents.mockClear()
+    menuWindow.setFocusable.mockClear()
 
     menuWindow.emit("blur")
     expect(menuWindow.hide).not.toHaveBeenCalled()
 
     vi.runOnlyPendingTimers()
 
-    expect(menuWindow.hide).toHaveBeenCalledTimes(1)
+    expect(menuWindow.hide).not.toHaveBeenCalled()
+    expect(menuWindow.setOpacity).toHaveBeenCalledWith(0)
+    expect(menuWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(true)
+    expect(menuWindow.setFocusable).toHaveBeenCalledWith(false)
     expect(ballWindow.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
   })
 
@@ -664,11 +852,17 @@ describe("floating ball window dragging", () => {
       height: EXPANDED_WINDOW_SIZE,
     })
     menuWindow.hide.mockClear()
+    menuWindow.setOpacity.mockClear()
+    menuWindow.setIgnoreMouseEvents.mockClear()
+    menuWindow.setFocusable.mockClear()
 
     openFloatingBallFeature("appLauncher")
 
     expect(deps.onOpenFeature).toHaveBeenCalledWith("appLauncher")
-    expect(menuWindow.hide).toHaveBeenCalledTimes(1)
+    expect(menuWindow.hide).not.toHaveBeenCalled()
+    expect(menuWindow.setOpacity).toHaveBeenCalledWith(0)
+    expect(menuWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(true)
+    expect(menuWindow.setFocusable).toHaveBeenCalledWith(false)
     expect(ballWindow.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
   })
 

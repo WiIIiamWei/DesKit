@@ -34,6 +34,7 @@ import {
   destroyFloatingBallWindow,
   finishFloatingBallDrag,
   hideFloatingBallWindow,
+  markFloatingBallMenuPainted,
   moveFloatingBallBy,
   moveFloatingBallDrag,
   openFloatingBallFeature,
@@ -345,6 +346,12 @@ function registerIpc(): void {
     const value = delta as Record<string, unknown>
     if (typeof value.x !== "number" || typeof value.y !== "number") return
     moveFloatingBallBy({ x: value.x, y: value.y })
+  })
+
+  ipcMain.on("floating-ball:menu-painted", (event, expanded: unknown) => {
+    if (typeof expanded === "boolean") {
+      markFloatingBallMenuPainted(event.sender, expanded)
+    }
   })
 
   ipcMain.handle("settings:get", () => launcher.getSettings())

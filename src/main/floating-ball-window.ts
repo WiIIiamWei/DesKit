@@ -1,3 +1,4 @@
+import type { WebContents } from "electron"
 import type { UserSettings } from "./settings/settings"
 import * as path from "node:path"
 import process from "node:process"
@@ -14,6 +15,7 @@ export const SNAP_EDGE_DISTANCE = 96
 const EDGE_MARGIN = 24
 const DRAG_THRESHOLD = 4 // 拖拽阈值。鼠标移动小于该阈值会被当成点击，超过才当成拖拽
 const BOUNDS_NORMALIZATION_TOLERANCE = 2 //  窗口 bounds 容差。避免因为微小误差反复 setBounds，导致漂移或重绘。
+const MENU_REVEAL_BLUR_SUPPRESSION_MS = 64
 const FLOATING_BALL_HASH = "floating-ball"
 const FLOATING_BALL_MENU_HASH = "floating-ball-menu"
 export type FloatingBallWindowPhase = "collapsed" | "expanded"
@@ -34,6 +36,8 @@ let menuPhase: FloatingBallWindowPhase = "collapsed"
 let lastRequestedBallBounds: Electron.Rectangle | null = null
 let lastRequestedMenuBounds: Electron.Rectangle | null = null
 let pendingBlurCollapseTimer: NodeJS.Timeout | null = null
+let pendingMenuReveal = false
+let revealBlurSuppressionTimer: NodeJS.Timeout | null = null
 let dragState: {
   cursor: Electron.Point
   bounds: Electron.Rectangle
@@ -82,23 +86,27 @@ function ensureFloatingBallMenuWindow(deps: FloatingBallWindowDeps): BrowserWind
     size: EXPANDED_WINDOW_SIZE,
     title: "DesKit Floating Ball Menu",
   })
+  const menuWin = floatingBallMenuWindow
 
-  floatingBallMenuWindow.on("closed", () => {
+  menuWin.on("closed", () => {
     floatingBallMenuWindow = null
     lastRequestedMenuBounds = null
   })
 
-  floatingBallMenuWindow.on("blur", () => {
+  menuWin.on("blur", () => {
     collapseFloatingBallMenuAfterFocusSettles()
   })
 
-  floatingBallMenuWindow.webContents.on("did-finish-load", () => {
+  menuWin.webContents.on("did-finish-load", () => {
     if (menuPhase === "expanded") {
-      floatingBallMenuWindow?.webContents.send("floating-ball:menu-state", true)
+      pendingMenuReveal = true
+      prepareHiddenFloatingBallMenuWindow(menuWin, { show: true })
+      menuWin.webContents.send("floating-ball:menu-state", true)
     }
   })
 
-  return floatingBallMenuWindow
+  prepareHiddenFloatingBallMenuWindow(menuWin, { show: false })
+  return menuWin
 }
 
 function createFloatingBallBrowserWindow({
@@ -150,7 +158,8 @@ function createFloatingBallBrowserWindow({
 
 export function showFloatingBallWindow(deps: FloatingBallWindowDeps): void {
   const win = ensureFloatingBallWindow(deps)
-  ensureFloatingBallMenuWindow(deps)
+  const menuWin = ensureFloatingBallMenuWindow(deps)
+  prepareHiddenFloatingBallMenuWindow(menuWin, { show: true })
   if (!win.isVisible()) win.showInactive()
 }
 
@@ -167,12 +176,14 @@ export function destroyFloatingBallWindow(): void {
   const win = getFloatingBallWindow()
   const menuWin = getFloatingBallMenuWindow()
   clearPendingBlurCollapse()
+  clearRevealBlurSuppression()
   floatingBallWindow = null
   floatingBallMenuWindow = null
   currentDeps = null
   menuPhase = "collapsed"
   lastRequestedBallBounds = null
   lastRequestedMenuBounds = null
+  pendingMenuReveal = false
   snappedEdge = "none"
   finishFloatingBallDrag()
   if (win) win.destroy()
@@ -191,8 +202,9 @@ export function expandFloatingBallMenu(): void {
     getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds))
   )
   requestFloatingBallMenuBounds(menuWin, menuBounds)
+  pendingMenuReveal = true
+  prepareHiddenFloatingBallMenuWindow(menuWin, { show: true })
   menuPhase = "expanded"
-  menuWin.showInactive()
   keepFloatingBallWindowAboveMenu()
   sendFloatingBallMenuState(true)
 }
@@ -201,10 +213,13 @@ export function collapseFloatingBallMenu(): void {
   if (menuPhase !== "expanded") return
 
   clearPendingBlurCollapse()
+  clearRevealBlurSuppression()
+  pendingMenuReveal = false
   applyExpandedMenuClosePosition()
   menuPhase = "collapsed"
   sendFloatingBallMenuState(false)
-  floatingBallMenuWindow?.hide()
+  const menuWin = getFloatingBallMenuWindow()
+  if (menuWin) prepareHiddenFloatingBallMenuWindow(menuWin, { show: false })
 }
 
 export function toggleFloatingBallMenu(): void {
@@ -219,9 +234,22 @@ export function openFloatingBallFeature(
   collapseFloatingBallMenu()
 }
 
+export function markFloatingBallMenuPainted(sender: WebContents, expanded: boolean): void {
+  const menuWin = getFloatingBallMenuWindow()
+  if (!menuWin || BrowserWindow.fromWebContents(sender) !== menuWin) return
+  if (!expanded || menuPhase !== "expanded" || !pendingMenuReveal) return
+
+  pendingMenuReveal = false
+  revealFloatingBallMenuWindow(menuWin)
+}
+
 export function startFloatingBallDrag(): void {
   const win = getFloatingBallWindow()
   if (!win) return
+  if (menuPhase === "expanded") {
+    win.focus()
+    keepFloatingBallWindowAboveMenu()
+  }
   dragState = {
     cursor: screen.getCursorScreenPoint(),
     bounds: getCurrentFloatingBallBounds(win),
@@ -259,6 +287,7 @@ export function moveFloatingBallDrag(): void {
       win,
       getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(nextMenu))
     )
+    keepFloatingBallWindowAboveMenu()
     return
   }
 
@@ -364,6 +393,7 @@ function collapseFloatingBallMenuAfterFocusSettles(): void {
   clearPendingBlurCollapse()
   pendingBlurCollapseTimer = setTimeout(() => {
     pendingBlurCollapseTimer = null
+    if (pendingMenuReveal || revealBlurSuppressionTimer) return
     if (isFloatingBallWindowGroupFocused()) return
     collapseFloatingBallMenu()
   }, 0)
@@ -375,6 +405,19 @@ function clearPendingBlurCollapse(): void {
   pendingBlurCollapseTimer = null
 }
 
+function suppressBlurCollapseUntilMenuRevealSettles(): void {
+  clearRevealBlurSuppression()
+  revealBlurSuppressionTimer = setTimeout(() => {
+    revealBlurSuppressionTimer = null
+  }, MENU_REVEAL_BLUR_SUPPRESSION_MS)
+}
+
+function clearRevealBlurSuppression(): void {
+  if (!revealBlurSuppressionTimer) return
+  clearTimeout(revealBlurSuppressionTimer)
+  revealBlurSuppressionTimer = null
+}
+
 function isFloatingBallWindowGroupFocused(): boolean {
   return Boolean(getFloatingBallWindow()?.isFocused() || getFloatingBallMenuWindow()?.isFocused())
 }
@@ -382,6 +425,23 @@ function isFloatingBallWindowGroupFocused(): boolean {
 function keepFloatingBallWindowAboveMenu(): void {
   if (menuPhase !== "expanded") return
   getFloatingBallWindow()?.moveTop()
+}
+
+function prepareHiddenFloatingBallMenuWindow(win: BrowserWindow, options: { show: boolean }): void {
+  win.setOpacity(0)
+  win.setIgnoreMouseEvents(true)
+  win.setFocusable(false)
+  if (options.show && !win.isVisible()) win.showInactive()
+}
+
+function revealFloatingBallMenuWindow(win: BrowserWindow): void {
+  suppressBlurCollapseUntilMenuRevealSettles()
+  if (!win.isVisible()) win.showInactive()
+  win.setFocusable(true)
+  win.setIgnoreMouseEvents(false)
+  win.setOpacity(1)
+  win.focus()
+  keepFloatingBallWindowAboveMenu()
 }
 
 function applyFloatingBallEdgeSnap(win: BrowserWindow): void {

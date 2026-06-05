@@ -10,7 +10,9 @@ vi.mock("react-i18next", () => ({
   }),
 }))
 
-type TestElectronApi = NonNullable<Window["electronAPI"]>
+type TestElectronApi = NonNullable<Window["electronAPI"]> & {
+  notifyFloatingBallMenuPainted: (expanded: boolean) => void
+}
 type MenuStateHandler = (expanded: boolean) => void
 type FeaturesHandler = (features: DeskitFloatingBallFeature[]) => void
 type SettingsChangedHandler = (settings: DeskitUserSettings) => void
@@ -55,6 +57,7 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
         menuStateHandler = null
       }
     }),
+    notifyFloatingBallMenuPainted: vi.fn(),
     onFloatingBallFeatures: vi.fn((handler: FeaturesHandler) => {
       featuresHandler = handler
       return () => {
@@ -129,6 +132,7 @@ function firePointerEvent(
 describe("floating ball panel", () => {
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     window.location.hash = ""
     delete window.electronAPI
@@ -157,6 +161,20 @@ describe("floating ball panel", () => {
 
     expect(screen.getByRole("button", { name: "floatingBall.features.appLauncher" })).toBeVisible()
     expect(screen.queryByRole("button", { name: "floatingBall.title" })).not.toBeInTheDocument()
+  })
+
+  it("notifies main after the menu interaction view paints the open state", () => {
+    vi.useFakeTimers()
+    window.location.hash = "#floating-ball-menu"
+    const api = installElectronApi(baseSettings(["appLauncher"]))
+    renderPanel()
+
+    api.emitMenuState(true)
+    act(() => {
+      vi.advanceTimersByTime(32)
+    })
+
+    expect(api.api.notifyFloatingBallMenuPainted).toHaveBeenCalledWith(true)
   })
 
   it("keeps menu actions hidden until main opens the menu interaction view", () => {

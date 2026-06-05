@@ -74,6 +74,7 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
     finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
+    notifyFloatingBallMenuPainted: vi.fn(),
     completeScreenshotSelection: vi.fn().mockResolvedValue(undefined),
     cancelScreenshotSelection: vi.fn().mockResolvedValue(undefined),
     getScreenshotAnnotationImage: vi.fn().mockResolvedValue(null),

@@ -5,6 +5,7 @@ import "./index"
 type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
 
 interface ExposedApi {
+  notifyFloatingBallMenuPainted: (expanded: boolean) => void
   cancelScreenshotSelection: () => void
   completeScreenshotSelection: (
     selection: { x: number; y: number; width: number; height: number },
@@ -60,6 +61,15 @@ describe("preload screenshot IPC", () => {
 })
 
 describe("preload floating ball IPC", () => {
+  it("sends menu paint acknowledgements without waiting for invoke replies", () => {
+    const api = exposedApi()
+
+    api.notifyFloatingBallMenuPainted(true)
+
+    expect(ipcRenderer.send).toHaveBeenCalledWith("floating-ball:menu-painted", true)
+    expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("floating-ball:menu-painted", true)
+  })
+
   it("does not expose single-window resize handshakes", () => {
     const api = exposedApi() as unknown as Record<string, unknown>
 

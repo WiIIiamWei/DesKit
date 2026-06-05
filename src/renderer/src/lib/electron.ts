@@ -115,6 +115,10 @@ export async function hideFloatingBall(): Promise<void> {
   await api().hideFloatingBall()
 }
 
+export function notifyFloatingBallMenuPainted(expanded: boolean): void {
+  api().notifyFloatingBallMenuPainted(expanded)
+}
+
 export async function getSettings(): Promise<UserSettings> {
   return api().getSettings()
 }
