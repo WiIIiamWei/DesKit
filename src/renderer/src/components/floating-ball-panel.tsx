@@ -1,5 +1,5 @@
 import type { PointerEvent } from "react"
-import { Search } from "lucide-react"
+import { ScanLine, Search } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import logoUrl from "@/assets/logo.svg"
@@ -7,19 +7,22 @@ import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip"
 import {
+  finishFloatingBallDrag,
   getSettings,
   listPlugins,
-  moveFloatingBallBy,
+  moveFloatingBallDrag,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
   onPluginRegistryChanged,
   onSettingsChanged,
   openFloatingBallFeature,
+  startFloatingBallDrag,
   toggleFloatingBallMenu,
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
 
 const APP_LAUNCHER_FEATURE = "appLauncher"
+const SCREENSHOT_FEATURE = "screenshot"
 const MENU_SLOT_ANGLES = [30, 90, 150, 210, 270, 330] as const
 const DRAG_THRESHOLD = 4
 
@@ -34,7 +37,10 @@ interface FloatingBallMenuItem {
 export function FloatingBallPanel() {
   const { t, i18n } = useTranslation()
   const [expanded, setExpanded] = useState(false)
-  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([APP_LAUNCHER_FEATURE])
+  const [features, setFeatures] = useState<DeskitFloatingBallFeature[]>([
+    APP_LAUNCHER_FEATURE,
+    SCREENSHOT_FEATURE,
+  ])
   const [plugins, setPlugins] = useState<DeskitPluginRegistryEntry[]>([])
   const dragRef = useRef<{
     pointerId: number
@@ -101,6 +107,7 @@ export function FloatingBallPanel() {
     if (event.button !== 0) return
     event.preventDefault()
     event.currentTarget.setPointerCapture(event.pointerId)
+    void startFloatingBallDrag()
     dragRef.current = {
       pointerId: event.pointerId,
       startX: event.screenX,
@@ -125,15 +132,19 @@ export function FloatingBallPanel() {
       Math.abs(event.screenY - drag.startY) >= DRAG_THRESHOLD
     drag.lastX = event.screenX
     drag.lastY = event.screenY
-    void moveFloatingBallBy(delta)
+    void moveFloatingBallDrag()
   }
 
   function onPointerUp(event: PointerEvent<HTMLButtonElement>) {
     const drag = dragRef.current
     if (!drag || drag.pointerId !== event.pointerId) return
-    event.currentTarget.releasePointerCapture(event.pointerId)
-    suppressNextClickRef.current = drag.moved
+    const moved = drag.moved
     dragRef.current = null
+    suppressNextClickRef.current = moved
+    void finishFloatingBallDrag()
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId)
+    }
   }
 
   function onBallClick() {
@@ -185,6 +196,7 @@ export function FloatingBallPanel() {
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onLostPointerCapture={onPointerUp}
         title={t("floatingBall.title")}
         className="absolute left-1/2 top-1/2 grid size-14 -translate-x-1/2 -translate-y-1/2 cursor-move place-items-center rounded-full border border-border bg-white shadow-xl transition hover:scale-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring dark:bg-popover"
       >
@@ -199,6 +211,7 @@ function FeatureIcon({ item }: { item: FloatingBallMenuItem }) {
   if (item.kind === "plugin") {
     return <PluginIcon pluginId={item.pluginId} icon={item.icon} className="size-5" />
   }
+  if (item.id === SCREENSHOT_FEATURE) return <ScanLine className="size-5" aria-hidden />
   return <Search className="size-5" aria-hidden />
 }
 
@@ -210,6 +223,9 @@ function menuItem(
 ): FloatingBallMenuItem {
   if (feature === APP_LAUNCHER_FEATURE) {
     return { id: feature, title: t("floatingBall.features.appLauncher"), kind: "builtin" }
+  }
+  if (feature === SCREENSHOT_FEATURE) {
+    return { id: feature, title: t("floatingBall.features.screenshot"), kind: "builtin" }
   }
   const parsed = parsePluginFeatureId(feature)
   if (!parsed) return { id: feature, title: feature, kind: "plugin" }

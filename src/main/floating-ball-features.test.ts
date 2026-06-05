@@ -102,7 +102,7 @@ describe("pruneUnavailableFloatingBallFeatures", () => {
           },
         },
       ])
-    ).toEqual(["appLauncher"])
+    ).toEqual(["appLauncher", "screenshot"])
   })
 
   it("removes stale command ids from active plugins", () => {

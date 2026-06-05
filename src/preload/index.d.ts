@@ -6,7 +6,7 @@ export {}
 
 declare global {
   type LauncherAppKind = "win32" | "uwp" | "url" | "macos"
-  type DeskitFloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
+  type DeskitFloatingBallFeature = "appLauncher" | "screenshot" | `plugin:${string}:${string}`
 
   interface LauncherAppEntry {
     id: string
@@ -27,8 +27,14 @@ declare global {
   type DeskitThemeMode = "light" | "dark" | "system"
   type DeskitThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
 
+  interface DeskitHotkeySettings {
+    launcher: string
+    screenshot: string
+  }
+
   interface DeskitUserSettings {
     hotkey: string
+    hotkeys: DeskitHotkeySettings
     themeMode: DeskitThemeMode
     accent: DeskitThemeAccent
     floatingBallEnabled: boolean
@@ -136,6 +142,7 @@ declare global {
     | { status: "empty" | "created" | "updated" | "applied" }
     | { status: "conflict"; conflict: DeskitSyncConflict }
 
+  type DeskitScreenshotAction = "copy" | "save" | "pin" | "annotate"
   type DeskitLocalizedString = string | Record<string, string>
   type DeskitClipboardContent =
     | { type: "text"; text: string }
@@ -236,6 +243,12 @@ declare global {
     deskitEngine: string
     icon?: string
     categories?: string[]
+    permissions?: string[]
+  }
+
+  interface DeskitMarketplaceInstallPreview {
+    entry: DeskitMarketplaceEntry
+    manifest: DeskitPluginManifest
   }
 
   interface DeskitPluginCommandResult {
@@ -268,6 +281,9 @@ declare global {
       notifyLauncherReady: () => void
       openFloatingBallFeature: (feature: DeskitFloatingBallFeature) => Promise<void>
       toggleFloatingBallMenu: () => Promise<void>
+      startFloatingBallDrag: () => Promise<void>
+      moveFloatingBallDrag: () => Promise<void>
+      finishFloatingBallDrag: () => Promise<void>
       moveFloatingBallBy: (delta: { x: number; y: number }) => Promise<void>
       hideFloatingBall: () => Promise<void>
       getSettings: () => Promise<DeskitUserSettings>
@@ -299,6 +315,22 @@ declare global {
       acceptLanTransfer: (transferId: string) => Promise<DeskitLanTransfer | null>
       rejectLanTransfer: (transferId: string) => Promise<DeskitLanTransfer>
       removeLanTransferHistory: (transferId: string) => Promise<DeskitLanTransfer[]>
+      completeScreenshotSelection: (
+        selection: { x: number; y: number; width: number; height: number },
+        action: DeskitScreenshotAction
+      ) => void
+      cancelScreenshotSelection: () => void
+      getScreenshotAnnotationImage: () => Promise<string | null>
+      completeScreenshotAnnotation: (
+        dataUrl: string,
+        action: Exclude<DeskitScreenshotAction, "annotate">
+      ) => void
+      cancelScreenshotAnnotation: () => void
+      getPinnedImageData: () => Promise<string | null>
+      copyPinnedImage: () => Promise<void>
+      savePinnedImage: () => Promise<void>
+      setPinnedImageOpacity: (opacity: number) => Promise<void>
+      closePinnedImage: () => void
       listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
       getPlugin: (
         pluginId: string
@@ -318,6 +350,9 @@ declare global {
       installPluginPackage: (
         zipPath: string
       ) => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry>>
+      installPluginPackageFromDialog: () => Promise<
+        DeskitPluginIpcResult<DeskitPluginRegistryEntry | null>
+      >
       uninstallPlugin: (pluginId: string) => Promise<DeskitPluginIpcResult<void>>
       reloadPlugin: (
         pluginId?: string
@@ -338,6 +373,10 @@ declare global {
         commandId: string
       ) => Promise<DeskitPluginIpcResult<void>>
       listMarketplacePlugins: () => Promise<DeskitPluginIpcResult<DeskitMarketplaceEntry[]>>
+      previewMarketplacePluginInstall: (
+        id: string,
+        version?: string
+      ) => Promise<DeskitPluginIpcResult<DeskitMarketplaceInstallPreview>>
       installMarketplacePlugin: (
         id: string,
         version?: string

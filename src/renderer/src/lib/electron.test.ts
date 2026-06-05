@@ -7,6 +7,7 @@ import {
   disconnectLanDevice,
   disconnectSync,
   disposePluginCommand,
+  finishFloatingBallDrag,
   getLanStatus,
   getPlugin,
   getSettings,
@@ -16,6 +17,7 @@ import {
   installMarketplacePlugin,
   installPluginFolder,
   installPluginPackage,
+  installPluginPackageFromDialog,
   invokePluginCommand,
   isElectron,
   launchApp,
@@ -23,6 +25,7 @@ import {
   listMarketplacePlugins,
   listPlugins,
   moveFloatingBallBy,
+  moveFloatingBallDrag,
   notifyLauncherReady,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
@@ -35,6 +38,7 @@ import {
   pairLanDevice,
   pasteClipboardContent,
   pollGitHubLogin,
+  previewMarketplacePluginInstall,
   pullSync,
   pushSync,
   refreshApps,
@@ -47,6 +51,7 @@ import {
   sendLanFile,
   setPluginEnabled,
   setPluginPreference,
+  startFloatingBallDrag,
   startGitHubLogin,
   toggleFloatingBallMenu,
   uninstallPlugin,
@@ -70,6 +75,9 @@ function mockApi() {
     notifyLauncherReady: vi.fn(),
     openFloatingBallFeature: vi.fn().mockResolvedValue(undefined),
     toggleFloatingBallMenu: vi.fn().mockResolvedValue(undefined),
+    startFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
+    moveFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
+    finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
     listPlugins: vi.fn().mockResolvedValue(ok([])),
@@ -78,15 +86,25 @@ function mockApi() {
     setPluginPreference: vi.fn().mockResolvedValue(ok(undefined)),
     installPluginFolder: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
     installPluginPackage: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
+    installPluginPackageFromDialog: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
     uninstallPlugin: vi.fn().mockResolvedValue(ok(undefined)),
     reloadPlugin: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
     searchPluginCommands: vi.fn().mockResolvedValue(ok([])),
     invokePluginCommand: vi.fn().mockResolvedValue(ok({ type: "toast" })),
     disposePluginCommand: vi.fn().mockResolvedValue(ok(undefined)),
     listMarketplacePlugins: vi.fn().mockResolvedValue(ok([])),
+    previewMarketplacePluginInstall: vi.fn().mockResolvedValue(
+      ok({
+        entry: { id: "plugin" },
+        manifest: { id: "plugin", permissions: ["clipboard:read"] },
+      })
+    ),
     installMarketplacePlugin: vi.fn().mockResolvedValue(ok({ id: "plugin" })),
     getSettings: vi.fn().mockResolvedValue({
-      hotkey: "CommandOrControl+Space",
+      hotkeys: {
+        launcher: "CommandOrControl+Space",
+        screenshot: "Control+Shift+A",
+      },
       themeMode: "system",
       accent: "blue",
       floatingBallEnabled: true,
@@ -94,13 +112,26 @@ function mockApi() {
       lanEnabled: false,
     }),
     updateSettings: vi.fn().mockResolvedValue({
-      hotkey: "CommandOrControl+Space",
+      hotkeys: {
+        launcher: "CommandOrControl+Space",
+        screenshot: "Control+Shift+A",
+      },
       themeMode: "dark",
       accent: "blue",
       floatingBallEnabled: true,
       floatingBallFeatures: ["appLauncher"],
       lanEnabled: false,
     }),
+    completeScreenshotSelection: vi.fn().mockResolvedValue(undefined),
+    cancelScreenshotSelection: vi.fn().mockResolvedValue(undefined),
+    getScreenshotAnnotationImage: vi.fn().mockResolvedValue(null),
+    completeScreenshotAnnotation: vi.fn().mockResolvedValue(undefined),
+    cancelScreenshotAnnotation: vi.fn().mockResolvedValue(undefined),
+    getPinnedImageData: vi.fn().mockResolvedValue(null),
+    copyPinnedImage: vi.fn().mockResolvedValue(undefined),
+    savePinnedImage: vi.fn().mockResolvedValue(undefined),
+    setPinnedImageOpacity: vi.fn().mockResolvedValue(undefined),
+    closePinnedImage: vi.fn().mockResolvedValue(undefined),
     getSyncStatus: vi.fn().mockResolvedValue({
       configured: true,
       enabled: true,
@@ -238,6 +269,24 @@ describe("lib/electron", () => {
       expect(api.toggleFloatingBallMenu).toHaveBeenCalled()
     })
 
+    it("startFloatingBallDrag calls startFloatingBallDrag", async () => {
+      const api = mockApi()
+      await startFloatingBallDrag()
+      expect(api.startFloatingBallDrag).toHaveBeenCalled()
+    })
+
+    it("moveFloatingBallDrag calls moveFloatingBallDrag", async () => {
+      const api = mockApi()
+      await moveFloatingBallDrag()
+      expect(api.moveFloatingBallDrag).toHaveBeenCalled()
+    })
+
+    it("finishFloatingBallDrag calls finishFloatingBallDrag", async () => {
+      const api = mockApi()
+      await finishFloatingBallDrag()
+      expect(api.finishFloatingBallDrag).toHaveBeenCalled()
+    })
+
     it("moveFloatingBallBy forwards delta", async () => {
       const api = mockApi()
       await moveFloatingBallBy({ x: 10, y: -5 })
@@ -361,6 +410,12 @@ describe("lib/electron", () => {
       expect(api.installPluginPackage).toHaveBeenCalledWith("/tmp/plugin.deskit")
     })
 
+    it("installPluginPackageFromDialog opens and installs a selected package", async () => {
+      const api = mockApi()
+      await installPluginPackageFromDialog()
+      expect(api.installPluginPackageFromDialog).toHaveBeenCalledOnce()
+    })
+
     it("uninstallPlugin forwards plugin id", async () => {
       const api = mockApi()
       await uninstallPlugin("com.deskit.test")
@@ -397,6 +452,12 @@ describe("lib/electron", () => {
       const api = mockApi()
       await listMarketplacePlugins()
       expect(api.listMarketplacePlugins).toHaveBeenCalled()
+    })
+
+    it("previewMarketplacePluginInstall forwards id and version", async () => {
+      const api = mockApi()
+      await previewMarketplacePluginInstall("com.deskit.test", "0.1.0")
+      expect(api.previewMarketplacePluginInstall).toHaveBeenCalledWith("com.deskit.test", "0.1.0")
     })
 
     it("installMarketplacePlugin forwards id and version", async () => {

@@ -24,6 +24,7 @@ export type LanPairing = DeskitLanPairing
 export type LanTransfer = DeskitLanTransfer
 export type PluginRegistryEntry = DeskitPluginRegistryEntry
 export type MarketplaceEntry = DeskitMarketplaceEntry
+export type MarketplaceInstallPreview = DeskitMarketplaceInstallPreview
 export type PluginCommandResult = DeskitPluginCommandResult
 export type PluginInvokePhase = DeskitPluginInvokePhase
 export type PluginView = DeskitPluginView
@@ -95,6 +96,18 @@ export async function openFloatingBallFeature(feature: FloatingBallFeature): Pro
 
 export async function toggleFloatingBallMenu(): Promise<void> {
   await api().toggleFloatingBallMenu()
+}
+
+export async function startFloatingBallDrag(): Promise<void> {
+  await api().startFloatingBallDrag()
+}
+
+export async function moveFloatingBallDrag(): Promise<void> {
+  await api().moveFloatingBallDrag()
+}
+
+export async function finishFloatingBallDrag(): Promise<void> {
+  await api().finishFloatingBallDrag()
 }
 
 export async function moveFloatingBallBy(delta: { x: number; y: number }): Promise<void> {
@@ -212,6 +225,52 @@ export async function removeLanTransferHistory(transferId: string): Promise<LanT
   return api().removeLanTransferHistory(transferId)
 }
 
+export async function completeScreenshotSelection(
+  selection: { x: number; y: number; width: number; height: number },
+  action: DeskitScreenshotAction
+): Promise<void> {
+  api().completeScreenshotSelection(selection, action)
+}
+
+export async function cancelScreenshotSelection(): Promise<void> {
+  api().cancelScreenshotSelection()
+}
+
+export async function getScreenshotAnnotationImage(): Promise<string | null> {
+  return api().getScreenshotAnnotationImage()
+}
+
+export async function completeScreenshotAnnotation(
+  dataUrl: string,
+  action: Exclude<DeskitScreenshotAction, "annotate">
+): Promise<void> {
+  api().completeScreenshotAnnotation(dataUrl, action)
+}
+
+export async function cancelScreenshotAnnotation(): Promise<void> {
+  api().cancelScreenshotAnnotation()
+}
+
+export async function getPinnedImageData(): Promise<string | null> {
+  return api().getPinnedImageData()
+}
+
+export async function copyPinnedImage(): Promise<void> {
+  await api().copyPinnedImage()
+}
+
+export async function savePinnedImage(): Promise<void> {
+  await api().savePinnedImage()
+}
+
+export async function setPinnedImageOpacity(opacity: number): Promise<void> {
+  await api().setPinnedImageOpacity(opacity)
+}
+
+export async function closePinnedImage(): Promise<void> {
+  api().closePinnedImage()
+}
+
 export async function listPlugins(): Promise<PluginRegistryEntry[]> {
   return unwrapIpcResult(await api().listPlugins())
 }
@@ -241,6 +300,10 @@ export async function installPluginFolder(folderPath: string): Promise<PluginReg
 
 export async function installPluginPackage(zipPath: string): Promise<PluginRegistryEntry> {
   return unwrapIpcResult(await api().installPluginPackage(zipPath))
+}
+
+export async function installPluginPackageFromDialog(): Promise<PluginRegistryEntry | null> {
+  return unwrapIpcResult(await api().installPluginPackageFromDialog())
 }
 
 export async function uninstallPlugin(pluginId: string): Promise<void> {
@@ -274,6 +337,13 @@ export async function disposePluginCommand(pluginId: string, commandId: string):
 
 export async function listMarketplacePlugins(): Promise<MarketplaceEntry[]> {
   return unwrapIpcResult(await api().listMarketplacePlugins())
+}
+
+export async function previewMarketplacePluginInstall(
+  id: string,
+  version?: string
+): Promise<MarketplaceInstallPreview> {
+  return unwrapIpcResult(await api().previewMarketplacePluginInstall(id, version))
 }
 
 export async function installMarketplacePlugin(

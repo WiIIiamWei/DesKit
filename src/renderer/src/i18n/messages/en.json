@@ -121,7 +121,8 @@
   "floatingBall": {
     "title": "DesKit Floating Ball",
     "features": {
-      "appLauncher": "App Launcher"
+      "appLauncher": "App Launcher",
+      "screenshot": "Screenshot"
     },
     "feature": {
       "title": "Floating Ball",
@@ -145,6 +146,20 @@
       "removeFeature": "Remove {{name}}"
     }
   },
+  "permissions": {
+    "items": {
+      "storage:plugin": "Plugin storage",
+      "clipboard:read": "Read clipboard",
+      "clipboard:write": "Write clipboard",
+      "network:http": "HTTP network access",
+      "sync:plugin": "Settings sync storage",
+      "notification": "Show notifications",
+      "system:open-url": "Open URLs",
+      "system:open-path": "Open files or folders",
+      "system:capture-screen": "Capture screen",
+      "system:pin-image": "Pin images"
+    }
+  },
   "plugins": {
     "title": "Plugins",
     "subtitle": "Manage built-in, installed, and development plugins.",
@@ -156,6 +171,10 @@
     "emptyTitle": "No plugins found",
     "emptyBody": "No built-in, installed, or development plugins are registered yet.",
     "installedCount": "{{count}} plugins installed",
+    "visibleCount": "Showing {{visible}} / {{total}} plugins",
+    "filteredEmptyTitle": "No plugins match these filters",
+    "filteredEmptyBody": "Try another search term, source, or status filter.",
+    "searchPlaceholder": "Search plugins, authors, commands, or permissions…",
     "pluginErrorTitle": "Plugin error",
     "status": {
       "active": "Active",
@@ -176,11 +195,18 @@
       "commands": "Commands",
       "path": "Path"
     },
+    "filters": {
+      "source": "Source",
+      "status": "Status",
+      "allSources": "All sources",
+      "allStatuses": "All statuses"
+    },
     "actions": {
       "enable": "Enable",
       "disable": "Disable",
       "reload": "Reload",
       "uninstall": "Uninstall",
+      "installPackage": "Install .deskit",
       "refresh": "Refresh"
     },
     "preferences": {
@@ -191,11 +217,16 @@
       "capturing": "Press keys...",
       "shortcutPlaceholder": "Control+Super+C"
     },
+    "permissions": {
+      "title": "Permissions",
+      "none": "No permissions requested"
+    },
     "toasts": {
       "enabled": "Plugin enabled.",
       "disabled": "Plugin disabled.",
       "reloaded": "Plugin reloaded.",
       "uninstalled": "Plugin uninstalled.",
+      "installed": "Plugin installed.",
       "preferenceSaved": "Preference saved."
     }
   },
@@ -232,6 +263,14 @@
       "homepage": "Homepage",
       "categories": "Categories",
       "openHomepage": "Open homepage"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "confirmTitle": "Review plugin permissions",
+      "confirmBody": "Before installing {{name}}, review the permissions this plugin requests.",
+      "none": "This plugin requests no permissions",
+      "cancel": "Cancel",
+      "confirm": "Install plugin"
     },
     "category": {
       "all": "All",
@@ -341,18 +380,48 @@
     "settings": {
       "title": "Launcher",
       "subtitle": "Summon the command palette from anywhere with a global shortcut.",
-      "hotkeyLabel": "Global shortcut",
+      "hotkeyLabel": "Launcher shortcut",
       "hotkeyHint": "You can manually enter Electron shortcut syntax, or click to capture and then press the key combination. Shortcut combinations that are already in use may not be captured; please use unused combinations or enter them manually.",
+      "screenshotHotkeyLabel": "Screenshot shortcut",
+      "screenshotHotkeyHint": "Starts region screenshot capture. The screenshot flow is implemented by the host so it can work before any plugin UI opens.",
       "capture": "Capture",
       "capturing": "Press keys...",
+      "launcherCaptureLabel": "Capture launcher shortcut",
+      "launcherCapturingLabel": "Capturing launcher shortcut",
+      "screenshotCaptureLabel": "Capture screenshot shortcut",
+      "screenshotCapturingLabel": "Capturing screenshot shortcut",
       "save": "Save",
-      "examples": "Examples: Control+Space · Alt+Space · CommandOrControl+Shift+P",
-      "active": "Active shortcut",
+      "examples": "Examples: Control+Space · Control+Shift+A · CommandOrControl+Shift+P",
+      "activeLauncher": "Active launcher shortcut",
+      "activeScreenshot": "Active screenshot shortcut",
       "rescan": "Rescan apps",
       "rescanning": "Rescanning…",
       "rescanned": "App list refreshed.",
       "saved": "Hotkey updated.",
       "invalid": "Could not register that combination. The previous shortcut is still active."
     }
+  },
+  "screenshot": {
+    "actions": {
+      "annotate": "Annotate",
+      "cancel": "Cancel",
+      "capture": "Capture",
+      "close": "Close",
+      "copy": "Copy",
+      "pin": "Pin",
+      "reselect": "Reselect",
+      "save": "Save",
+      "undo": "Undo"
+    },
+    "tools": {
+      "arrow": "Arrow",
+      "ellipse": "Ellipse",
+      "mosaic": "Mosaic",
+      "pen": "Pen",
+      "rectangle": "Rectangle"
+    },
+    "colorLabel": "Color {{color}}",
+    "opacity": "Opacity",
+    "strokeWidth": "Stroke width"
   }
 }

@@ -1,4 +1,5 @@
-import type { KeyboardEvent } from "react"
+import type { LucideProps } from "lucide-react"
+import type { ComponentType, KeyboardEvent } from "react"
 import type {
   LocalizedString,
   PluginAction,
@@ -10,9 +11,10 @@ import type {
   PluginListView,
   RenderablePluginView,
 } from "@/components/plugins/view-types"
-import { Check, Clipboard, ExternalLink, File, Hash, Play, Send, X } from "lucide-react"
+import { Check, Clipboard, Copy, ExternalLink, File, Hash, Play, Send, Star, X } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Button } from "@/components/ui/button"
 import { Checkbox } from "@/components/ui/checkbox"
@@ -26,6 +28,8 @@ import {
 } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
 import { cn } from "@/lib/utils"
+
+type LucideIconComponent = ComponentType<LucideProps>
 
 interface ViewRendererProps {
   view: RenderablePluginView
@@ -202,6 +206,11 @@ function ListPluginView({
             {section.items.map((item) => {
               const primary = item.actions?.[0]
               const selected = item.id === effectiveSelectedId
+              const statusActions = statusActionSlots(item.actions)
+              const showAccessoryIcon =
+                item.accessoryIcon &&
+                !statusActions.some((action) => action.icon === item.accessoryIcon)
+              const actionBarActions = compactActionBarActions(item.actions, statusActions)
               return (
                 <div
                   key={item.id}
@@ -234,18 +243,37 @@ function ListPluginView({
                       </span>
                     )}
                   </span>
-                  {item.accessory && (
-                    <span className="max-w-28 truncate text-xs text-muted-foreground">
-                      {item.accessory}
-                    </span>
-                  )}
-                  {!!item.actions?.length && (
+                  {selected && actionBarActions.length > 0 && (
                     <ActionBar
-                      actions={item.actions}
+                      actions={actionBarActions}
                       locale={locale}
                       onAction={(action) => onAction(action, { item })}
                       compact
                     />
+                  )}
+                  {(item.accessory || showAccessoryIcon || statusActions.length > 0) && (
+                    <span className="flex max-w-36 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                      {item.accessory && <span className="truncate">{item.accessory}</span>}
+                      {showAccessoryIcon &&
+                        item.accessoryIcon &&
+                        accessoryIcon(item.accessoryIcon, item.accessoryIconActive === true)}
+                      {statusActions.map((action) => (
+                        <Button
+                          key={actionKey(action, locale)}
+                          type="button"
+                          size="icon-xs"
+                          variant="ghost"
+                          title={actionLabel(action, locale)}
+                          aria-label={actionLabel(action, locale)}
+                          onClick={(event) => {
+                            event.stopPropagation()
+                            onAction(action, { item })
+                          }}
+                        >
+                          {actionIcon(action)}
+                        </Button>
+                      ))}
+                    </span>
                   )}
                 </div>
               )
@@ -385,6 +413,7 @@ function ActionBar({
           size={compact ? "icon-xs" : "sm"}
           variant="secondary"
           title={actionLabel(action, locale)}
+          aria-label={compact ? actionLabel(action, locale) : undefined}
           onClick={(event) => {
             event.stopPropagation()
             onAction(action)
@@ -407,7 +436,56 @@ function PluginItemIcon({ icon }: { icon?: string }) {
   )
 }
 
+const ACTION_ICON_OVERRIDES: Record<string, LucideIconComponent> = {
+  "lucide:copy": Copy,
+  "lucide:star": Star,
+}
+
+const ACCESSORY_ICON_OVERRIDES: Record<string, LucideIconComponent> = {
+  "lucide:check": Check,
+  "lucide:star": Star,
+}
+
+function statusActionSlots(actions?: PluginAction[]): PluginAction[] {
+  return (actions ?? []).filter(
+    (action) => action.placement === "status" || isLegacyStatusAction(action)
+  )
+}
+
+function compactActionBarActions(
+  actions: PluginAction[] | undefined,
+  statusActions: PluginAction[]
+): PluginAction[] {
+  return (actions ?? []).filter((action) => {
+    if (statusActions.includes(action)) return false
+    if (action.placement === "overflow") return false
+    if (action.placement === "inline") return true
+    return hasCompactActionIcon(action)
+  })
+}
+
+function isLegacyStatusAction(action: PluginAction): boolean {
+  return action.placement === undefined && action.active === true && !!action.icon
+}
+
+function hasCompactActionIcon(action: PluginAction): boolean {
+  return action.type !== "custom" || !!action.icon
+}
+
+function accessoryIcon(icon: string, active: boolean) {
+  const className = cn("size-3.5", active && shouldFillIcon(icon) && "fill-current")
+  const Override = ACCESSORY_ICON_OVERRIDES[icon]
+  if (Override) return <Override className={className} />
+  return <PluginIcon icon={icon} className={className} fallback={Check} />
+}
+
 function actionIcon(action: PluginAction) {
+  const className = cn("size-4", action.active && shouldFillIcon(action.icon) && "fill-current")
+  const Override = action.icon ? ACTION_ICON_OVERRIDES[action.icon] : undefined
+  if (Override) return <Override className={className} />
+  if (action.icon) {
+    return <PluginIcon icon={action.icon} className={className} fallback={Check} />
+  }
   if (action.type === "copy" || action.type === "paste") return <Clipboard className="size-4" />
   if (action.type === "open-url" || action.type === "open-path")
     return <ExternalLink className="size-4" />
@@ -415,6 +493,10 @@ function actionIcon(action: PluginAction) {
   if (action.type === "close") return <X className="size-4" />
   if (action.type === "custom") return <Check className="size-4" />
   return <Play className="size-4" />
+}
+
+function shouldFillIcon(icon: string | undefined): boolean {
+  return icon === "lucide:star"
 }
 
 function actionLabel(action: PluginAction, locale: string): string {

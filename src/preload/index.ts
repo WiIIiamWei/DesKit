@@ -5,17 +5,35 @@ import { contextBridge, ipcRenderer } from "electron"
 // The global declared in index.d.ts is only loaded into the renderer's
 // compilation; the preload tsconfig doesn't pick up that .d.ts, so we
 // keep a structurally identical type here for type-only use.
-type FloatingBallFeature = "appLauncher" | `plugin:${string}:${string}`
+type FloatingBallFeature = "appLauncher" | "screenshot" | `plugin:${string}:${string}`
 
 interface SettingsPatch {
   hotkey?: string
+  hotkeys?: {
+    launcher?: string
+    screenshot?: string
+  }
   themeMode?: "light" | "dark" | "system"
   accent?: "neutral" | "blue" | "green" | "rose" | "violet"
   floatingBallEnabled?: boolean
   floatingBallFeatures?: FloatingBallFeature[]
   lanEnabled?: boolean
 }
-type Settings = Required<SettingsPatch>
+
+interface Settings {
+  hotkey: string
+  hotkeys: {
+    launcher: string
+    screenshot: string
+  }
+  themeMode: "light" | "dark" | "system"
+  accent: "neutral" | "blue" | "green" | "rose" | "violet"
+  floatingBallEnabled: boolean
+  floatingBallFeatures: FloatingBallFeature[]
+  lanEnabled: boolean
+}
+
+type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
 
 interface SyncStatus {
   configured: boolean
@@ -65,6 +83,9 @@ const electronAPI = {
   openFloatingBallFeature: (feature: FloatingBallFeature) =>
     ipcRenderer.invoke("floating-ball:open-feature", feature),
   toggleFloatingBallMenu: () => ipcRenderer.invoke("floating-ball:toggle-menu"),
+  startFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-start"),
+  moveFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-move"),
+  finishFloatingBallDrag: () => ipcRenderer.invoke("floating-ball:drag-end"),
   moveFloatingBallBy: (delta: { x: number; y: number }) =>
     ipcRenderer.invoke("floating-ball:move-by", delta),
   hideFloatingBall: () => ipcRenderer.invoke("floating-ball:hide"),
@@ -109,6 +130,23 @@ const electronAPI = {
   removeLanTransferHistory: (transferId: string) =>
     ipcRenderer.invoke("lan:transfer-history-remove", transferId),
 
+  // ---- Screenshot ----
+  completeScreenshotSelection: (
+    selection: { x: number; y: number; width: number; height: number },
+    action: ScreenshotAction
+  ) => ipcRenderer.send("screenshot:selection-complete", { selection, action }),
+  cancelScreenshotSelection: () => ipcRenderer.send("screenshot:selection-cancel"),
+  getScreenshotAnnotationImage: () => ipcRenderer.invoke("screenshot:annotation-image"),
+  completeScreenshotAnnotation: (dataUrl: string, action: Exclude<ScreenshotAction, "annotate">) =>
+    ipcRenderer.send("screenshot:annotation-complete", { dataUrl, action }),
+  cancelScreenshotAnnotation: () => ipcRenderer.send("screenshot:annotation-cancel"),
+  getPinnedImageData: () => ipcRenderer.invoke("pinned-image:data"),
+  copyPinnedImage: () => ipcRenderer.invoke("pinned-image:copy"),
+  savePinnedImage: () => ipcRenderer.invoke("pinned-image:save"),
+  setPinnedImageOpacity: (opacity: number) =>
+    ipcRenderer.invoke("pinned-image:set-opacity", opacity),
+  closePinnedImage: () => ipcRenderer.send("pinned-image:close"),
+
   // ---- Plugins ----
   listPlugins: () => ipcRenderer.invoke("plugin:list"),
   getPlugin: (pluginId: string) => ipcRenderer.invoke("plugin:get", pluginId),
@@ -119,6 +157,7 @@ const electronAPI = {
   installPluginFolder: (folderPath: string) =>
     ipcRenderer.invoke("plugin:install-folder", folderPath),
   installPluginPackage: (zipPath: string) => ipcRenderer.invoke("plugin:install-package", zipPath),
+  installPluginPackageFromDialog: () => ipcRenderer.invoke("plugin:install-package-from-dialog"),
   uninstallPlugin: (pluginId: string) => ipcRenderer.invoke("plugin:uninstall", pluginId),
   reloadPlugin: (pluginId?: string) => ipcRenderer.invoke("plugin:reload", pluginId),
   searchPluginCommands: (query: string, locale?: string, limit?: number) =>
@@ -132,6 +171,8 @@ const electronAPI = {
   disposePluginCommand: (pluginId: string, commandId: string) =>
     ipcRenderer.invoke("plugin:dispose-command", { pluginId, commandId }),
   listMarketplacePlugins: () => ipcRenderer.invoke("marketplace:list"),
+  previewMarketplacePluginInstall: (id: string, version?: string) =>
+    ipcRenderer.invoke("marketplace:preview-install", { id, version }),
   installMarketplacePlugin: (id: string, version?: string) =>
     ipcRenderer.invoke("marketplace:install", { id, version }),
 

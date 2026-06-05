@@ -1,9 +1,18 @@
 import type { KeyboardEvent, ReactNode } from "react"
 import type { PluginRegistryEntry } from "@/lib/electron"
-import { AlertCircle, ChevronDown, Keyboard, RefreshCw, Trash2 } from "lucide-react"
-import { useCallback, useEffect, useRef, useState } from "react"
+import {
+  AlertCircle,
+  ChevronDown,
+  Keyboard,
+  PackagePlus,
+  PackageSearch,
+  RefreshCw,
+  Trash2,
+} from "lucide-react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { PermissionTagList } from "@/components/plugins/permission-tags"
 import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
@@ -25,6 +34,7 @@ import { Switch } from "@/components/ui/switch"
 import { acceleratorFromKeyboardEvent, modifierKeys } from "@/lib/accelerators"
 import {
   ElectronIpcError,
+  installPluginPackageFromDialog,
   isElectron,
   listPlugins,
   onPluginRegistryChanged,
@@ -39,13 +49,65 @@ type ManifestPreference = NonNullable<
   NonNullable<PluginRegistryEntry["manifest"]>["contributes"]["preferences"]
 >[number]
 
+const ALL_PLUGIN_SOURCE = "all"
+const ALL_PLUGIN_STATUS = "all"
+const PLUGIN_SOURCE_FILTERS: Array<PluginRegistryEntry["source"]["kind"]> = [
+  "user",
+  "builtin",
+  "dev",
+]
+const PLUGIN_STATUS_FILTERS: PluginRegistryEntry["status"][] = [
+  "active",
+  "disabled",
+  "crashed",
+  "invalid",
+  "shadowed",
+]
+type PluginSourceFilter = PluginRegistryEntry["source"]["kind"] | typeof ALL_PLUGIN_SOURCE
+type PluginStatusFilter = PluginRegistryEntry["status"] | typeof ALL_PLUGIN_STATUS
+
 export function PluginsPage() {
   const { i18n, t } = useTranslation()
   const electronReady = isElectron()
   const [plugins, setPlugins] = useState<PluginRegistryEntry[]>([])
+  const [query, setQuery] = useState("")
+  const [sourceFilter, setSourceFilter] = useState<PluginSourceFilter>(ALL_PLUGIN_SOURCE)
+  const [statusFilter, setStatusFilter] = useState<PluginStatusFilter>(ALL_PLUGIN_STATUS)
   const [loading, setLoading] = useState(electronReady)
   const [error, setError] = useState<string | null>(null)
   const [pending, setPending] = useState<string | null>(null)
+
+  const sourceFilters = useMemo<PluginSourceFilter[]>(
+    () => [
+      ALL_PLUGIN_SOURCE,
+      ...PLUGIN_SOURCE_FILTERS.filter((source) =>
+        plugins.some((plugin) => plugin.source.kind === source)
+      ),
+    ],
+    [plugins]
+  )
+
+  const statusFilters = useMemo<PluginStatusFilter[]>(
+    () => [
+      ALL_PLUGIN_STATUS,
+      ...PLUGIN_STATUS_FILTERS.filter((status) =>
+        plugins.some((plugin) => plugin.status === status)
+      ),
+    ],
+    [plugins]
+  )
+
+  const visiblePlugins = useMemo(() => {
+    const normalizedQuery = query.trim().toLowerCase()
+
+    return plugins.filter((plugin) => {
+      if (sourceFilter !== ALL_PLUGIN_SOURCE && plugin.source.kind !== sourceFilter) return false
+      if (statusFilter !== ALL_PLUGIN_STATUS && plugin.status !== statusFilter) return false
+      if (!normalizedQuery) return true
+
+      return pluginSearchText(plugin, i18n.language).toLowerCase().includes(normalizedQuery)
+    })
+  }, [i18n.language, plugins, query, sourceFilter, statusFilter])
 
   const load = useCallback(async () => {
     if (!electronReady) return
@@ -89,6 +151,16 @@ export function PluginsPage() {
     })
   }
 
+  async function onInstallPackage() {
+    await mutate("install-package", async () => {
+      const installed = await installPluginPackageFromDialog()
+      if (!installed) return
+
+      upsertPlugin(installed)
+      toast.success(t("plugins.toasts.installed"))
+    })
+  }
+
   async function onPreferenceChange(
     plugin: PluginRegistryEntry,
     preference: ManifestPreference,
@@ -128,7 +200,12 @@ export function PluginsPage() {
   }
 
   function upsertPlugin(plugin: PluginRegistryEntry) {
-    setPlugins((current) => current.map((item) => (samePlugin(item, plugin) ? plugin : item)))
+    setPlugins((current) => {
+      const index = current.findIndex((item) => samePlugin(item, plugin))
+      if (index === -1) return [plugin, ...current]
+
+      return current.map((item, itemIndex) => (itemIndex === index ? plugin : item))
+    })
   }
 
   if (!electronReady) {
@@ -148,24 +225,86 @@ export function PluginsPage() {
       title={t("plugins.title")}
       subtitle={t("plugins.subtitle")}
       action={
-        <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
-          <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden />
-          {t("plugins.actions.refresh")}
-        </Button>
+        <div className="flex flex-wrap justify-end gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={loading || pending === "install-package"}
+            onClick={() => void onInstallPackage()}
+          >
+            <PackagePlus className="size-4" aria-hidden />
+            {t("plugins.actions.installPackage")}
+          </Button>
+          <Button variant="outline" size="sm" disabled={loading} onClick={() => void load()}>
+            <RefreshCw className={cn("size-4", loading && "animate-spin")} aria-hidden />
+            {t("plugins.actions.refresh")}
+          </Button>
+        </div>
       }
     >
-      {!loading && plugins.length > 0 && (
-        <p className="text-sm text-muted-foreground">
-          {t("plugins.installedCount", { count: plugins.length })}
-        </p>
-      )}
-
       {error && (
         <Alert variant="destructive">
           <AlertCircle className="size-4" aria-hidden />
           <AlertTitle>{t("plugins.errorTitle")}</AlertTitle>
           <AlertDescription>{error}</AlertDescription>
         </Alert>
+      )}
+
+      {!loading && plugins.length > 0 && (
+        <>
+          <div className="flex flex-col gap-3 rounded-lg border bg-card p-3">
+            <div className="relative min-w-64 flex-1">
+              <PackageSearch className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                value={query}
+                onChange={(event) => setQuery(event.currentTarget.value)}
+                placeholder={t("plugins.searchPlaceholder")}
+                className="pl-9"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">{t("plugins.filters.source")}</span>
+              {sourceFilters.map((source) => (
+                <Button
+                  key={source}
+                  type="button"
+                  variant={sourceFilter === source ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSourceFilter(source)}
+                >
+                  {source === ALL_PLUGIN_SOURCE
+                    ? t("plugins.filters.allSources")
+                    : t(`plugins.source.${source}`)}
+                </Button>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs text-muted-foreground">{t("plugins.filters.status")}</span>
+              {statusFilters.map((status) => (
+                <Button
+                  key={status}
+                  type="button"
+                  variant={statusFilter === status ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setStatusFilter(status)}
+                >
+                  {status === ALL_PLUGIN_STATUS
+                    ? t("plugins.filters.allStatuses")
+                    : t(`plugins.status.${status}`)}
+                </Button>
+              ))}
+            </div>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            {t("plugins.visibleCount", {
+              total: plugins.length,
+              visible: visiblePlugins.length,
+            })}
+          </p>
+        </>
       )}
 
       {loading ? (
@@ -182,9 +321,16 @@ export function PluginsPage() {
             <CardDescription>{t("plugins.emptyBody")}</CardDescription>
           </CardHeader>
         </Card>
+      ) : visiblePlugins.length === 0 ? (
+        <Card>
+          <CardHeader>
+            <CardTitle>{t("plugins.filteredEmptyTitle")}</CardTitle>
+            <CardDescription>{t("plugins.filteredEmptyBody")}</CardDescription>
+          </CardHeader>
+        </Card>
       ) : (
         <div className="flex flex-col gap-3">
-          {plugins.map((plugin) => (
+          {visiblePlugins.map((plugin) => (
             <PluginListItem
               key={`${plugin.pluginId}:${plugin.source.kind}:${plugin.rootDir}`}
               locale={i18n.language}
@@ -200,6 +346,34 @@ export function PluginsPage() {
       )}
     </PageFrame>
   )
+}
+
+function pluginSearchText(plugin: PluginRegistryEntry, locale: string): string {
+  const manifest = plugin.manifest
+  const commandText =
+    manifest?.contributes.commands.flatMap((command) => [
+      command.id,
+      localize(command.title, locale),
+      localize(command.subtitle, locale),
+      ...(command.keywords ?? []),
+    ]) ?? []
+
+  return [
+    plugin.pluginId,
+    plugin.rootDir,
+    plugin.status,
+    plugin.source.kind,
+    plugin.error,
+    manifest?.name,
+    manifest?.version,
+    manifest?.author,
+    localize(manifest?.displayName, locale),
+    localize(manifest?.description, locale),
+    ...(manifest?.permissions ?? []),
+    ...commandText,
+  ]
+    .filter((value): value is string => Boolean(value))
+    .join(" ")
 }
 
 function PageFrame({
@@ -321,6 +495,14 @@ function PluginListItem({
               <span className="min-w-0 truncate sm:col-span-2" title={plugin.rootDir}>
                 {t("plugins.meta.path")}: {plugin.rootDir}
               </span>
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-sm font-medium">{t("plugins.permissions.title")}</h3>
+              <PermissionTagList
+                permissions={manifest?.permissions}
+                emptyLabel={t("plugins.permissions.none")}
+              />
             </div>
 
             {plugin.error && (

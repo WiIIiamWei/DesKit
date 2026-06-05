@@ -47,6 +47,21 @@ describe("marketplace registry", () => {
     expect(entries.map((entry) => entry.icon)).toEqual(["lucide:clock"])
   })
 
+  it("accepts declared marketplace permissions", () => {
+    const entries = parseMarketplaceRegistry(
+      registryJson([
+        registryEntry({
+          id: "com.deskit.permissions",
+          permissions: ["clipboard:read", "storage:plugin"],
+        }),
+      ])
+    )
+
+    expect(entries.map((entry) => entry.permissions)).toEqual([
+      ["clipboard:read", "storage:plugin"],
+    ])
+  })
+
   it("rejects packaged image marketplace icon paths", () => {
     expect(() =>
       parseMarketplaceRegistry(registryJson([registryEntry({ icon: "assets/icon.png" })]))
@@ -151,6 +166,7 @@ function registryEntry(
     downloadUrl: string
     deskitEngine: string
     icon: string
+    permissions: string[]
   }> = {}
 ) {
   return {
@@ -168,5 +184,6 @@ function registryEntry(
     deskitEngine: overrides.deskitEngine ?? "^0.2.0",
     icon: overrides.icon,
     categories: ["utilities"],
+    permissions: overrides.permissions,
   }
 }

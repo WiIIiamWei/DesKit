@@ -25,10 +25,22 @@ afterEach(async () => {
 const noopAdapters = {
   clipboard: { read: async () => undefined, write: async () => {} },
   notifications: { show: async () => {} },
+  network: {
+    request: async (url: string) => ({
+      url,
+      status: 200,
+      statusText: "OK",
+      ok: true,
+      headers: {},
+      body: "",
+    }),
+  },
   system: {
     openUrl: async () => {},
     openPath: async () => {},
     captureScreen: async () => ({ path: "" }),
+    captureRegion: async () => null,
+    pinImage: async () => {},
   },
 }
 
@@ -169,6 +181,7 @@ const baseEntry: PluginRegistryEntry = {
 function marketplaceEntry(
   overrides: Partial<{
     downloadUrl: string
+    permissions: string[]
     sha256: string
   }> = {}
 ) {
@@ -186,6 +199,7 @@ function marketplaceEntry(
     sha256: overrides.sha256 ?? "0".repeat(64),
     deskitEngine: "^0.2.0",
     categories: ["utilities"],
+    permissions: overrides.permissions,
   }
 }
 
@@ -277,6 +291,45 @@ describe("pluginHost.setPreference value validation", () => {
     )
   })
 
+  it("stores plugin sync data as hidden synchronized preferences", async () => {
+    const onSyncDataChanged = vi.fn()
+    const hostWithCallback = new PluginHost({
+      userDataDir: dir,
+      resourcesDir: path.join(dir, "resources"),
+      adapters: noopAdapters,
+      onSyncDataChanged,
+    })
+    await hostWithCallback.preferences.load()
+    vi.spyOn(hostWithCallback.registry, "get").mockReturnValue(baseEntry)
+
+    await hostWithCallback.setSyncData("com.deskit.test", "history", {
+      items: [{ text: "hello" }],
+    })
+
+    expect(hostWithCallback.exportPreferences()).toEqual({
+      "com.deskit.test": {
+        "__sync.history": { items: [{ text: "hello" }] },
+      },
+    })
+    expect(hostWithCallback.getSyncData("com.deskit.test", "history")).toEqual({
+      items: [{ text: "hello" }],
+    })
+    expect(hostWithCallback.get("com.deskit.test")?.preferences).not.toHaveProperty(
+      "__sync.history"
+    )
+    expect(onSyncDataChanged).toHaveBeenCalledTimes(1)
+  })
+
+  it("rejects oversized plugin sync values", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
+    await expect(
+      host.setSyncData("com.deskit.test", "history", "x".repeat(512 * 1024 + 1))
+    ).rejects.toThrow("exceeds 512 KiB")
+  })
+
   it("imports synced preferences and leaves uninstalled plugin preferences pending", async () => {
     const host = makeHost()
     await host.preferences.load()
@@ -289,13 +342,14 @@ describe("pluginHost.setPreference value validation", () => {
         "com.deskit.test": {
           label: "remote",
           unit: "s",
+          "__sync.history": [{ text: "hello" }],
           missing: true,
           limit: "large",
         },
         "com.deskit.pending": { token: "encrypted upstream" },
       })
     ).resolves.toMatchObject({
-      applied: 2,
+      applied: 3,
       pending: 1,
       skipped: [
         { pluginId: "com.deskit.test", key: "missing" },
@@ -304,8 +358,41 @@ describe("pluginHost.setPreference value validation", () => {
     })
 
     expect(host.exportPreferences()).toEqual({
-      "com.deskit.test": { label: "remote", unit: "s" },
+      "com.deskit.test": {
+        label: "remote",
+        unit: "s",
+        "__sync.history": [{ text: "hello" }],
+      },
       "com.deskit.pending": { token: "encrypted upstream" },
+    })
+  })
+
+  it("rejects invalid plugin sync preference keys during import", async () => {
+    const host = makeHost()
+    await host.preferences.load()
+    vi.spyOn(host.registry, "get").mockReturnValue(baseEntry)
+
+    await expect(
+      host.importSyncedPreferences({
+        "com.deskit.test": {
+          "__sync.history": [{ text: "hello" }],
+          "__sync.": [{ text: "empty" }],
+          "__sync.__sync.history": [{ text: "reserved" }],
+        },
+      })
+    ).resolves.toMatchObject({
+      applied: 1,
+      pending: 0,
+      skipped: [
+        { pluginId: "com.deskit.test", key: "__sync." },
+        { pluginId: "com.deskit.test", key: "__sync.__sync.history" },
+      ],
+    })
+
+    expect(host.exportPreferences()).toEqual({
+      "com.deskit.test": {
+        "__sync.history": [{ text: "hello" }],
+      },
     })
   })
 })
@@ -371,6 +458,61 @@ describe("pluginHost package installation", () => {
     expect(entry.pluginId).toBe("com.deskit.timestamp")
     expect(entry.source.kind).toBe("user")
     expect(entry.status).toBe("active")
+  })
+
+  it("previews marketplace packages before installation", async () => {
+    const packagePath = path.resolve(
+      "resources",
+      "mock-marketplace",
+      "packages",
+      "com.deskit.timestamp-0.3.0.deskit"
+    )
+    const packageBuffer = await fs.readFile(packagePath)
+    const sha256 = createHash("sha256").update(packageBuffer).digest("hex")
+    const host = makeHostWithFetch(async (url) => {
+      if (url.endsWith("registry.json")) {
+        return Response.json({ version: 1, plugins: [marketplaceEntry({ sha256 })] })
+      }
+      return new Response(packageBuffer)
+    })
+    await host.init()
+
+    const preview = await host.previewMarketplacePluginInstall("com.deskit.timestamp")
+
+    expect(preview.entry.id).toBe("com.deskit.timestamp")
+    expect(preview.manifest.id).toBe("com.deskit.timestamp")
+    expect(preview.manifest.permissions).toEqual([])
+    await expect(
+      fs.stat(path.join(dir, "plugins", "com.deskit.timestamp", "deskit.json"))
+    ).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  it("rejects marketplace packages with mismatched permissions", async () => {
+    const packagePath = path.resolve(
+      "resources",
+      "mock-marketplace",
+      "packages",
+      "com.deskit.timestamp-0.3.0.deskit"
+    )
+    const packageBuffer = await fs.readFile(packagePath)
+    const sha256 = createHash("sha256").update(packageBuffer).digest("hex")
+    const host = makeHostWithFetch(async (url) => {
+      if (url.endsWith("registry.json")) {
+        return Response.json({
+          version: 1,
+          plugins: [marketplaceEntry({ permissions: ["clipboard:read"], sha256 })],
+        })
+      }
+      return new Response(packageBuffer)
+    })
+    await host.init()
+
+    await expect(host.installMarketplacePlugin("com.deskit.timestamp")).rejects.toMatchObject({
+      details: {
+        actualPermissions: [],
+        expectedPermissions: ["clipboard:read"],
+      },
+    })
   })
 
   it("rejects marketplace packages with mismatched checksums", async () => {

@@ -1,5 +1,12 @@
 import type { ClipboardContent } from "./clipboard"
 
+export interface CaptureRegionResult {
+  imagePath: string
+  width: number
+  height: number
+  displayId: string
+}
+
 /**
  * Per-plugin key/value store. Backed by `userData/plugin-data/<pluginId>.json`
  * with throttled atomic writes (250ms batch) on the host. Values must be
@@ -39,6 +46,50 @@ export interface NotificationAPI {
   show: (options: { title: string; body?: string; silent?: boolean }) => Promise<void>
 }
 
+export interface NetworkRequestOptions {
+  method?: string
+  headers?: Record<string, string>
+  body?: string
+  timeoutMs?: number
+}
+
+export interface NetworkResponse {
+  url: string
+  status: number
+  statusText: string
+  ok: boolean
+  headers: Record<string, string>
+  body: string
+}
+
+/**
+ * HTTP(S) client for plugin-managed integrations. Requires `network:http`.
+ * The host returns a text body instead of exposing streaming Response objects
+ * across the sandbox boundary.
+ */
+export interface NetworkAPI {
+  request: (url: string, options?: NetworkRequestOptions) => Promise<NetworkResponse>
+}
+
+export interface PluginSyncStatus {
+  enabled: boolean
+  available: boolean
+  lastSyncedAt?: string
+  lastRemoteUpdatedAt?: string
+  lastLocalUpdatedAt?: string
+}
+
+/**
+ * Small per-plugin data sync surface backed by DesKit's encrypted settings
+ * sync Gist. Requires `sync:plugin`.
+ */
+export interface PluginSyncAPI {
+  status: () => Promise<PluginSyncStatus>
+  get: <T = unknown>(key: string) => Promise<T | undefined>
+  set: <T = unknown>(key: string, value: T) => Promise<void>
+  delete: (key: string) => Promise<void>
+}
+
 export interface SystemAPI {
   /** Opens the URL in the user's default browser. Only `http(s)` is honoured. */
   openUrl: (url: string) => Promise<void>
@@ -53,6 +104,10 @@ export interface SystemAPI {
     /** Optional filename (without extension). Default = ISO timestamp. */
     name?: string
   }) => Promise<{ path: string }>
+  /** Opens DesKit's trusted region-capture overlay and returns a PNG path, or null if cancelled. */
+  captureRegion: () => Promise<CaptureRegionResult | null>
+  /** Pins an image as a temporary always-on-top desktop reference window. */
+  pinImage: (imagePath: string) => Promise<void>
 }
 
 /**
@@ -78,6 +133,8 @@ export interface PluginContext {
 
   storage: StorageAPI
   clipboard: ClipboardAPI
+  network: NetworkAPI
+  sync: PluginSyncAPI
   notifications: NotificationAPI
   system: SystemAPI
 

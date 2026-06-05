@@ -1,6 +1,7 @@
 import type { IpcMain, IpcMainInvokeEvent } from "electron"
 import type { PluginHost } from "../plugins/plugin-host"
 import type { PluginInvokePhase, PluginInvokeRequest } from "../plugins/types"
+import { BrowserWindow, dialog } from "electron"
 import { PermissionDenied } from "../plugins/permissions"
 import {
   PluginHostNotImplementedError,
@@ -50,13 +51,19 @@ export interface PluginIpcHandlers {
   setPreference: (payload: unknown) => Promise<void>
   installFolder: (folderPath: unknown) => Promise<unknown>
   installPackage: (zipPath: unknown) => Promise<unknown>
+  installPackageFromDialog: (event: IpcMainInvokeEvent) => Promise<unknown | null>
   uninstall: (pluginId: unknown) => Promise<void>
   reload: (pluginId?: unknown) => Promise<unknown>
   searchCommands: (query: unknown) => unknown
   invoke: (payload: unknown) => Promise<unknown>
   disposeCommand: (payload: unknown) => Promise<void>
   marketplaceList: () => unknown[] | Promise<unknown[]>
+  marketplacePreviewInstall: (payload: unknown) => Promise<unknown>
   marketplaceInstall: (payload: unknown) => Promise<unknown>
+}
+
+export interface PluginIpcDialogHandlers {
+  selectPackageFile: (event: IpcMainInvokeEvent) => Promise<string | null>
 }
 
 export interface RegisterPluginIpcOptions {
@@ -65,7 +72,10 @@ export interface RegisterPluginIpcOptions {
   onPreferencesChanged?: () => void
 }
 
-export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
+export function createPluginIpcHandlers(
+  host: PluginHost,
+  dialogHandlers: PluginIpcDialogHandlers = { selectPackageFile }
+): PluginIpcHandlers {
   return {
     list: () => host.list(),
 
@@ -91,6 +101,12 @@ export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
     installFolder: (folderPath) => host.installFolder(requireString(folderPath, "folderPath")),
 
     installPackage: (zipPath) => host.installPackage(requireString(zipPath, "zipPath")),
+
+    installPackageFromDialog: async (event) => {
+      const zipPath = await dialogHandlers.selectPackageFile(event)
+      if (!zipPath) return null
+      return host.installPackage(zipPath)
+    },
 
     uninstall: (pluginId) => host.uninstall(requireString(pluginId, "pluginId")),
 
@@ -118,6 +134,14 @@ export function createPluginIpcHandlers(host: PluginHost): PluginIpcHandlers {
     },
 
     marketplaceList: () => host.listMarketplacePlugins(),
+
+    marketplacePreviewInstall(payload) {
+      const value = requireRecord(payload, "marketplace:preview-install payload")
+      return host.previewMarketplacePluginInstall(
+        requireString(value.id, "id"),
+        typeof value.version === "string" ? value.version : undefined
+      )
+    },
 
     marketplaceInstall(payload) {
       const value = requireRecord(payload, "marketplace:install payload")
@@ -182,6 +206,14 @@ export function registerPluginIpc(
       options.isTrustedSender
     )
   )
+  ipcMain.handle("plugin:install-package-from-dialog", (event) =>
+    invokePluginIpcHandler(
+      "plugin:install-package-from-dialog",
+      event,
+      () => handlers.installPackageFromDialog(event),
+      options.isTrustedSender
+    )
+  )
   ipcMain.handle("plugin:uninstall", (event, pluginId: unknown) =>
     invokePluginIpcHandler(
       "plugin:uninstall",
@@ -230,6 +262,14 @@ export function registerPluginIpc(
       options.isTrustedSender
     )
   )
+  ipcMain.handle("marketplace:preview-install", (event, payload: unknown) =>
+    invokePluginIpcHandler(
+      "marketplace:preview-install",
+      event,
+      () => handlers.marketplacePreviewInstall(payload),
+      options.isTrustedSender
+    )
+  )
   ipcMain.handle("marketplace:install", (event, payload: unknown) =>
     invokePluginIpcHandler(
       "marketplace:install",
@@ -240,6 +280,27 @@ export function registerPluginIpc(
   )
 
   host.registry.on("changed", () => options.onRegistryChanged(host.list()))
+}
+
+const pluginPackageDialogOptions: Electron.OpenDialogOptions = {
+  title: "Select DesKit plugin package",
+  properties: ["openFile"],
+  filters: [
+    {
+      name: "DesKit plugin package",
+      extensions: ["deskit"],
+    },
+  ],
+}
+
+async function selectPackageFile(event: IpcMainInvokeEvent): Promise<string | null> {
+  const parent = BrowserWindow.fromWebContents(event.sender)
+  const result = parent
+    ? await dialog.showOpenDialog(parent, pluginPackageDialogOptions)
+    : await dialog.showOpenDialog(pluginPackageDialogOptions)
+
+  if (result.canceled) return null
+  return result.filePaths[0] ?? null
 }
 
 export async function invokePluginIpcHandler<T>(

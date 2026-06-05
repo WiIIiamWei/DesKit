@@ -26,6 +26,14 @@ import { discoverPlugins } from "./plugin-discovery"
 import { pluginPreferenceFilePath, PluginPreferenceStore } from "./plugin-preferences"
 import { PluginRegistry } from "./plugin-registry"
 import { PluginSandbox } from "./plugin-sandbox"
+import {
+  clonePluginSyncValue,
+  isPluginSyncPreferenceKey,
+  normalizePluginSyncPreferenceKey,
+  pluginSyncPreferenceKey,
+  validatePluginSyncPreferenceValue,
+  visiblePluginPreferences,
+} from "./plugin-sync-data"
 
 export interface PluginHostOptions {
   userDataDir: string
@@ -34,6 +42,14 @@ export interface PluginHostOptions {
   fetch?: (url: string) => Promise<Response>
   marketplaceRegistryUrl?: string
   runtime?: () => PluginRuntimeSnapshot
+  syncStatus?: () => {
+    enabled: boolean
+    available: boolean
+    lastSyncedAt?: string
+    lastRemoteUpdatedAt?: string
+    lastLocalUpdatedAt?: string
+  }
+  onSyncDataChanged?: () => void
   clipboardPollMs?: number
 }
 
@@ -83,6 +99,17 @@ export interface PluginPreferenceImportResult {
   skipped: Array<{ pluginId: string; key: string; reason: string }>
 }
 
+export interface MarketplaceInstallPreview {
+  entry: MarketplaceEntry
+  manifest: PluginManifest
+}
+
+interface InstallExpectations {
+  expectedPluginId?: string
+  expectedVersion?: string
+  expectedPermissions?: string[]
+}
+
 function clipboardSnapshot(content: ClipboardContent): string {
   return JSON.stringify(content)
 }
@@ -111,6 +138,12 @@ export class PluginHost {
       adapters: options.adapters ?? createElectronPluginAdapters(options.userDataDir),
       runtime: options.runtime,
       preferences: (pluginId, manifest) => this.preferencesFor(pluginId, manifest),
+      sync: {
+        status: () => options.syncStatus?.() ?? { enabled: false, available: false },
+        get: (pluginId, key) => this.getSyncData(pluginId, key),
+        set: (pluginId, key, value) => this.setSyncData(pluginId, key, value),
+        delete: (pluginId, key) => this.deleteSyncData(pluginId, key),
+      },
     })
     this.sandbox = new PluginSandbox({ bridge: this.bridge })
     this.registry = new PluginRegistry({ sandbox: this.sandbox })
@@ -179,6 +212,28 @@ export class PluginHost {
     return this.preferences.exportAll()
   }
 
+  getSyncData(pluginId: string, key: string): unknown | undefined {
+    const stored = this.preferences.get(pluginId)[pluginSyncPreferenceKey(key)]
+    return stored === undefined ? undefined : clonePluginSyncValue(stored)
+  }
+
+  async setSyncData(pluginId: string, key: string, value: unknown): Promise<void> {
+    const entry = this.registry.get(pluginId)
+    if (!entry?.manifest) throw new Error(`Plugin not found: ${pluginId}`)
+    validatePluginSyncPreferenceValue(value)
+    await this.preferences.set(pluginId, pluginSyncPreferenceKey(key), clonePluginSyncValue(value))
+    this.registry.emit("changed", this.registry.list())
+    this.options.onSyncDataChanged?.()
+  }
+
+  async deleteSyncData(pluginId: string, key: string): Promise<void> {
+    const entry = this.registry.get(pluginId)
+    if (!entry?.manifest) throw new Error(`Plugin not found: ${pluginId}`)
+    await this.preferences.set(pluginId, pluginSyncPreferenceKey(key), undefined)
+    this.registry.emit("changed", this.registry.list())
+    this.options.onSyncDataChanged?.()
+  }
+
   async importSyncedPreferences(
     preferences: PreferenceFile
   ): Promise<PluginPreferenceImportResult> {
@@ -198,6 +253,22 @@ export class PluginHost {
       const declared = entry.manifest.contributes.preferences ?? []
       const valid: Record<string, unknown> = {}
       for (const [key, value] of Object.entries(pluginPreferences)) {
+        if (isPluginSyncPreferenceKey(key)) {
+          try {
+            const syncPreferenceKey = normalizePluginSyncPreferenceKey(key)
+            validatePluginSyncPreferenceValue(value)
+            valid[syncPreferenceKey] = clonePluginSyncValue(value)
+            applied += 1
+          } catch (err) {
+            skipped.push({
+              pluginId,
+              key,
+              reason: err instanceof Error ? err.message : "invalid sync data",
+            })
+          }
+          continue
+        }
+
         const preference = declared.find((item) => item.id === key)
         if (!preference) {
           skipped.push({ pluginId, key, reason: "unknown preference" })
@@ -246,7 +317,30 @@ export class PluginHost {
       return await this.installPackageFile(packagePath, {
         expectedPluginId: entry.id,
         expectedVersion: entry.version,
+        expectedPermissions: entry.permissions,
       })
+    } finally {
+      await removeDirectoryIfExists(path.dirname(packagePath))
+    }
+  }
+
+  async previewMarketplacePluginInstall(
+    id: string,
+    version?: string
+  ): Promise<MarketplaceInstallPreview> {
+    const entry = findMarketplaceEntry(await this.listMarketplacePlugins(), id, version)
+    if (!entry) {
+      throw new PluginInstallError("Marketplace plugin was not found.", { pluginId: id, version })
+    }
+
+    const packagePath = await this.downloadMarketplacePackage(entry)
+    try {
+      const manifest = await this.previewPackageManifest(packagePath, {
+        expectedPluginId: entry.id,
+        expectedVersion: entry.version,
+        expectedPermissions: entry.permissions,
+      })
+      return { entry, manifest }
     } finally {
       await removeDirectoryIfExists(path.dirname(packagePath))
     }
@@ -299,7 +393,7 @@ export class PluginHost {
     for (const preference of manifest.contributes.preferences ?? []) {
       if ("default" in preference) defaults[preference.id] = preference.default
     }
-    return { ...defaults, ...this.preferences.get(pluginId) }
+    return { ...defaults, ...visiblePluginPreferences(this.preferences.get(pluginId)) }
   }
 
   private withPreferences(entry: PluginRegistryEntry): PluginRegistryEntry {
@@ -399,7 +493,7 @@ export class PluginHost {
 
   private async installPackageFile(
     packagePath: string,
-    options: { expectedPluginId?: string; expectedVersion?: string } = {}
+    options: InstallExpectations = {}
   ): Promise<PluginRegistryEntry> {
     const stagingDir = path.join(
       this.options.userDataDir,
@@ -415,24 +509,32 @@ export class PluginHost {
     }
   }
 
+  private async previewPackageManifest(
+    packagePath: string,
+    options: InstallExpectations = {}
+  ): Promise<PluginManifest> {
+    const stagingDir = path.join(
+      this.options.userDataDir,
+      "plugin-install-staging",
+      `.install-preview-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
+
+    try {
+      await extractDeskitPackage(packagePath, stagingDir)
+      const manifest = await validateInstallSource(stagingDir)
+      validateInstallExpectations(manifest, options)
+      return manifest
+    } finally {
+      await removeDirectoryIfExists(stagingDir)
+    }
+  }
+
   private async installDirectory(
     sourceDir: string,
-    options: { expectedPluginId?: string; expectedVersion?: string } = {}
+    options: InstallExpectations = {}
   ): Promise<PluginRegistryEntry> {
     const manifest = await validateInstallSource(sourceDir)
-    if (options.expectedPluginId && manifest.id !== options.expectedPluginId) {
-      throw new PluginInstallError("Plugin ID does not match marketplace entry.", {
-        expectedPluginId: options.expectedPluginId,
-        actualPluginId: manifest.id,
-      })
-    }
-    if (options.expectedVersion && manifest.version !== options.expectedVersion) {
-      throw new PluginInstallError("Plugin version does not match marketplace entry.", {
-        pluginId: manifest.id,
-        expectedVersion: options.expectedVersion,
-        actualVersion: manifest.version,
-      })
-    }
+    validateInstallExpectations(manifest, options)
 
     const existing = this.registry.get(manifest.id)
     if (existing && existing.source.kind !== "user") {
@@ -513,6 +615,32 @@ async function validateInstallSource(sourceDir: string): Promise<PluginManifest>
   }
   await validatePluginIconFiles(sourceDir, manifest)
   return manifest
+}
+
+function validateInstallExpectations(manifest: PluginManifest, options: InstallExpectations): void {
+  if (options.expectedPluginId && manifest.id !== options.expectedPluginId) {
+    throw new PluginInstallError("Plugin ID does not match marketplace entry.", {
+      expectedPluginId: options.expectedPluginId,
+      actualPluginId: manifest.id,
+    })
+  }
+  if (options.expectedVersion && manifest.version !== options.expectedVersion) {
+    throw new PluginInstallError("Plugin version does not match marketplace entry.", {
+      pluginId: manifest.id,
+      expectedVersion: options.expectedVersion,
+      actualVersion: manifest.version,
+    })
+  }
+  if (
+    options.expectedPermissions &&
+    !sameStringSet(options.expectedPermissions, manifest.permissions)
+  ) {
+    throw new PluginInstallError("Plugin permissions do not match marketplace entry.", {
+      pluginId: manifest.id,
+      expectedPermissions: sortedUniqueStrings(options.expectedPermissions),
+      actualPermissions: sortedUniqueStrings(manifest.permissions),
+    })
+  }
 }
 
 async function validatePluginIconFiles(sourceDir: string, manifest: PluginManifest): Promise<void> {
@@ -672,6 +800,19 @@ function isInsideDirectory(target: string, parent: string): boolean {
 function isInsideOrSameDirectory(target: string, parent: string): boolean {
   const relative = path.relative(parent, target)
   return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  const normalizedLeft = sortedUniqueStrings(left)
+  const normalizedRight = sortedUniqueStrings(right)
+  return (
+    normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((value, index) => value === normalizedRight[index])
+  )
+}
+
+function sortedUniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right))
 }
 
 function isFileNotFound(err: unknown): boolean {

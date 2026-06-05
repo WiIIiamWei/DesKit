@@ -27,6 +27,7 @@ function createBrowserWindowMock() {
   const events = createEventTarget()
   const webContents = {
     ...createEventTarget(),
+    id: Math.floor(Math.random() * 100000),
     send: vi.fn(),
     openDevTools: vi.fn(),
     setWindowOpenHandler: vi.fn(),
@@ -39,6 +40,7 @@ function createBrowserWindowMock() {
     once: vi.fn((event: string, listener: Listener) => events.on(event, listener)),
     show: vi.fn(),
     showInactive: vi.fn(),
+    close: vi.fn(),
     hide: vi.fn(),
     isVisible: vi.fn(() => false),
     isDestroyed: vi.fn(() => false),
@@ -57,8 +59,12 @@ function createBrowserWindowMock() {
 }
 
 export const contextBridge = { exposeInMainWorld: vi.fn() }
-export const ipcRenderer = { invoke: vi.fn(), on: vi.fn() }
+export const ipcRenderer = { invoke: vi.fn(), send: vi.fn(), on: vi.fn() }
 export const ipcMain = { handle: vi.fn(), on: vi.fn() }
+export const dialog = {
+  showOpenDialog: vi.fn(() => Promise.resolve({ canceled: true, filePaths: [] })),
+  showSaveDialog: vi.fn(() => Promise.resolve({ canceled: true })),
+}
 export const app = {
   whenReady: vi.fn(() => Promise.resolve()),
   getAppPath: vi.fn(() => "/app"),
@@ -67,6 +73,10 @@ export const app = {
   on: vi.fn(),
   quit: vi.fn(),
   requestSingleInstanceLock: vi.fn(() => true),
+  getPath: vi.fn((name: string) => `/mock/${name}`),
+  commandLine: {
+    appendSwitch: vi.fn(),
+  },
 }
 export const BrowserWindow = Object.assign(vi.fn(createBrowserWindowMock), {
   getAllWindows: vi.fn(() => []),
@@ -75,13 +85,33 @@ export const BrowserWindow = Object.assign(vi.fn(createBrowserWindowMock), {
 export const session = { defaultSession: { webRequest: { onHeadersReceived: vi.fn() } } }
 export const screen = {
   getCursorScreenPoint: vi.fn(() => ({ x: 0, y: 0 })),
-  getDisplayNearestPoint: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
-  getPrimaryDisplay: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
-  getDisplayMatching: vi.fn(() => ({ workArea: { x: 0, y: 0, width: 1440, height: 900 } })),
+  getDisplayNearestPoint: vi.fn(() => ({
+    id: 1,
+    scaleFactor: 1,
+    bounds: { x: 0, y: 0, width: 1440, height: 900 },
+    workArea: { x: 0, y: 0, width: 1440, height: 900 },
+  })),
+  getPrimaryDisplay: vi.fn(() => ({
+    id: 1,
+    scaleFactor: 1,
+    bounds: { x: 0, y: 0, width: 1440, height: 900 },
+    workArea: { x: 0, y: 0, width: 1440, height: 900 },
+    workAreaSize: { width: 1440, height: 900 },
+  })),
+  getDisplayMatching: vi.fn(() => ({
+    id: 1,
+    scaleFactor: 1,
+    bounds: { x: 0, y: 0, width: 1440, height: 900 },
+    workArea: { x: 0, y: 0, width: 1440, height: 900 },
+  })),
 }
 export const nativeImage = {
   createEmpty: vi.fn(() => ({ isEmpty: vi.fn(() => true) })),
-  createFromPath: vi.fn(() => ({ isEmpty: vi.fn(() => false) })),
+  createFromPath: vi.fn(() => ({
+    getSize: vi.fn(() => ({ width: 480, height: 320 })),
+    isEmpty: vi.fn(() => false),
+    toDataURL: vi.fn(() => ""),
+  })),
   createFromDataURL: vi.fn((value: string) => ({ dataUrl: value })),
 }
 export const Notification = Object.assign(
@@ -110,10 +140,6 @@ export const shell = {
   openExternal: vi.fn(() => Promise.resolve()),
   openPath: vi.fn(() => Promise.resolve("")),
 }
-export const dialog = {
-  showOpenDialog: vi.fn(() => Promise.resolve({ canceled: true, filePaths: [] })),
-  showSaveDialog: vi.fn(() => Promise.resolve({ canceled: true })),
-}
 export const safeStorage = {
   isEncryptionAvailable: vi.fn(() => true),
   encryptString: vi.fn((value: string) => Buffer.from(value)),
@@ -130,13 +156,29 @@ export const clipboard = {
   writeImage: vi.fn(),
 }
 export const desktopCapturer = {
-  getSources: vi.fn(() => Promise.resolve([])),
+  getSources: vi.fn(() =>
+    Promise.resolve([
+      {
+        display_id: "1",
+        thumbnail: {
+          crop: vi.fn(() => ({ toPNG: vi.fn(() => Buffer.from("")) })),
+        },
+      },
+    ])
+  ),
+}
+export const globalShortcut = {
+  register: vi.fn(() => true),
+  unregister: vi.fn(),
+  isRegistered: vi.fn(() => false),
+  unregisterAll: vi.fn(),
 }
 
 export default {
   contextBridge,
   ipcRenderer,
   ipcMain,
+  dialog,
   app,
   BrowserWindow,
   session,
@@ -152,4 +194,5 @@ export default {
   safeStorage,
   clipboard,
   desktopCapturer,
+  globalShortcut,
 }

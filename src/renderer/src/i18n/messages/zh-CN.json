@@ -121,7 +121,8 @@
   "floatingBall": {
     "title": "DesKit 桌面悬浮球",
     "features": {
-      "appLauncher": "应用启动器"
+      "appLauncher": "应用启动器",
+      "screenshot": "截图"
     },
     "feature": {
       "title": "桌面悬浮球",
@@ -145,6 +146,20 @@
       "removeFeature": "移除 {{name}}"
     }
   },
+  "permissions": {
+    "items": {
+      "storage:plugin": "插件本地存储",
+      "clipboard:read": "读取剪贴板",
+      "clipboard:write": "写入剪贴板",
+      "network:http": "HTTP 网络访问",
+      "sync:plugin": "设置同步存储",
+      "notification": "显示通知",
+      "system:open-url": "打开 URL",
+      "system:open-path": "打开文件或文件夹",
+      "system:capture-screen": "屏幕截图",
+      "system:pin-image": "贴图"
+    }
+  },
   "plugins": {
     "title": "插件",
     "subtitle": "管理内置、已安装与开发中的插件。",
@@ -156,6 +171,10 @@
     "emptyTitle": "未发现插件",
     "emptyBody": "当前还没有注册内置、已安装或开发插件。",
     "installedCount": "已安装 {{count}} 个插件",
+    "visibleCount": "显示 {{visible}} / {{total}} 个插件",
+    "filteredEmptyTitle": "没有符合筛选的插件",
+    "filteredEmptyBody": "请尝试更换搜索关键词、来源或状态筛选。",
+    "searchPlaceholder": "搜索插件、作者、命令或权限…",
     "pluginErrorTitle": "插件错误",
     "status": {
       "active": "已启用",
@@ -176,11 +195,18 @@
       "commands": "命令",
       "path": "路径"
     },
+    "filters": {
+      "source": "来源",
+      "status": "状态",
+      "allSources": "全部来源",
+      "allStatuses": "全部状态"
+    },
     "actions": {
       "enable": "启用",
       "disable": "停用",
       "reload": "重载",
       "uninstall": "卸载",
+      "installPackage": "安装 .deskit",
       "refresh": "刷新"
     },
     "preferences": {
@@ -191,11 +217,16 @@
       "capturing": "请按键...",
       "shortcutPlaceholder": "Control+Super+C"
     },
+    "permissions": {
+      "title": "权限",
+      "none": "未申请权限"
+    },
     "toasts": {
       "enabled": "插件已启用。",
       "disabled": "插件已停用。",
       "reloaded": "插件已重载。",
       "uninstalled": "插件已卸载。",
+      "installed": "插件已安装。",
       "preferenceSaved": "偏好设置已保存。"
     }
   },
@@ -232,6 +263,14 @@
       "homepage": "主页",
       "categories": "分类",
       "openHomepage": "打开主页"
+    },
+    "permissions": {
+      "title": "权限",
+      "confirmTitle": "确认插件权限",
+      "confirmBody": "安装 {{name}} 前，请确认该插件申请的权限。",
+      "none": "该插件未申请权限",
+      "cancel": "取消",
+      "confirm": "安装插件"
     },
     "category": {
       "all": "全部",
@@ -341,18 +380,48 @@
     "settings": {
       "title": "启动器",
       "subtitle": "设置一个全局快捷键，在任意位置唤出命令面板。",
-      "hotkeyLabel": "全局快捷键",
+      "hotkeyLabel": "启动器快捷键",
       "hotkeyHint": "可手动输入 Electron 快捷键语法，也可点击捕获后按下组合键。已被占用的快捷键组合可能无法捕获，请换用未占用组合或手动输入。",
+      "screenshotHotkeyLabel": "截图快捷键",
+      "screenshotHotkeyHint": "启动区域截图。截图流程由主程序提供，因此不需要先打开插件界面。",
       "capture": "捕获",
       "capturing": "请按键...",
+      "launcherCaptureLabel": "捕获启动器快捷键",
+      "launcherCapturingLabel": "正在捕获启动器快捷键",
+      "screenshotCaptureLabel": "捕获截图快捷键",
+      "screenshotCapturingLabel": "正在捕获截图快捷键",
       "save": "保存",
-      "examples": "示例：Control+Space · Alt+Space · CommandOrControl+Shift+P",
-      "active": "当前快捷键",
+      "examples": "示例：Control+Space · Control+Shift+A · CommandOrControl+Shift+P",
+      "activeLauncher": "当前启动器快捷键",
+      "activeScreenshot": "当前截图快捷键",
       "rescan": "重新扫描应用",
       "rescanning": "扫描中…",
       "rescanned": "应用列表已刷新。",
       "saved": "快捷键已更新。",
       "invalid": "无法注册该组合，仍使用上一次的快捷键。"
     }
+  },
+  "screenshot": {
+    "actions": {
+      "annotate": "标注",
+      "cancel": "取消",
+      "capture": "截图",
+      "close": "关闭",
+      "copy": "复制",
+      "pin": "贴图",
+      "reselect": "重选",
+      "save": "保存",
+      "undo": "撤销"
+    },
+    "tools": {
+      "arrow": "箭头",
+      "ellipse": "椭圆",
+      "mosaic": "马赛克",
+      "pen": "画笔",
+      "rectangle": "矩形"
+    },
+    "colorLabel": "颜色 {{color}}",
+    "opacity": "不透明度",
+    "strokeWidth": "线宽"
   }
 }

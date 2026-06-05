@@ -28,6 +28,10 @@ export interface ListItem {
   subtitle?: LocalizedString
   /** Right-aligned hint text (e.g. "12 days ago", a count). */
   accessory?: string
+  /** Right-aligned state icon displayed before `accessory`, e.g. `lucide:star`. */
+  accessoryIcon?: string
+  /** Whether `accessoryIcon` is currently active; host may render it highlighted/filled. */
+  accessoryIconActive?: boolean
   /** Asset path relative to the plugin root, or `lucide:<icon-name>`. */
   icon?: string
   actions: Action[]

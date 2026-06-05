@@ -24,6 +24,10 @@ function fakeHost(): PluginHost {
     invoke: vi.fn(async (payload: unknown) => ({ type: "toast", payload })),
     disposeCommand: vi.fn(async () => {}),
     listMarketplacePlugins: vi.fn(async () => [{ id: "com.deskit.marketplace" }]),
+    previewMarketplacePluginInstall: vi.fn(async (id: string, version?: string) => ({
+      entry: { id, version },
+      manifest: { id, permissions: ["clipboard:read"] },
+    })),
     installMarketplacePlugin: vi.fn(async (id: string, version?: string) => ({ id, version })),
     registry: { on: vi.fn() },
   } as unknown as PluginHost
@@ -111,6 +115,32 @@ describe("plugin ipc handlers", () => {
     expect(host.installPackage).toHaveBeenCalledWith("C:/tmp/plugin.deskit")
   })
 
+  it("installs a selected package from the native dialog", async () => {
+    const host = fakeHost()
+    const selectPackageFile = vi.fn(async () => "C:/tmp/plugin.deskit")
+    const handlers = createPluginIpcHandlers(host, { selectPackageFile })
+    const event = fakeEvent("app://app/index.html")
+
+    await expect(handlers.installPackageFromDialog(event)).resolves.toEqual({
+      pluginId: "com.deskit.package",
+      zipPath: "C:/tmp/plugin.deskit",
+    })
+    expect(selectPackageFile).toHaveBeenCalledWith(event)
+    expect(host.installPackage).toHaveBeenCalledWith("C:/tmp/plugin.deskit")
+  })
+
+  it("skips package installation when the native dialog is canceled", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host, {
+      selectPackageFile: vi.fn(async () => null),
+    })
+
+    await expect(
+      handlers.installPackageFromDialog(fakeEvent("app://app/index.html"))
+    ).resolves.toBe(null)
+    expect(host.installPackage).not.toHaveBeenCalled()
+  })
+
   it("validates and forwards marketplace install payloads", async () => {
     const host = fakeHost()
     const handlers = createPluginIpcHandlers(host)
@@ -119,6 +149,22 @@ describe("plugin ipc handlers", () => {
       handlers.marketplaceInstall({ id: "com.deskit.marketplace", version: "1.0.0" })
     ).resolves.toEqual({ id: "com.deskit.marketplace", version: "1.0.0" })
     expect(host.installMarketplacePlugin).toHaveBeenCalledWith("com.deskit.marketplace", "1.0.0")
+  })
+
+  it("validates and forwards marketplace install previews", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host)
+
+    await expect(
+      handlers.marketplacePreviewInstall({ id: "com.deskit.marketplace", version: "1.0.0" })
+    ).resolves.toEqual({
+      entry: { id: "com.deskit.marketplace", version: "1.0.0" },
+      manifest: { id: "com.deskit.marketplace", permissions: ["clipboard:read"] },
+    })
+    expect(host.previewMarketplacePluginInstall).toHaveBeenCalledWith(
+      "com.deskit.marketplace",
+      "1.0.0"
+    )
   })
 
   it("wraps successful ipc calls in IpcResult", async () => {

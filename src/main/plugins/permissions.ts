@@ -4,10 +4,13 @@ export type PluginPermission =
   | "storage:plugin"
   | "clipboard:read"
   | "clipboard:write"
+  | "network:http"
+  | "sync:plugin"
   | "notification"
   | "system:open-url"
   | "system:open-path"
   | "system:capture-screen"
+  | "system:pin-image"
 
 export class PermissionDenied extends Error {
   readonly pluginId: string
