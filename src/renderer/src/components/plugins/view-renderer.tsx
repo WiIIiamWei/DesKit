@@ -206,11 +206,10 @@ function ListPluginView({
             {section.items.map((item) => {
               const primary = item.actions?.[0]
               const selected = item.id === effectiveSelectedId
-              const statusActions = activeIconActions(item.actions)
+              const statusActions = statusActionSlots(item.actions)
               const showAccessoryIcon =
                 item.accessoryIcon &&
-                !statusActions.some((action) => action.icon === item.accessoryIcon) &&
-                !(selected && item.accessoryIcon === "lucide:check")
+                !statusActions.some((action) => action.icon === item.accessoryIcon)
               const actionBarActions = compactActionBarActions(item.actions, statusActions)
               return (
                 <div
@@ -252,10 +251,7 @@ function ListPluginView({
                       compact
                     />
                   )}
-                  {(item.accessory ||
-                    showAccessoryIcon ||
-                    statusActions.length > 0 ||
-                    selected) && (
+                  {(item.accessory || showAccessoryIcon || statusActions.length > 0) && (
                     <span className="flex max-w-36 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
                       {item.accessory && <span className="truncate">{item.accessory}</span>}
                       {showAccessoryIcon &&
@@ -277,7 +273,6 @@ function ListPluginView({
                           {actionIcon(action)}
                         </Button>
                       ))}
-                      {selected && <Check className="size-3.5 text-primary" aria-hidden />}
                     </span>
                   )}
                 </div>
@@ -451,17 +446,26 @@ const ACCESSORY_ICON_OVERRIDES: Record<string, LucideIconComponent> = {
   "lucide:star": Star,
 }
 
-function activeIconActions(actions?: PluginAction[]): PluginAction[] {
-  return (actions ?? []).filter((action) => action.active && action.icon)
+function statusActionSlots(actions?: PluginAction[]): PluginAction[] {
+  return (actions ?? []).filter(
+    (action) => action.placement === "status" || isLegacyStatusAction(action)
+  )
 }
 
 function compactActionBarActions(
   actions: PluginAction[] | undefined,
   statusActions: PluginAction[]
 ): PluginAction[] {
-  return (actions ?? []).filter(
-    (action) => !statusActions.includes(action) && hasCompactActionIcon(action)
-  )
+  return (actions ?? []).filter((action) => {
+    if (statusActions.includes(action)) return false
+    if (action.placement === "overflow") return false
+    if (action.placement === "inline") return true
+    return hasCompactActionIcon(action)
+  })
+}
+
+function isLegacyStatusAction(action: PluginAction): boolean {
+  return action.placement === undefined && action.active === true && !!action.icon
 }
 
 function hasCompactActionIcon(action: PluginAction): boolean {
