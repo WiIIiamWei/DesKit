@@ -61,9 +61,7 @@ import { captureRegion } from "./screenshot/capture-region"
 import {
   closeScreenshotOcrWindow,
   getScreenshotOcrState,
-  isScreenshotOcrWindow,
   openScreenshotOcrWindow,
-  showScreenshotOcrMessage,
 } from "./screenshot/ocr-window"
 import {
   cancelScreenshotOverlay,
@@ -464,11 +462,10 @@ function registerIpc(): void {
   })
 
   ipcMain.handle("screenshot:ocr-recapture", async (event) => {
-    if (!isScreenshotOcrWindow(event.sender)) return false
+    if (!closeScreenshotOcrWindow(event.sender)) return false
     await startScreenshotCapture({
       forcedAction: "ocr",
       mode: "capture",
-      onCancel: () => showScreenshotOcrMessage(event.sender, "已取消重新截图"),
     })
     return true
   })

@@ -83,11 +83,12 @@ export function getScreenshotOcrState(sender: WebContents): ScreenshotOcrState |
   return ocr.state
 }
 
-export function closeScreenshotOcrWindow(sender: WebContents): void {
+export function closeScreenshotOcrWindow(sender: WebContents): boolean {
   const ocr = activeOcrWindow
-  if (!ocr || ElectronBrowserWindow.fromWebContents(sender) !== ocr.win) return
+  if (!ocr || ElectronBrowserWindow.fromWebContents(sender) !== ocr.win) return false
   activeOcrWindow = null
   ocr.win.destroy()
+  return true
 }
 
 export function isScreenshotOcrWindow(sender: WebContents): boolean {

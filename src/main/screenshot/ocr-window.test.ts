@@ -97,10 +97,10 @@ describe("screenshot OCR window", () => {
     expect(isScreenshotOcrWindow(ocrWindow!.webContents)).toBe(true)
     expect(isScreenshotOcrWindow(otherWindow.webContents)).toBe(false)
 
-    closeScreenshotOcrWindow(otherWindow.webContents)
+    expect(closeScreenshotOcrWindow(otherWindow.webContents)).toBe(false)
     expect(ocrWindow!.destroy).not.toHaveBeenCalled()
 
-    closeScreenshotOcrWindow(ocrWindow!.webContents)
+    expect(closeScreenshotOcrWindow(ocrWindow!.webContents)).toBe(true)
     expect(ocrWindow!.destroy).toHaveBeenCalledTimes(1)
   })
 })
