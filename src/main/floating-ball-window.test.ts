@@ -490,11 +490,19 @@ describe("floating ball window dragging", () => {
 
   it("clamps the menu interaction area inside the primary work area when opening near the edge", () => {
     vi.mocked(screen.getDisplayMatching).mockReturnValue({
-      workArea: { x: 1440, y: 0, width: 1440, height: 900 },
+      workArea: { x: 0, y: 0, width: 1440, height: 900 },
     } as Electron.Display)
+
     ensureFloatingBallWindow(deps)
+
     const ballWindow = latestWindow()
-    ballWindow.getBounds.mockReturnValue({ x: 1344, y: 414, width: 72, height: 72 })
+    ballWindow.getBounds.mockReturnValue({
+      x: 1344,
+      y: 414,
+      width: 72,
+      height: 72,
+    })
+
     ballWindow.setBounds.mockClear()
 
     expandFloatingBallMenu()
@@ -505,6 +513,7 @@ describe("floating ball window dragging", () => {
       width: COLLAPSED_WINDOW_SIZE,
       height: COLLAPSED_WINDOW_SIZE,
     })
+
     expect(
       createdWindows().some((win) =>
         hasBoundsCall(win, {
