@@ -34,6 +34,7 @@ import {
   openFloatingBallFeature,
   pasteClipboardContent,
   pollGitHubLogin,
+  previewMarketplacePluginInstall,
   pullSync,
   pushSync,
   refreshApps,
@@ -86,6 +87,12 @@ function mockApi() {
     invokePluginCommand: vi.fn().mockResolvedValue(ok({ type: "toast" })),
     disposePluginCommand: vi.fn().mockResolvedValue(ok(undefined)),
     listMarketplacePlugins: vi.fn().mockResolvedValue(ok([])),
+    previewMarketplacePluginInstall: vi.fn().mockResolvedValue(
+      ok({
+        entry: { id: "plugin" },
+        manifest: { id: "plugin", permissions: ["clipboard:read"] },
+      })
+    ),
     installMarketplacePlugin: vi.fn().mockResolvedValue(ok({ id: "plugin" })),
     getSettings: vi.fn().mockResolvedValue({
       hotkeys: {
@@ -403,6 +410,12 @@ describe("lib/electron", () => {
       const api = mockApi()
       await listMarketplacePlugins()
       expect(api.listMarketplacePlugins).toHaveBeenCalled()
+    })
+
+    it("previewMarketplacePluginInstall forwards id and version", async () => {
+      const api = mockApi()
+      await previewMarketplacePluginInstall("com.deskit.test", "0.1.0")
+      expect(api.previewMarketplacePluginInstall).toHaveBeenCalledWith("com.deskit.test", "0.1.0")
     })
 
     it("installMarketplacePlugin forwards id and version", async () => {

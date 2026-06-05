@@ -99,6 +99,17 @@ export interface PluginPreferenceImportResult {
   skipped: Array<{ pluginId: string; key: string; reason: string }>
 }
 
+export interface MarketplaceInstallPreview {
+  entry: MarketplaceEntry
+  manifest: PluginManifest
+}
+
+interface InstallExpectations {
+  expectedPluginId?: string
+  expectedVersion?: string
+  expectedPermissions?: string[]
+}
+
 function clipboardSnapshot(content: ClipboardContent): string {
   return JSON.stringify(content)
 }
@@ -306,7 +317,30 @@ export class PluginHost {
       return await this.installPackageFile(packagePath, {
         expectedPluginId: entry.id,
         expectedVersion: entry.version,
+        expectedPermissions: entry.permissions,
       })
+    } finally {
+      await removeDirectoryIfExists(path.dirname(packagePath))
+    }
+  }
+
+  async previewMarketplacePluginInstall(
+    id: string,
+    version?: string
+  ): Promise<MarketplaceInstallPreview> {
+    const entry = findMarketplaceEntry(await this.listMarketplacePlugins(), id, version)
+    if (!entry) {
+      throw new PluginInstallError("Marketplace plugin was not found.", { pluginId: id, version })
+    }
+
+    const packagePath = await this.downloadMarketplacePackage(entry)
+    try {
+      const manifest = await this.previewPackageManifest(packagePath, {
+        expectedPluginId: entry.id,
+        expectedVersion: entry.version,
+        expectedPermissions: entry.permissions,
+      })
+      return { entry, manifest }
     } finally {
       await removeDirectoryIfExists(path.dirname(packagePath))
     }
@@ -459,7 +493,7 @@ export class PluginHost {
 
   private async installPackageFile(
     packagePath: string,
-    options: { expectedPluginId?: string; expectedVersion?: string } = {}
+    options: InstallExpectations = {}
   ): Promise<PluginRegistryEntry> {
     const stagingDir = path.join(
       this.options.userDataDir,
@@ -475,24 +509,32 @@ export class PluginHost {
     }
   }
 
+  private async previewPackageManifest(
+    packagePath: string,
+    options: InstallExpectations = {}
+  ): Promise<PluginManifest> {
+    const stagingDir = path.join(
+      this.options.userDataDir,
+      "plugin-install-staging",
+      `.install-preview-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    )
+
+    try {
+      await extractDeskitPackage(packagePath, stagingDir)
+      const manifest = await validateInstallSource(stagingDir)
+      validateInstallExpectations(manifest, options)
+      return manifest
+    } finally {
+      await removeDirectoryIfExists(stagingDir)
+    }
+  }
+
   private async installDirectory(
     sourceDir: string,
-    options: { expectedPluginId?: string; expectedVersion?: string } = {}
+    options: InstallExpectations = {}
   ): Promise<PluginRegistryEntry> {
     const manifest = await validateInstallSource(sourceDir)
-    if (options.expectedPluginId && manifest.id !== options.expectedPluginId) {
-      throw new PluginInstallError("Plugin ID does not match marketplace entry.", {
-        expectedPluginId: options.expectedPluginId,
-        actualPluginId: manifest.id,
-      })
-    }
-    if (options.expectedVersion && manifest.version !== options.expectedVersion) {
-      throw new PluginInstallError("Plugin version does not match marketplace entry.", {
-        pluginId: manifest.id,
-        expectedVersion: options.expectedVersion,
-        actualVersion: manifest.version,
-      })
-    }
+    validateInstallExpectations(manifest, options)
 
     const existing = this.registry.get(manifest.id)
     if (existing && existing.source.kind !== "user") {
@@ -573,6 +615,32 @@ async function validateInstallSource(sourceDir: string): Promise<PluginManifest>
   }
   await validatePluginIconFiles(sourceDir, manifest)
   return manifest
+}
+
+function validateInstallExpectations(manifest: PluginManifest, options: InstallExpectations): void {
+  if (options.expectedPluginId && manifest.id !== options.expectedPluginId) {
+    throw new PluginInstallError("Plugin ID does not match marketplace entry.", {
+      expectedPluginId: options.expectedPluginId,
+      actualPluginId: manifest.id,
+    })
+  }
+  if (options.expectedVersion && manifest.version !== options.expectedVersion) {
+    throw new PluginInstallError("Plugin version does not match marketplace entry.", {
+      pluginId: manifest.id,
+      expectedVersion: options.expectedVersion,
+      actualVersion: manifest.version,
+    })
+  }
+  if (
+    options.expectedPermissions &&
+    !sameStringSet(options.expectedPermissions, manifest.permissions)
+  ) {
+    throw new PluginInstallError("Plugin permissions do not match marketplace entry.", {
+      pluginId: manifest.id,
+      expectedPermissions: sortedUniqueStrings(options.expectedPermissions),
+      actualPermissions: sortedUniqueStrings(manifest.permissions),
+    })
+  }
 }
 
 async function validatePluginIconFiles(sourceDir: string, manifest: PluginManifest): Promise<void> {
@@ -732,6 +800,19 @@ function isInsideDirectory(target: string, parent: string): boolean {
 function isInsideOrSameDirectory(target: string, parent: string): boolean {
   const relative = path.relative(parent, target)
   return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative))
+}
+
+function sameStringSet(left: string[], right: string[]): boolean {
+  const normalizedLeft = sortedUniqueStrings(left)
+  const normalizedRight = sortedUniqueStrings(right)
+  return (
+    normalizedLeft.length === normalizedRight.length &&
+    normalizedLeft.every((value, index) => value === normalizedRight[index])
+  )
+}
+
+function sortedUniqueStrings(values: string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right))
 }
 
 function isFileNotFound(err: unknown): boolean {

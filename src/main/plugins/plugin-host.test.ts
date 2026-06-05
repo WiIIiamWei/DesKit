@@ -181,6 +181,7 @@ const baseEntry: PluginRegistryEntry = {
 function marketplaceEntry(
   overrides: Partial<{
     downloadUrl: string
+    permissions: string[]
     sha256: string
   }> = {}
 ) {
@@ -198,6 +199,7 @@ function marketplaceEntry(
     sha256: overrides.sha256 ?? "0".repeat(64),
     deskitEngine: "^0.2.0",
     categories: ["utilities"],
+    permissions: overrides.permissions,
   }
 }
 
@@ -456,6 +458,61 @@ describe("pluginHost package installation", () => {
     expect(entry.pluginId).toBe("com.deskit.timestamp")
     expect(entry.source.kind).toBe("user")
     expect(entry.status).toBe("active")
+  })
+
+  it("previews marketplace packages before installation", async () => {
+    const packagePath = path.resolve(
+      "resources",
+      "mock-marketplace",
+      "packages",
+      "com.deskit.timestamp-0.3.0.deskit"
+    )
+    const packageBuffer = await fs.readFile(packagePath)
+    const sha256 = createHash("sha256").update(packageBuffer).digest("hex")
+    const host = makeHostWithFetch(async (url) => {
+      if (url.endsWith("registry.json")) {
+        return Response.json({ version: 1, plugins: [marketplaceEntry({ sha256 })] })
+      }
+      return new Response(packageBuffer)
+    })
+    await host.init()
+
+    const preview = await host.previewMarketplacePluginInstall("com.deskit.timestamp")
+
+    expect(preview.entry.id).toBe("com.deskit.timestamp")
+    expect(preview.manifest.id).toBe("com.deskit.timestamp")
+    expect(preview.manifest.permissions).toEqual([])
+    await expect(
+      fs.stat(path.join(dir, "plugins", "com.deskit.timestamp", "deskit.json"))
+    ).rejects.toMatchObject({ code: "ENOENT" })
+  })
+
+  it("rejects marketplace packages with mismatched permissions", async () => {
+    const packagePath = path.resolve(
+      "resources",
+      "mock-marketplace",
+      "packages",
+      "com.deskit.timestamp-0.3.0.deskit"
+    )
+    const packageBuffer = await fs.readFile(packagePath)
+    const sha256 = createHash("sha256").update(packageBuffer).digest("hex")
+    const host = makeHostWithFetch(async (url) => {
+      if (url.endsWith("registry.json")) {
+        return Response.json({
+          version: 1,
+          plugins: [marketplaceEntry({ permissions: ["clipboard:read"], sha256 })],
+        })
+      }
+      return new Response(packageBuffer)
+    })
+    await host.init()
+
+    await expect(host.installMarketplacePlugin("com.deskit.timestamp")).rejects.toMatchObject({
+      details: {
+        actualPermissions: [],
+        expectedPermissions: ["clipboard:read"],
+      },
+    })
   })
 
   it("rejects marketplace packages with mismatched checksums", async () => {

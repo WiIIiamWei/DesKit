@@ -178,6 +178,12 @@ declare global {
     deskitEngine: string
     icon?: string
     categories?: string[]
+    permissions?: string[]
+  }
+
+  interface DeskitMarketplaceInstallPreview {
+    entry: DeskitMarketplaceEntry
+    manifest: DeskitPluginManifest
   }
 
   interface DeskitPluginCommandResult {
@@ -289,6 +295,10 @@ declare global {
         commandId: string
       ) => Promise<DeskitPluginIpcResult<void>>
       listMarketplacePlugins: () => Promise<DeskitPluginIpcResult<DeskitMarketplaceEntry[]>>
+      previewMarketplacePluginInstall: (
+        id: string,
+        version?: string
+      ) => Promise<DeskitPluginIpcResult<DeskitMarketplaceInstallPreview>>
       installMarketplacePlugin: (
         id: string,
         version?: string

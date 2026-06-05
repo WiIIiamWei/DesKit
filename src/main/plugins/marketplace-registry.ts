@@ -20,6 +20,7 @@ export interface MarketplaceEntry {
   deskitEngine: string
   icon?: string
   categories?: string[]
+  permissions?: string[]
 }
 
 export interface MarketplaceRegistryOptions {
@@ -53,6 +54,7 @@ const marketplaceEntrySchema = z
     deskitEngine: z.string().min(1),
     icon: marketplaceIconSchema.optional(),
     categories: z.array(z.string().min(1)).optional(),
+    permissions: z.array(z.string().min(1)).optional(),
   })
   .strict()
 
