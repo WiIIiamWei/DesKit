@@ -149,7 +149,10 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
         subtitle: indexed.command.subtitle,
         icon: indexed.command.icon ?? indexed.pluginIcon,
         mode: indexed.command.mode,
-        score: match.score + rankingBoost(this.options.ranking?.getSignals(rankingKey), now),
+        score:
+          match.score +
+          rankingBoost(this.options.ranking?.getSignals(rankingKey), now) +
+          (this.options.ranking?.getQueryBoost?.(trimmed, rankingKey, now) ?? 0),
         matches: match.matches,
       })
     }

@@ -297,9 +297,9 @@ function registerIpc(): void {
     return launcher.search(typeof query === "string" ? query : "")
   })
 
-  ipcMain.handle("launcher:launch", async (_event, id: unknown) => {
+  ipcMain.handle("launcher:launch", async (_event, id: unknown, query: unknown) => {
     if (typeof id !== "string") return false
-    const ok = await launcher.launchById(id)
+    const ok = await launcher.launchById(id, typeof query === "string" ? query : undefined)
     if (ok) hideSearchWindow()
     return ok
   })

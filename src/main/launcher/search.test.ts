@@ -73,6 +73,22 @@ describe("searchApps", () => {
     expect(results[0].entry.name).toBe("Visual Studio Code")
   })
 
+  it("lets a learned query boost lift a weaker text match on prefix match", () => {
+    const now = Date.UTC(2026, 5, 5)
+    // "Code Composer Studio" scores below "Code" on text alone, but the user
+    // has repeatedly picked it under the query "co".
+    const results = searchApps(apps, "co", {
+      now: () => now,
+      ranking: {
+        getSignals: () => undefined,
+        getQueryBoost: (query, key) =>
+          query === "co" && key === "app:win32:Code Composer Studio" ? 9 : 0,
+      },
+    })
+
+    expect(results[0].entry.name).toBe("Code Composer Studio")
+  })
+
   it("filters out non-matches entirely", () => {
     const results = searchApps(apps, "zzz")
     expect(results).toHaveLength(0)

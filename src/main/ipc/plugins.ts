@@ -123,7 +123,10 @@ export function createPluginIpcHandlers(
       return host.searchCommands(requireString(value.query, "query"), locale, limit)
     },
 
-    invoke: (payload) => host.invoke(parseInvokePayload(payload)),
+    invoke: (payload) => {
+      const { request, query } = parseInvokePayload(payload)
+      return host.invoke(request, { query })
+    },
 
     disposeCommand: (payload) => {
       const value = requireRecord(payload, "plugin:dispose-command payload")
@@ -331,13 +334,21 @@ export async function invokePluginIpcHandler<T>(
   }
 }
 
-function parseInvokePayload(payload: unknown): PluginInvokeRequest {
+function parseInvokePayload(payload: unknown): {
+  request: PluginInvokeRequest
+  query?: string
+} {
   const value = requireRecord(payload, "plugin:invoke payload")
   return {
-    pluginId: requireString(value.pluginId, "pluginId"),
-    commandId: requireString(value.commandId, "commandId"),
-    phase: requirePhase(value.phase),
-    payload: value.payload,
+    request: {
+      pluginId: requireString(value.pluginId, "pluginId"),
+      commandId: requireString(value.commandId, "commandId"),
+      phase: requirePhase(value.phase),
+      payload: value.payload,
+    },
+    // The launcher search text is optional context for ranking; ignore anything
+    // that isn't a non-empty string rather than rejecting the invocation.
+    query: typeof value.query === "string" ? value.query : undefined,
   }
 }
 

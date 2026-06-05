@@ -2,7 +2,12 @@ import { promises as fs } from "node:fs"
 import * as os from "node:os"
 import * as path from "node:path"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { launcherRankingFilePath, LauncherRankingStore, rankingBoost } from "./ranking-store"
+import {
+  launcherRankingFilePath,
+  LauncherRankingStore,
+  queryBoost,
+  rankingBoost,
+} from "./ranking-store"
 
 const DAY_MS = 24 * 3_600_000
 
@@ -75,8 +80,8 @@ describe("launcherRankingStore", () => {
     const store = new LauncherRankingStore(filePath)
     await store.load()
 
-    await store.recordSelection("app:win32:Code", 100)
-    await store.recordSelection("app:win32:Code", 250)
+    await store.recordSelection("app:win32:Code", { now: 100 })
+    await store.recordSelection("app:win32:Code", { now: 250 })
 
     expect(store.getSignals("app:win32:Code")).toEqual({
       launchCount: 2,
@@ -94,7 +99,7 @@ describe("launcherRankingStore", () => {
     // each — this used to collide on a Date.now()-based temp path and reject
     // with ENOENT on rename.
     await Promise.all(
-      Array.from({ length: 25 }, () => store.recordSelection("app:win32:Code", 1000))
+      Array.from({ length: 25 }, () => store.recordSelection("app:win32:Code", { now: 1000 }))
     )
 
     expect(store.getSignals("app:win32:Code")?.launchCount).toBe(25)
@@ -112,9 +117,9 @@ describe("launcherRankingStore", () => {
     const filePath = launcherRankingFilePath(dir)
     const store = new LauncherRankingStore(filePath)
     await store.load()
-    await store.recordSelection("app:win32:Code", 100)
-    await store.recordSelection("app:win32:Gone", 100)
-    await store.recordSelection("plugin-command:com.deskit.x:run", 100)
+    await store.recordSelection("app:win32:Code", { now: 100 })
+    await store.recordSelection("app:win32:Gone", { now: 100 })
+    await store.recordSelection("plugin-command:com.deskit.x:run", { now: 100 })
 
     await store.prune("app:", ["app:win32:Code"])
 
@@ -132,11 +137,143 @@ describe("launcherRankingStore", () => {
     const filePath = launcherRankingFilePath(dir)
     const store = new LauncherRankingStore(filePath)
     await store.load()
-    await store.recordSelection("app:win32:Code", 100)
+    await store.recordSelection("app:win32:Code", { now: 100 })
 
     // An empty live set means a failed/empty scan, not "all uninstalled".
     await store.prune("app:", [])
 
     expect(store.getSignals("app:win32:Code")).toBeDefined()
+  })
+})
+
+describe("queryBoost", () => {
+  const now = Date.UTC(2026, 5, 5)
+
+  it("returns no boost without signals", () => {
+    expect(queryBoost(undefined, now)).toBe(0)
+  })
+
+  it("is capped so a single learned association can never run away", () => {
+    const huge = queryBoost({ count: 10_000, lastUsedAt: now }, now)
+    expect(huge).toBeLessThanOrEqual(10)
+    expect(huge).toBeGreaterThan(9)
+  })
+
+  it("decays as the association sits idle", () => {
+    const fresh = queryBoost({ count: 4, lastUsedAt: now }, now)
+    const halfLifeLater = queryBoost({ count: 4, lastUsedAt: now - 30 * DAY_MS }, now)
+    expect(halfLifeLater).toBeCloseTo(fresh * 0.5, 5)
+  })
+})
+
+describe("launcherRankingStore query learning", () => {
+  it("records the query a selection was made under and boosts it on prefix match", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const store = new LauncherRankingStore(launcherRankingFilePath(dir))
+    await store.load()
+
+    await store.recordSelection("app:win32:Excel", { query: "ex", now })
+
+    // Conservative prefix match: typing as much as last time (or more) boosts;
+    // typing less than the learned query does not.
+    expect(store.getQueryBoost("ex", "app:win32:Excel", now)).toBeGreaterThan(0)
+    expect(store.getQueryBoost("exc", "app:win32:Excel", now)).toBeGreaterThan(0)
+    expect(store.getQueryBoost("e", "app:win32:Excel", now)).toBe(0)
+    // No learning for a key that was never picked under that query.
+    expect(store.getQueryBoost("ex", "app:win32:Edge", now)).toBe(0)
+  })
+
+  it("persists learned queries across reloads", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const filePath = launcherRankingFilePath(dir)
+    const store = new LauncherRankingStore(filePath)
+    await store.load()
+    await store.recordSelection("app:win32:Chrome", { query: "ch", now })
+
+    const reloaded = new LauncherRankingStore(filePath)
+    await reloaded.load()
+    expect(reloaded.getQueryBoost("ch", "app:win32:Chrome", now)).toBeGreaterThan(0)
+  })
+
+  it("does not learn from empty or whitespace-only queries", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const store = new LauncherRankingStore(launcherRankingFilePath(dir))
+    await store.load()
+
+    await store.recordSelection("app:win32:Code", { query: "   ", now })
+    await store.recordSelection("app:win32:Code", { now })
+
+    // Global frecency is still recorded; there is just no query bucket to match.
+    expect(store.getSignals("app:win32:Code")?.launchCount).toBe(2)
+    expect(store.getQueryBoost("anything", "app:win32:Code", now)).toBe(0)
+  })
+
+  it("takes the strongest matching prefix rather than stacking them", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const store = new LauncherRankingStore(launcherRankingFilePath(dir))
+    await store.load()
+
+    // Learn the same key under two overlapping prefixes.
+    await store.recordSelection("app:win32:Excel", { query: "e", now })
+    await store.recordSelection("app:win32:Excel", { query: "ex", now })
+
+    const combined = store.getQueryBoost("excel", "app:win32:Excel", now)
+    const strongest = Math.max(
+      queryBoost({ count: 1, lastUsedAt: now }, now),
+      queryBoost({ count: 1, lastUsedAt: now }, now)
+    )
+    expect(combined).toBeCloseTo(strongest, 5)
+  })
+
+  it("prunes orphaned keys out of query buckets and drops empty buckets", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const filePath = launcherRankingFilePath(dir)
+    const store = new LauncherRankingStore(filePath)
+    await store.load()
+    await store.recordSelection("app:win32:Gone", { query: "go", now })
+    await store.recordSelection("app:win32:Code", { query: "co", now })
+
+    await store.prune("app:", ["app:win32:Code"])
+
+    expect(store.getQueryBoost("go", "app:win32:Gone", now)).toBe(0)
+    expect(store.getQueryBoost("co", "app:win32:Code", now)).toBeGreaterThan(0)
+  })
+
+  it("loads a v1 file (no queries field) without error", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const filePath = launcherRankingFilePath(dir)
+    await fs.writeFile(
+      filePath,
+      JSON.stringify({
+        version: 1,
+        items: { "app:win32:Code": { launchCount: 3, lastUsedAt: now } },
+      }),
+      "utf-8"
+    )
+    const store = new LauncherRankingStore(filePath)
+
+    await store.load()
+
+    expect(store.getSignals("app:win32:Code")?.launchCount).toBe(3)
+    expect(store.getQueryBoost("co", "app:win32:Code", now)).toBe(0)
+  })
+
+  it("keeps only the strongest keys per query, evicting the stalest", async () => {
+    const base = Date.UTC(2026, 5, 5)
+    const store = new LauncherRankingStore(launcherRankingFilePath(dir))
+    await store.load()
+
+    // Nine distinct apps picked under the same query "q", each one millisecond
+    // newer than the last, so "app:0" is the stalest (lowest boost) once the
+    // bucket overflows its eight-key cap.
+    for (let i = 0; i < 9; i++) {
+      await store.recordSelection(`app:win32:app${i}`, { query: "q", now: base + i })
+    }
+
+    const at = base + 8
+    // The stalest entry was evicted; the newest and the rest survive.
+    expect(store.getQueryBoost("q", "app:win32:app0", at)).toBe(0)
+    expect(store.getQueryBoost("q", "app:win32:app1", at)).toBeGreaterThan(0)
+    expect(store.getQueryBoost("q", "app:win32:app8", at)).toBeGreaterThan(0)
   })
 })

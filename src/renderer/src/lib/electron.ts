@@ -63,8 +63,8 @@ export async function searchApps(query: string): Promise<SearchResult[]> {
   return api().searchApps(query)
 }
 
-export async function launchApp(id: string): Promise<boolean> {
-  return api().launchApp(id)
+export async function launchApp(id: string, query?: string): Promise<boolean> {
+  return api().launchApp(id, query)
 }
 
 export async function refreshApps(): Promise<AppEntry[]> {
@@ -343,9 +343,12 @@ export async function invokePluginCommand(
   pluginId: string,
   commandId: string,
   phase: PluginInvokePhase,
-  payload?: unknown
+  payload?: unknown,
+  query?: string
 ): Promise<PluginView | void> {
-  return unwrapIpcResult(await api().invokePluginCommand(pluginId, commandId, phase, payload))
+  return unwrapIpcResult(
+    await api().invokePluginCommand(pluginId, commandId, phase, payload, query)
+  )
 }
 
 export async function disposePluginCommand(pluginId: string, commandId: string): Promise<void> {

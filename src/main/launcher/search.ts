@@ -89,8 +89,11 @@ export function searchApps(
   for (const entry of apps) {
     const match = fuzzyMatch(trimmed, entry.name)
     if (!match) continue
+    const key = appRankingKey(entry.id)
     const score =
-      match.score + rankingBoost(options.ranking?.getSignals(appRankingKey(entry.id)), now)
+      match.score +
+      rankingBoost(options.ranking?.getSignals(key), now) +
+      (options.ranking?.getQueryBoost?.(trimmed, key, now) ?? 0)
     results.push({ entry, score, matches: match.matches })
   }
   results.sort((a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name))

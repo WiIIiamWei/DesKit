@@ -56,15 +56,16 @@ export class LauncherService {
     return searchApps(this.cache.list(), query, { limit: 30, ranking: this.ranking })
   }
 
-  async launchById(id: string): Promise<boolean> {
+  async launchById(id: string, query?: string): Promise<boolean> {
     const entry = this.cache.list().find((app) => app.id === id)
     if (!entry) return false
     const ok = await launchApp(entry)
     if (ok) {
       // Ranking is best-effort telemetry; a failed write must not turn a
-      // successful launch into a user-facing error.
+      // successful launch into a user-facing error. `query` is the search text
+      // the launch was triggered from, for per-query learning.
       try {
-        await this.ranking?.recordSelection(appRankingKey(entry.id))
+        await this.ranking?.recordSelection(appRankingKey(entry.id), { query })
       } catch (err) {
         console.warn("[launcher] failed to record launch for ranking", err)
       }

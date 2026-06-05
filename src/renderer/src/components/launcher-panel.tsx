@@ -220,9 +220,16 @@ export function LauncherPanel() {
     async (command: DeskitPluginCommandResult, initialQuery = query) => {
       try {
         ++pluginSearchSeqRef.current
-        const view = await invokePluginCommand(command.pluginId, command.commandId, "run", {
-          initialQuery,
-        })
+        // `initialQuery` is the command's own input; `query` is the launcher
+        // search text the command was found under, recorded for per-query
+        // ranking (the two are distinct).
+        const view = await invokePluginCommand(
+          command.pluginId,
+          command.commandId,
+          "run",
+          { initialQuery },
+          query
+        )
         if (isPluginToastView(view)) {
           showPluginToast(view, i18n.language)
           return
@@ -292,7 +299,7 @@ export function LauncherPanel() {
       if (!item) return
       try {
         if (item.kind === "app") {
-          await launchApp(item.result.entry.id)
+          await launchApp(item.result.entry.id, query)
         } else {
           await runPluginCommand(item.result, "")
         }
@@ -300,7 +307,7 @@ export function LauncherPanel() {
         console.error("launcher selection failed", err)
       }
     },
-    [items, runPluginCommand]
+    [items, query, runPluginCommand]
   )
 
   const onPluginAction = useCallback(

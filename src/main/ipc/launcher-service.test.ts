@@ -30,7 +30,22 @@ describe("launcherService ranking", () => {
 
     await expect(service.launchById("win32:Code")).resolves.toBe(true)
 
-    expect(ranking.recordSelection).toHaveBeenCalledWith("app:win32:Code")
+    expect(ranking.recordSelection).toHaveBeenCalledWith("app:win32:Code", { query: undefined })
+  })
+
+  it("forwards the search query a launch was triggered from for per-query learning", async () => {
+    const ranking = {
+      getSignals: vi.fn(),
+      recordSelection: vi.fn(async () => {}),
+      prune: vi.fn(async () => {}),
+    }
+    const service = new LauncherService()
+    await service.init({ ranking })
+    ;(service.cache as unknown as { apps: AppEntry[] }).apps = [entry("Code")]
+
+    await expect(service.launchById("win32:Code", "co")).resolves.toBe(true)
+
+    expect(ranking.recordSelection).toHaveBeenCalledWith("app:win32:Code", { query: "co" })
   })
 
   it("still reports a successful launch when recording the ranking fails", async () => {
@@ -48,7 +63,7 @@ describe("launcherService ranking", () => {
 
     await expect(service.launchById("win32:Code")).resolves.toBe(true)
 
-    expect(ranking.recordSelection).toHaveBeenCalledWith("app:win32:Code")
+    expect(ranking.recordSelection).toHaveBeenCalledWith("app:win32:Code", { query: undefined })
     expect(warn).toHaveBeenCalled()
     warn.mockRestore()
   })

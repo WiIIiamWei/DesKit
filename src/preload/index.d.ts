@@ -279,7 +279,7 @@ declare global {
   interface Window {
     electronAPI?: {
       searchApps: (query: string) => Promise<LauncherSearchResult[]>
-      launchApp: (id: string) => Promise<boolean>
+      launchApp: (id: string, query?: string) => Promise<boolean>
       refreshApps: () => Promise<LauncherAppEntry[]>
       hideLauncher: () => Promise<void>
       openExternalUrl: (url: string) => Promise<boolean>
@@ -378,7 +378,8 @@ declare global {
         pluginId: string,
         commandId: string,
         phase: DeskitPluginInvokePhase,
-        payload?: unknown
+        payload?: unknown,
+        query?: string
       ) => Promise<DeskitPluginIpcResult<DeskitPluginView | void>>
       disposePluginCommand: (
         pluginId: string,

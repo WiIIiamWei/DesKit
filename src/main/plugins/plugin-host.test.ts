@@ -582,7 +582,34 @@ describe("pluginHost facade forwards to registry", () => {
 
     await host.invoke({ pluginId: "com.deskit.test", commandId: "test.run", phase: "run" })
 
-    expect(ranking.recordSelection).toHaveBeenCalledWith("plugin-command:com.deskit.test:test.run")
+    expect(ranking.recordSelection).toHaveBeenCalledWith(
+      "plugin-command:com.deskit.test:test.run",
+      { query: undefined }
+    )
+  })
+
+  it("forwards the search query a command was run from for per-query learning", async () => {
+    const ranking = {
+      getSignals: vi.fn(),
+      recordSelection: vi.fn(async () => {}),
+      prune: vi.fn(async () => {}),
+    }
+    const host = makeHost({ ranking })
+    vi.spyOn(host.registry, "invoke").mockResolvedValue({
+      type: "toast",
+      level: "success",
+      message: "done",
+    })
+
+    await host.invoke(
+      { pluginId: "com.deskit.test", commandId: "test.run", phase: "run" },
+      { query: "ts" }
+    )
+
+    expect(ranking.recordSelection).toHaveBeenCalledWith(
+      "plugin-command:com.deskit.test:test.run",
+      { query: "ts" }
+    )
   })
 })
 

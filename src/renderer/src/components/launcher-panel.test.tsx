@@ -101,11 +101,15 @@ describe("launcher panel", () => {
     fireEvent.click(screen.getByText("JSON Formatter"))
 
     await waitFor(() => expect(api.invokePluginCommand).toHaveBeenCalledTimes(1))
+    // The search text "json" must not leak into the command input (initialQuery
+    // stays ""), but it IS forwarded as the trailing ranking query so the
+    // command can be learned under it.
     expect(api.invokePluginCommand).toHaveBeenLastCalledWith(
       "com.sanqian.dev-utilities",
       "dev.json",
       "run",
-      { initialQuery: "" }
+      { initialQuery: "" },
+      "json"
     )
   })
 })

@@ -193,14 +193,16 @@ export class PluginHost {
     return this.registry.searchCommands(query, locale, limit)
   }
 
-  async invoke(request: PluginInvokeRequest): Promise<unknown> {
+  async invoke(request: PluginInvokeRequest, options: { query?: string } = {}): Promise<unknown> {
     const result = await this.registry.invoke(request)
     if (request.phase === "run") {
       // Best-effort ranking signal; never let a failed write discard the
-      // command result or surface as an invocation error.
+      // command result or surface as an invocation error. `query` is the
+      // launcher search text the command was run from, for per-query learning.
       try {
         await this.options.ranking?.recordSelection(
-          pluginCommandRankingKey(request.pluginId, request.commandId)
+          pluginCommandRankingKey(request.pluginId, request.commandId),
+          { query: options.query }
         )
       } catch (err) {
         console.warn("[plugin-host] failed to record command run for ranking", err)
