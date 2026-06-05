@@ -22,12 +22,23 @@ export interface LanDevice extends DiscoveredLanDevice {
   paired: boolean
 }
 
+export interface TrustedLanDeviceEndpoint {
+  host: string
+  addresses: string[]
+  port: number
+  lastEndpointSeenAt: number
+}
+
 export interface TrustedLanDevice {
   deviceId: string
   name: string
   certificatePem: string
   certificateFingerprint: string
   pairedAt: number
+  host?: string
+  addresses?: string[]
+  port?: number
+  lastEndpointSeenAt?: number
 }
 
 export type LanPairingDirection = "incoming" | "outgoing"

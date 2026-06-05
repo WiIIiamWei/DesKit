@@ -8,6 +8,7 @@ import type {
   PairingCommitment,
   PairingIdentity,
   PairingReveal,
+  PresenceAnnouncement,
 } from "./sas-pairing"
 import type {
   IncomingTransferRequest,
@@ -16,14 +17,21 @@ import type {
   OutgoingTransferStore,
 } from "./transfer-store"
 import type { TrustedDeviceStore } from "./trusted-device-store"
-import type { LanDevice, LanPairing, LanTransfer, StoredLanIdentity } from "./types"
+import type {
+  DiscoveredLanDevice,
+  LanDevice,
+  LanPairing,
+  LanTransfer,
+  StoredLanIdentity,
+} from "./types"
 import { Buffer } from "node:buffer"
-import { EventEmitter } from "node:events"
 import { createServer, request } from "node:https"
 import { isIP } from "node:net"
 import { certificateFingerprint } from "./credential-store"
 import { SasPairingManager } from "./sas-pairing"
 import { readChunk, sha256Buffer } from "./transfer-store"
+import { trustedDeviceWithEndpoint } from "./trusted-device-store"
+import { TypedEventEmitter } from "./typed-event-emitter"
 
 const JSON_LIMIT = 64 * 1024
 const CHUNK_LIMIT = 2 * 1024 * 1024
@@ -39,8 +47,16 @@ export interface LanSecureServerOptions {
   resolveDevice: (deviceId: string) => LanDevice | null
 }
 
-export class LanSecureServer extends EventEmitter {
+export interface LanSecureServerEvents {
+  "device-learned": [device: DiscoveredLanDevice]
+  "pairings-changed": [pairings: LanPairing[]]
+  "transfers-changed": [transfers: LanTransfer[]]
+  "trusted-devices-changed": []
+}
+
+export class LanSecureServer extends TypedEventEmitter<LanSecureServerEvents> {
   private readonly pairing: SasPairingManager
+  private readonly pairingPeerDevices = new Map<string, LanDevice>()
   private readonly pairingPeerFingerprints = new Map<string, string>()
   private server: Server | null = null
 
@@ -102,7 +118,7 @@ export class LanSecureServer extends EventEmitter {
   }
 
   async pair(device: LanDevice): Promise<LanPairing> {
-    const draft = this.pairing.createOutgoingDraft()
+    const draft = this.pairing.createOutgoingDraft({ endpointPort: this.port() })
     const challenge = await this.requestJson<PairingChallenge>(
       device,
       "POST",
@@ -118,9 +134,21 @@ export class LanSecureServer extends EventEmitter {
     return pairing
   }
 
+  // Tell a peer we just discovered (over mDNS) that we exist, so a blind-side
+  // peer that cannot see us via mDNS can still list us as an unpaired device.
+  // The peer's fingerprint is unknown before pairing, so this is unauthenticated
+  // like the initial pairing request; it never grants trust (SAS still required).
+  async announcePresence(device: LanDevice): Promise<void> {
+    const announcement: PresenceAnnouncement = {
+      identity: this.localPairingIdentity(),
+      endpointPort: this.port(),
+    }
+    await this.requestJson(device, "POST", "/v1/presence", announcement)
+  }
+
   async confirmPairing(id: string, sas: string): Promise<LanPairing[]> {
     const pendingTrusted = this.pairing.prepareLocalConfirmation(id, sas)
-    const device = this.options.resolveDevice(pendingTrusted.deviceId)
+    const device = this.resolvePairingDevice(id, pendingTrusted.deviceId)
     if (!device?.online) throw new Error("Target device is offline.")
     await this.requestJson(
       device,
@@ -133,7 +161,10 @@ export class LanSecureServer extends EventEmitter {
     )
     const trusted = this.pairing.markLocalConfirmed(id)
     if (trusted) {
-      await this.options.trustedDevices.trust(trusted)
+      await this.options.trustedDevices.trust(
+        trustedDeviceWithEndpoint(trusted, device, Date.now())
+      )
+      this.pairingPeerDevices.delete(id)
       this.emitTrustedDevicesChanged()
     }
     this.emitPairingsChanged()
@@ -145,8 +176,9 @@ export class LanSecureServer extends EventEmitter {
     if (!pairing || pairing.state !== "awaiting-confirmation") return this.listPairings()
     const fingerprint = this.pairing.peerFingerprint(id)
     this.pairing.reject(id)
+    this.pairingPeerDevices.delete(id)
     this.emitPairingsChanged()
-    const device = this.options.resolveDevice(pairing.deviceId)
+    const device = this.resolvePairingDevice(id, pairing.deviceId)
     if (device?.online) {
       try {
         await this.requestJson(
@@ -289,11 +321,36 @@ export class LanSecureServer extends EventEmitter {
   }
 
   private async handleRequest(req: import("node:http").IncomingMessage, res: ServerResponse) {
+    // Unauthenticated endpoint: a peer that can see us over mDNS announces
+    // itself so a blind-side peer can list us. It never grants trust (pairing
+    // still requires SAS); requests are bound to the announcer's certificate via
+    // assertPeerFingerprint, and canLearnDevice prevents redirecting a trusted
+    // device's endpoint to an attacker.
+    if (req.method === "POST" && req.url === "/v1/presence") {
+      const announcement = await readJson<PresenceAnnouncement>(req)
+      const fingerprint = peerFingerprint(req)
+      assertPeerFingerprint(fingerprint, announcement.identity)
+      const device = deviceFromRemote(announcement.identity, announcement.endpointPort, req)
+      if (device && this.canLearnDevice(device.deviceId, fingerprint)) {
+        this.emit("device-learned", device)
+      }
+      sendJson(res, 200, {})
+      return
+    }
+
     if (req.method === "POST" && req.url === "/v1/pairing/requests") {
       const commitment = await readJson<PairingCommitment>(req)
-      assertPeerFingerprint(peerFingerprint(req), commitment.identity)
+      const fingerprint = peerFingerprint(req)
+      assertPeerFingerprint(fingerprint, commitment.identity)
       const challenge = this.pairing.acceptIncomingCommitment(commitment)
       this.pairingPeerFingerprints.set(challenge.id, commitment.identity.certificateFingerprint)
+      const device = deviceFromRemote(commitment.identity, commitment.endpointPort, req)
+      if (device) {
+        this.pairingPeerDevices.set(challenge.id, device)
+        if (this.canLearnDevice(device.deviceId, fingerprint)) {
+          this.emit("device-learned", device)
+        }
+      }
       sendJson(res, 200, challenge)
       return
     }
@@ -316,7 +373,11 @@ export class LanSecureServer extends EventEmitter {
       await readJson(req)
       const trusted = this.pairing.markPeerConfirmed(id)
       if (trusted) {
-        await this.options.trustedDevices.trust(trusted)
+        const device = this.pairingPeerDevices.get(id)
+        await this.options.trustedDevices.trust(
+          trustedDeviceWithEndpoint(trusted, device, Date.now())
+        )
+        this.pairingPeerDevices.delete(id)
         this.emitTrustedDevicesChanged()
       }
       this.emitPairingsChanged()
@@ -330,6 +391,7 @@ export class LanSecureServer extends EventEmitter {
       assertFingerprint(peerFingerprint(req), this.pairing.peerFingerprint(id))
       await readJson(req)
       this.pairing.reject(id)
+      this.pairingPeerDevices.delete(id)
       this.emitPairingsChanged()
       sendJson(res, 200, {})
       return
@@ -391,6 +453,24 @@ export class LanSecureServer extends EventEmitter {
   private assertTransferOwner(transferId: string, deviceId: string): void {
     const transfer = this.options.incomingTransfers.get(transferId)
     if (!transfer || transfer.deviceId !== deviceId) throw new Error("Sender identity mismatch.")
+  }
+
+  // A device may be displayed/learned if it is not yet trusted (display is safe
+  // because every transfer is fingerprint-pinned), or if the caller proves
+  // possession of the trusted device's pinned certificate. This stops a LAN
+  // attacker from redirecting a trusted device's endpoint to itself through an
+  // unauthenticated presence or pairing request.
+  private canLearnDevice(deviceId: string, fingerprint: string): boolean {
+    const trusted = this.options.trustedDevices.get(deviceId)
+    return !trusted || trusted.certificateFingerprint === fingerprint
+  }
+
+  private resolvePairingDevice(pairingId: string, deviceId: string): LanDevice | null {
+    const discovered = this.options.resolveDevice(deviceId)
+    if (discovered?.online) return discovered
+    const pairingDevice = this.pairingPeerDevices.get(pairingId)
+    if (pairingDevice?.online) return pairingDevice
+    return discovered ?? pairingDevice ?? null
   }
 
   private requestJson<T = unknown>(
@@ -614,6 +694,41 @@ export function candidateHosts(device: LanDevice): string[] {
     if (normalized) hosts.add(normalized)
   }
   return [...hosts].sort((left, right) => addressPriority(left) - addressPriority(right))
+}
+
+function deviceFromRemote(
+  identity: PairingIdentity,
+  endpointPort: number | undefined,
+  req: import("node:http").IncomingMessage
+): LanDevice | null {
+  const host = normalizeRemoteAddress(req.socket.remoteAddress)
+  if (
+    typeof endpointPort !== "number" ||
+    !Number.isInteger(endpointPort) ||
+    endpointPort <= 0 ||
+    endpointPort > 65535 ||
+    !host
+  ) {
+    return null
+  }
+  return {
+    deviceId: identity.deviceId,
+    name: identity.name,
+    host,
+    addresses: [host],
+    port: endpointPort,
+    platform: "unknown",
+    capabilities: ["pair", "https-chunks"],
+    lastSeenAt: Date.now(),
+    online: true,
+    paired: false,
+  }
+}
+
+function normalizeRemoteAddress(address: string | undefined): string {
+  if (!address) return ""
+  const normalized = address.trim()
+  return normalized.startsWith("::ffff:") ? normalized.slice("::ffff:".length) : normalized
 }
 
 function addressPriority(host: string): number {

@@ -22,6 +22,12 @@ export interface PairingIdentity {
 
 export interface PairingCommitment {
   commitment: string
+  endpointPort?: number
+  identity: PairingIdentity
+}
+
+export interface PresenceAnnouncement {
+  endpointPort: number
   identity: PairingIdentity
 }
 
@@ -59,6 +65,10 @@ export interface OutgoingPairingDraft {
   complete: (challenge: PairingChallenge) => { pairing: LanPairing; reveal: PairingReveal }
 }
 
+export interface OutgoingPairingDraftOptions {
+  endpointPort?: number
+}
+
 export class SasPairingManager {
   private readonly sessions = new Map<string, PairingSession>()
   private readonly incoming = new Map<string, PendingIncoming>()
@@ -68,7 +78,7 @@ export class SasPairingManager {
     private readonly now = Date.now
   ) {}
 
-  createOutgoingDraft(): OutgoingPairingDraft {
+  createOutgoingDraft(options: OutgoingPairingDraftOptions = {}): OutgoingPairingDraft {
     const { privateKey, publicKey } = generateX25519KeyPair()
     const initiatorPublicKey = exportPublicKey(publicKey)
     const initiatorNonce = randomBytes(32).toString("base64")
@@ -76,6 +86,7 @@ export class SasPairingManager {
       commitment: {
         identity: this.localIdentity,
         commitment: pairingCommitment(initiatorPublicKey, initiatorNonce),
+        endpointPort: options.endpointPort,
       },
       complete: (challenge) => {
         const codes = deriveSasCodes({

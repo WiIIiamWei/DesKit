@@ -117,4 +117,48 @@ describe("lanDiscoveryService", () => {
 
     expect(service.listDevices()[0]?.online).toBe(false)
   })
+
+  it("marks a learned device offline after bonjour reports it down", async () => {
+    const { adapter, service } = createService()
+    await service.start()
+
+    service.learnDevice({
+      ...remoteDevice,
+      host: "192.168.1.42",
+      addresses: ["192.168.1.42"],
+      capabilities: ["pair", "https-chunks"],
+    })
+    adapter.onDeviceUp?.(remoteDevice)
+    adapter.onDeviceDown?.("remote-device")
+
+    expect(service.listDevices()[0]?.online).toBe(false)
+  })
+
+  it("lists devices learned from direct pairing requests", async () => {
+    const { service } = createService()
+    const onDevicesChanged = vi.fn()
+    service.on("devices-changed", onDevicesChanged)
+    await service.start()
+
+    service.learnDevice({
+      ...remoteDevice,
+      host: "192.168.1.42",
+      addresses: ["192.168.1.42"],
+      capabilities: ["pair", "https-chunks"],
+    })
+
+    expect(service.listDevices()).toEqual([
+      {
+        ...remoteDevice,
+        host: "192.168.1.42",
+        addresses: ["192.168.1.42"],
+        capabilities: ["pair", "https-chunks"],
+        lastSeenAt: 1234,
+        online: true,
+        paired: false,
+      },
+    ])
+    expect(service.getStatus().deviceCount).toBe(1)
+    expect(onDevicesChanged).toHaveBeenCalledOnce()
+  })
 })
