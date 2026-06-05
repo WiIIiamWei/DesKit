@@ -36,6 +36,7 @@ export class LanService extends EventEmitter {
   private readonly outgoingTransfers: OutgoingTransferStore
   private readonly discovery: LanDiscoveryService
   private readonly announcedEndpoints = new Map<string, string>()
+  private initialized = false
   private secure: LanSecureServer | null = null
 
   constructor(private readonly options: LanServiceOptions) {
@@ -68,29 +69,13 @@ export class LanService extends EventEmitter {
   }
 
   async init(enabled: boolean): Promise<LanStatus> {
-    const identity = await this.identityStore.loadOrCreate()
-    const credential = await this.credentialStore.loadOrCreate(identity)
+    await this.identityStore.loadOrCreate()
     await Promise.all([
       this.trustedDevices.init(),
       this.incomingTransfers.init(),
       this.outgoingTransfers.init(),
     ])
-    this.secure = new LanSecureServer({
-      identity,
-      credential,
-      trustedDevices: this.trustedDevices,
-      incomingTransfers: this.incomingTransfers,
-      outgoingTransfers: this.outgoingTransfers,
-      resolveDevice: (deviceId) => this.findDevice(deviceId),
-    })
-    this.secure.on("device-learned", (device) => {
-      this.discovery.learnDevice(device)
-      void this.persistLearnedEndpoint(device)
-    })
-    this.discovery.on("device-discovered", (device) => void this.announcePresence(device))
-    this.secure.on("pairings-changed", (pairings) => this.emit("pairings-changed", pairings))
-    this.secure.on("transfers-changed", (transfers) => this.emit("transfers-changed", transfers))
-    this.secure.on("trusted-devices-changed", () => this.discovery.refreshDevices())
+    this.initialized = true
     await this.discovery.init(false)
     this.discovery.restoreTrustedDevices(this.trustedDevices.list())
     if (enabled) await this.start()
@@ -98,6 +83,7 @@ export class LanService extends EventEmitter {
   }
 
   async start(): Promise<LanStatus> {
+    await this.ensureSecure()
     await this.requireSecure().start()
     try {
       return await this.discovery.start()
@@ -123,11 +109,11 @@ export class LanService extends EventEmitter {
   }
 
   listPairings(): LanPairing[] {
-    return this.requireSecure().listPairings()
+    return this.secure?.listPairings() ?? []
   }
 
   listTransfers(): LanTransfer[] {
-    return this.requireSecure().listTransfers()
+    return [...this.incomingTransfers.list(), ...this.outgoingTransfers.list()]
   }
 
   async pair(deviceId: string): Promise<LanPairing> {
@@ -214,6 +200,30 @@ export class LanService extends EventEmitter {
       device.deviceId,
       endpointFromDiscoveredDevice(device, this.options.now?.() ?? Date.now())
     )
+  }
+
+  private async ensureSecure(): Promise<LanSecureServer> {
+    if (this.secure) return this.secure
+    if (!this.initialized) await this.init(false)
+    const identity = await this.identityStore.loadOrCreate()
+    const credential = await this.credentialStore.loadOrCreate(identity)
+    this.secure = new LanSecureServer({
+      identity,
+      credential,
+      trustedDevices: this.trustedDevices,
+      incomingTransfers: this.incomingTransfers,
+      outgoingTransfers: this.outgoingTransfers,
+      resolveDevice: (deviceId) => this.findDevice(deviceId),
+    })
+    this.secure.on("device-learned", (device) => {
+      this.discovery.learnDevice(device)
+      void this.persistLearnedEndpoint(device)
+    })
+    this.discovery.on("device-discovered", (device) => void this.announcePresence(device))
+    this.secure.on("pairings-changed", (pairings) => this.emit("pairings-changed", pairings))
+    this.secure.on("transfers-changed", (transfers) => this.emit("transfers-changed", transfers))
+    this.secure.on("trusted-devices-changed", () => this.discovery.refreshDevices())
+    return this.secure
   }
 
   private requireSecure(): LanSecureServer {

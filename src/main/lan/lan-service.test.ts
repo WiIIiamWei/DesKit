@@ -41,6 +41,32 @@ describe("lanService", () => {
     await Promise.all(dirs.splice(0).map((dir) => fs.rm(dir, { recursive: true, force: true })))
   })
 
+  it("does not require credential encryption while LAN is disabled", async () => {
+    const adapter = new FakeLanDiscoveryAdapter()
+    const service = new LanService({
+      userDataDir: await tempDir(),
+      adapter,
+      deviceName: "CI desktop",
+      protector: {
+        encrypt: () => {
+          throw new Error("safeStorage unavailable")
+        },
+        decrypt: () => {
+          throw new Error("safeStorage unavailable")
+        },
+      },
+    })
+    services.push(service)
+
+    await expect(service.init(false)).resolves.toMatchObject({
+      enabled: false,
+      localDeviceName: "CI desktop",
+    })
+    expect(service.listPairings()).toEqual([])
+    expect(service.listTransfers()).toEqual([])
+    expect(adapter.start).not.toHaveBeenCalled()
+  })
+
   it("adds a direct pairing peer to the blind-side device list and can send back", async () => {
     const aliceAdapter = new FakeLanDiscoveryAdapter()
     const bobAdapter = new FakeLanDiscoveryAdapter()
@@ -177,8 +203,7 @@ describe("lanService", () => {
   }, 30_000)
 
   async function createService(deviceName: string, adapter: FakeLanDiscoveryAdapter) {
-    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "deskit-lan-service-"))
-    dirs.push(dir)
+    const dir = await tempDir()
     const service = new LanService({
       userDataDir: dir,
       adapter,
@@ -188,6 +213,12 @@ describe("lanService", () => {
     services.push(service)
     await service.init(true)
     return { dir, service }
+  }
+
+  async function tempDir(): Promise<string> {
+    const dir = await fs.mkdtemp(path.join(os.tmpdir(), "deskit-lan-service-"))
+    dirs.push(dir)
+    return dir
   }
 
   function deviceFor(identity: LocalLanIdentity): DiscoveredLanDevice {
