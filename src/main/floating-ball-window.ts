@@ -39,6 +39,7 @@ let floatingBallWorkArea: Electron.Rectangle | null = null
 let pendingBlurCollapseTimer: NodeJS.Timeout | null = null
 let pendingMenuReveal = false
 let revealBlurSuppressionTimer: NodeJS.Timeout | null = null
+let floatingBallParentedToMenu = false
 let dragState: {
   cursor: Electron.Point
   bounds: Electron.Rectangle
@@ -61,6 +62,7 @@ export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserW
   floatingBallWindow.on("closed", () => {
     floatingBallWindow = null
     lastRequestedBallBounds = null
+    floatingBallParentedToMenu = false
   })
 
   floatingBallWindow.on("blur", () => {
@@ -90,6 +92,7 @@ function ensureFloatingBallMenuWindow(deps: FloatingBallWindowDeps): BrowserWind
   menuWin.on("closed", () => {
     floatingBallMenuWindow = null
     lastRequestedMenuBounds = null
+    floatingBallParentedToMenu = false
   })
 
   menuWin.on("blur", () => {
@@ -186,6 +189,7 @@ export function destroyFloatingBallWindow(): void {
   lastRequestedMenuBounds = null
   floatingBallWorkArea = null
   pendingMenuReveal = false
+  floatingBallParentedToMenu = false
   snappedEdge = "none"
   finishFloatingBallDrag()
   if (win) win.destroy()
@@ -204,6 +208,7 @@ export function expandFloatingBallMenu(): void {
     getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds))
   )
   requestFloatingBallMenuBounds(menuWin, menuBounds)
+  parentFloatingBallWindowToMenu(menuWin)
   pendingMenuReveal = true
   prepareHiddenFloatingBallMenuWindow(menuWin, { show: true })
   menuPhase = "expanded"
@@ -218,6 +223,7 @@ export function collapseFloatingBallMenu(): void {
   clearRevealBlurSuppression()
   pendingMenuReveal = false
   applyExpandedMenuClosePosition()
+  detachFloatingBallWindowFromMenu()
   menuPhase = "collapsed"
   sendFloatingBallMenuState(false)
   const menuWin = getFloatingBallMenuWindow()
@@ -432,6 +438,20 @@ function isFloatingBallWindowGroupFocused(): boolean {
 function keepFloatingBallWindowAboveMenu(): void {
   if (menuPhase !== "expanded") return
   getFloatingBallWindow()?.moveTop()
+}
+
+function parentFloatingBallWindowToMenu(menuWin: BrowserWindow): void {
+  const win = getFloatingBallWindow()
+  if (!win || win.isDestroyed() || menuWin.isDestroyed()) return
+  win.setParentWindow(menuWin)
+  floatingBallParentedToMenu = true
+}
+
+function detachFloatingBallWindowFromMenu(): void {
+  const win = getFloatingBallWindow()
+  if (!win || win.isDestroyed() || !floatingBallParentedToMenu) return
+  win.setParentWindow(null)
+  floatingBallParentedToMenu = false
 }
 
 function prepareHiddenFloatingBallMenuWindow(win: BrowserWindow, options: { show: boolean }): void {
@@ -675,7 +695,8 @@ function showFloatingBallContextMenu(ownerWindow: BrowserWindow | null): void {
   const s = floatingBallStrings(deps.getLocale())
   const popupWindow =
     ownerWindow && !ownerWindow.isDestroyed() ? ownerWindow : getFloatingBallWindow()
-  keepFloatingBallWindowAboveMenu()
+  const contextMenuNeedsRestack = menuPhase !== "expanded" || !floatingBallParentedToMenu
+  if (contextMenuNeedsRestack) keepFloatingBallWindowAboveMenu()
   Menu.buildFromTemplate([
     {
       label: s.close,
@@ -687,7 +708,7 @@ function showFloatingBallContextMenu(ownerWindow: BrowserWindow | null): void {
   ]).popup({
     window: popupWindow ?? undefined,
     callback: () => {
-      keepFloatingBallWindowAboveMenu()
+      if (contextMenuNeedsRestack) keepFloatingBallWindowAboveMenu()
     },
   })
 }
