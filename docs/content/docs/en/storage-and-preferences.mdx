@@ -1,0 +1,55 @@
+---
+title: Storage and Preferences
+description: Save plugin data, expose user settings, and handle shortcuts.
+---
+
+# Storage and Preferences
+
+Plugins usually save two kinds of data:
+
+- runtime data: history, favorites, cached results;
+- user preferences: toggles, numbers, text, shortcuts.
+
+Treat them differently. Runtime data belongs to the plugin. Preferences should be declared in the manifest so DesKit can render them in the plugin page.
+
+## Persistent storage
+
+Plugins can use storage from the plugin context to save JSON-friendly data. It is a good fit for:
+
+- recent items;
+- favorite IDs;
+- small caches;
+- internal plugin state.
+
+Keep the data small and explicit. Do not store large images, binary files, or large remote payloads directly. The clipboard history plugin uses a conservative sync strategy: it syncs only a small number of recent text records to avoid bloating the shared sync file.
+
+## Preferences
+
+Preferences are declared in the manifest, and DesKit renders the matching UI in the plugin page.
+
+Good preference candidates:
+
+- whether a capture type is enabled;
+- maximum history count;
+- sync method;
+- WebDAV endpoint;
+- shortcut binding.
+
+Be careful with secrets. If a preference type is currently stored as plain text, mention that clearly in README or preference descriptions.
+
+## Shortcuts
+
+If a plugin needs a shortcut, prefer DesKit's shortcut preference support instead of listening to global keyboard events yourself.
+
+For example, the clipboard history plugin can expose a shortcut preference that opens the plugin command. Conflict handling, display, and editing then stay consistent with the rest of DesKit.
+
+## Sync
+
+Settings sync may include plugin preferences, so do not hide large data inside preferences. If plugin data must sync, enforce hard limits:
+
+- limit item count;
+- limit total bytes;
+- drop the largest or oldest records when over limit;
+- avoid syncing images and file contents.
+
+Conservative sync is better. Users can understand “sync the latest 5 text records”; they will not enjoy “sync fails because of one screenshot”.

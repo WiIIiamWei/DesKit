@@ -1,0 +1,72 @@
+---
+title: Submit to Marketplace
+description: Publish a .deskit artifact, calculate SHA256, and submit a DesKit Marketplace listing.
+---
+
+# Submit to Marketplace
+
+Marketplace does not store plugin source code. It stores listings. Your plugin source stays in your repository, and the installable package comes from a GitHub Release `.deskit` asset.
+
+## Publish a plugin release
+
+Recommended flow:
+
+1. Make sure `package.json` and `deskit.json` use the same version.
+2. Run `npm run check`.
+3. Push a tag, such as `v0.1.0`.
+4. Wait for GitHub Actions to create `.deskit` and `.sha256` assets.
+
+The release asset URL should look like:
+
+```text
+https://github.com/<owner>/<repo>/releases/download/v0.1.0/com.example.plugin-0.1.0.deskit
+```
+
+## Marketplace listing
+
+Add `plugins/<id>.json` to the `DesKit-Marketplace` repository:
+
+```json
+{
+  "id": "com.example.plugin",
+  "name": "plugin",
+  "displayName": {
+    "en": "Example Plugin",
+    "zh-CN": "示例插件"
+  },
+  "description": {
+    "en": "A short description.",
+    "zh-CN": "一句简短说明。"
+  },
+  "author": "Alice",
+  "homepage": "https://github.com/alice/deskit-plugin-example",
+  "version": "0.1.0",
+  "downloadUrl": "https://github.com/alice/deskit-plugin-example/releases/download/v0.1.0/com.example.plugin-0.1.0.deskit",
+  "sha256": "lowercase-hex-sha256",
+  "deskitEngine": "^0.2.0",
+  "icon": "lucide:puzzle",
+  "categories": ["utilities"]
+}
+```
+
+Then run:
+
+```bash
+npm run build-registry
+npm run validate
+```
+
+Commit `plugins/<id>.json` and the regenerated `registry.json`, then open a PR using the repository template.
+
+## Review focus
+
+Marketplace review usually checks:
+
+- `id` matches the plugin manifest;
+- `version` matches the plugin manifest;
+- `downloadUrl` points to a GitHub Release `.deskit` asset;
+- `sha256` matches the exact artifact;
+- `icon` can render;
+- permissions match actual behavior.
+
+If the plugin adds dependencies, requests sensitive permissions, or introduces background behavior, state that clearly in the PR. Reviewers should not have to infer your intent from source code.

@@ -1,0 +1,61 @@
+---
+title: Quick Start
+description: Create a plugin from the template, run checks, package it, and test it in DesKit.
+---
+
+# Quick Start
+
+Start from the official template. It already includes a manifest, SDK types, build scripts, packaging scripts, and a GitHub Release workflow.
+
+```bash
+git clone https://github.com/WiIIiamWei/deskit-plugin-template.git my-deskit-plugin
+cd my-deskit-plugin
+npm install
+npm run check
+```
+
+`npm run check` usually runs:
+
+- TypeScript type checking;
+- building `dist/index.js`;
+- validating `deskit.json`;
+- the plugin's own smoke test.
+
+## Update plugin identity
+
+For a new plugin, update at least these fields:
+
+```json
+{
+  "id": "com.example.my-plugin",
+  "name": "my-plugin",
+  "displayName": {
+    "en": "My Plugin",
+    "zh-CN": "我的插件"
+  },
+  "version": "0.1.0",
+  "main": "dist/index.js"
+}
+```
+
+Keep `id` stable after release. If you change it, DesKit will treat the package as a different plugin.
+
+## Package locally
+
+```bash
+npm run pack
+```
+
+The packaged `.deskit` archive is written to `release/`. You can install it from DesKit's plugin page to verify installation, permission prompts, icons, and command rendering.
+
+## Development loop
+
+A practical loop looks like this:
+
+1. Edit `src/index.ts` and `deskit.json`.
+2. Run `npm run check`.
+3. Run `npm run pack`.
+4. Install the new `.deskit` from DesKit's plugin page.
+5. Search for the command in the launcher and test the interaction.
+
+If your plugin needs the Marketplace install path, publish a GitHub Release first and then update the Marketplace listing. During local development, you do not need to touch Marketplace on every iteration.

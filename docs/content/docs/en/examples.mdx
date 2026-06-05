@@ -1,0 +1,60 @@
+---
+title: Example Plugins
+description: Learn common patterns from calculator, timestamp conversion, and clipboard history.
+---
+
+# Example Plugins
+
+The best plugin documentation is still a plugin that runs. These repositories are good references.
+
+## Calculator
+
+Repository: `WiIIiamWei/deskit-plugin-calculator`
+
+Good for learning:
+
+- live calculation;
+- `onSearchChange`;
+- rendering error rows;
+- copy result actions;
+- searchable keywords.
+
+The calculator plugin also avoids `eval` and `Function`; it parses expressions directly. That is a useful pattern when handling user input.
+
+## Timestamp Converter
+
+Repository: `WiIIiamWei/deskit-plugin-timestamp`
+
+Good for learning:
+
+- turning input into multiple candidate results;
+- presenting formats in a list;
+- adding copy actions to each item;
+- using a clear icon such as `lucide:clock`.
+
+## Clipboard History
+
+Repository: `WiIIiamWei/deskit-plugin-clipboard-history`
+
+Good for learning:
+
+- background clipboard events;
+- favorite, filter, and selected states;
+- plugin shortcuts;
+- careful sync size limits;
+- avoiding duplicate history entries when the plugin writes to clipboard.
+
+This is a more complex plugin. Read it after you are comfortable with basic commands and views.
+
+## First plugin ideas
+
+If you want a small first plugin, try:
+
+- text case conversion;
+- URL encode/decode;
+- JSON formatting;
+- regex testing;
+- color format conversion;
+- simple unit conversion.
+
+Each can provide a complete experience with one list view, and each is a reasonable Marketplace candidate.

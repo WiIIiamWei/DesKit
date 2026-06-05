@@ -1,0 +1,94 @@
+---
+title: Manifest
+description: deskit.json 的核心字段、命令声明、图标和兼容性要求。
+---
+
+# Manifest
+
+`deskit.json` 是插件的入口说明书。DesKit 会先读取它，再决定插件能否加载、显示什么名称、暴露哪些命令、需要哪些权限。
+
+一个最小 manifest 类似这样：
+
+```json
+{
+  "$schema": "./schema/deskit-manifest.schema.json",
+  "id": "com.deskit.calculator",
+  "name": "calculator",
+  "displayName": {
+    "en": "Calculator",
+    "zh-CN": "计算器"
+  },
+  "description": {
+    "en": "Evaluate arithmetic expressions.",
+    "zh-CN": "计算数学表达式。"
+  },
+  "version": "0.1.0",
+  "author": "DesKit",
+  "icon": "lucide:calculator",
+  "engines": {
+    "deskit": "^0.2.0"
+  },
+  "main": "dist/index.js",
+  "contributes": {
+    "commands": [
+      {
+        "id": "calculator.evaluate",
+        "title": {
+          "en": "Calculator",
+          "zh-CN": "计算器"
+        },
+        "keywords": ["calculator", "calc", "计算器"],
+        "icon": "lucide:calculator",
+        "mode": "view"
+      }
+    ]
+  },
+  "permissions": []
+}
+```
+
+## 基本字段
+
+- `id`：全局唯一插件 ID，推荐反向域名格式，例如 `com.alice.weather`。
+- `name`：机器可读短名称，通常用于仓库名和包名。
+- `displayName`：展示给用户看的名称，建议至少提供 `en` 和 `zh-CN`。
+- `description`：一句话说明插件做什么。
+- `version`：插件版本，必须和发布产物一致。
+- `author`：作者或组织名称。
+- `homepage`：可选，通常指向插件 GitHub 仓库。
+- `icon`：插件图标，推荐使用 `lucide:*`，例如 `lucide:clock`。
+- `engines.deskit`：兼容的 DesKit 版本范围。
+- `main`：构建后的入口文件，通常是 `dist/index.js`。
+
+## 命令字段
+
+`contributes.commands` 决定用户能在启动器里搜到什么。
+
+- `id`：命令 ID，在插件内唯一。
+- `title`：命令标题，支持多语言。
+- `subtitle`：可选，展示更短的说明。
+- `keywords`：搜索关键词。符号也可以作为关键词，例如计算器可以声明 `"="`。
+- `icon`：命令图标；没有设置时会回退到插件图标。
+- `mode`：`view` 表示命令打开插件视图；`no-view` 适合直接执行的小动作。
+
+## 图标
+
+Marketplace 和已安装插件列表都会读取 icon。当前建议使用 `lucide:*`：
+
+```json
+{
+  "icon": "lucide:clipboard-list"
+}
+```
+
+如果未来要使用插件包内图片，请使用包内相对路径，而不是网络图片。网络图片会让离线用户看到缺失图标。
+
+## 版本一致性
+
+发布前检查三处版本一致：
+
+- `package.json`
+- `deskit.json`
+- GitHub Release tag，例如 `v0.1.0`
+
+Marketplace listing 里的 `version` 也必须和 `deskit.json` 一致。

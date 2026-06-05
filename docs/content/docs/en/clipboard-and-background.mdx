@@ -1,0 +1,54 @@
+---
+title: Clipboard and Background Tasks
+description: Background events, clipboard access, and safety boundaries.
+---
+
+# Clipboard and Background Tasks
+
+DesKit can let plugins respond to background events such as clipboard changes. This is powerful and sensitive, so design conservatively.
+
+## Clipboard events
+
+If a plugin needs to run when the clipboard changes, declare the activation event and request the required permission:
+
+```json
+{
+  "contributes": {
+    "activationEvents": ["clipboard:change"]
+  },
+  "permissions": ["clipboard:read"]
+}
+```
+
+The plugin module must export the matching event handler. A plugin without a handler should not start background polling.
+
+## Supported content types
+
+Clipboard plugins currently focus on:
+
+- text;
+- images.
+
+File clipboard is not a formal capability yet. A possible compromise is copying file paths as text, but that only works on the same machine and is not true cross-device file clipboard sync. Unless your plugin says so explicitly, do not present it as full file clipboard support.
+
+## Writing to clipboard
+
+Writing requires `clipboard:write`. Common uses:
+
+- copy calculation results;
+- copy a history item back to clipboard;
+- copy transformed text.
+
+If your plugin also listens to clipboard changes, avoid recording the content it just wrote as a duplicate history item.
+
+## Background task design
+
+Keep background work disciplined:
+
+- run only while the plugin is enabled;
+- stop immediately when disabled or uninstalled;
+- do not start watchers without actual handlers;
+- do not keep stale listeners after a crash;
+- let users disable sensitive behavior from settings.
+
+Background tasks should not become hidden services. They should behave like clearly declared plugin capabilities.

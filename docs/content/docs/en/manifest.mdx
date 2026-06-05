@@ -1,0 +1,94 @@
+---
+title: Manifest
+description: Core deskit.json fields, command declarations, icons, and compatibility.
+---
+
+# Manifest
+
+`deskit.json` is the plugin's entry document. DesKit reads it before loading the plugin, deciding how the plugin is displayed, which commands it exposes, and which permissions it requests.
+
+A minimal manifest looks like this:
+
+```json
+{
+  "$schema": "./schema/deskit-manifest.schema.json",
+  "id": "com.deskit.calculator",
+  "name": "calculator",
+  "displayName": {
+    "en": "Calculator",
+    "zh-CN": "计算器"
+  },
+  "description": {
+    "en": "Evaluate arithmetic expressions.",
+    "zh-CN": "计算数学表达式。"
+  },
+  "version": "0.1.0",
+  "author": "DesKit",
+  "icon": "lucide:calculator",
+  "engines": {
+    "deskit": "^0.2.0"
+  },
+  "main": "dist/index.js",
+  "contributes": {
+    "commands": [
+      {
+        "id": "calculator.evaluate",
+        "title": {
+          "en": "Calculator",
+          "zh-CN": "计算器"
+        },
+        "keywords": ["calculator", "calc", "计算器"],
+        "icon": "lucide:calculator",
+        "mode": "view"
+      }
+    ]
+  },
+  "permissions": []
+}
+```
+
+## Basic fields
+
+- `id`: globally unique plugin ID. Reverse-domain style is recommended, such as `com.alice.weather`.
+- `name`: machine-readable short name, usually matching the repository or package name.
+- `displayName`: user-facing name. Provide at least `en` and `zh-CN` when possible.
+- `description`: one sentence explaining what the plugin does.
+- `version`: plugin version; it must match the release artifact.
+- `author`: author or organization.
+- `homepage`: optional, usually the plugin GitHub repository.
+- `icon`: plugin icon. Prefer `lucide:*`, such as `lucide:clock`.
+- `engines.deskit`: compatible DesKit version range.
+- `main`: built entry file, usually `dist/index.js`.
+
+## Command fields
+
+`contributes.commands` controls what users can find from the launcher.
+
+- `id`: command ID, unique inside the plugin.
+- `title`: command title, localized when possible.
+- `subtitle`: optional short description.
+- `keywords`: search keywords. Symbols can be useful too; a calculator can include `"="`.
+- `icon`: command icon; falls back to the plugin icon when omitted.
+- `mode`: `view` opens a plugin view; `no-view` is for direct actions.
+
+## Icons
+
+Marketplace and installed plugin lists both read icon metadata. For now, prefer `lucide:*`:
+
+```json
+{
+  "icon": "lucide:clipboard-list"
+}
+```
+
+If packaged image icons are supported in the future, use a relative path inside the `.deskit` package, not an image URL. Network images break offline use.
+
+## Version consistency
+
+Before release, keep these versions aligned:
+
+- `package.json`
+- `deskit.json`
+- GitHub Release tag, such as `v0.1.0`
+
+The Marketplace listing `version` must also match `deskit.json`.

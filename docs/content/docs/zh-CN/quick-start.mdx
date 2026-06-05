@@ -1,0 +1,61 @@
+---
+title: 快速开始
+description: 从模板创建插件、运行检查、打包并在 DesKit 中调试。
+---
+
+# 快速开始
+
+推荐从官方模板开始。模板已经包含 manifest、SDK 类型、构建脚本、打包脚本和 GitHub Release workflow。
+
+```bash
+git clone https://github.com/WiIIiamWei/deskit-plugin-template.git my-deskit-plugin
+cd my-deskit-plugin
+npm install
+npm run check
+```
+
+`npm run check` 通常会执行：
+
+- TypeScript 类型检查；
+- 构建 `dist/index.js`；
+- 校验 `deskit.json`；
+- 运行插件自己的 smoke test。
+
+## 修改插件身份
+
+创建新插件时，至少修改这些字段：
+
+```json
+{
+  "id": "com.example.my-plugin",
+  "name": "my-plugin",
+  "displayName": {
+    "en": "My Plugin",
+    "zh-CN": "我的插件"
+  },
+  "version": "0.1.0",
+  "main": "dist/index.js"
+}
+```
+
+`id` 必须稳定。发布之后不要随意更换，否则 DesKit 会把它当成另一个插件。
+
+## 本地打包
+
+```bash
+npm run pack
+```
+
+打包后会在 `release/` 下生成 `.deskit` 文件。你可以在 DesKit 的插件页面选择 `.deskit` 包直接安装，用来验证安装流程、权限提示、图标和命令展示。
+
+## 开发时的基本循环
+
+一个舒服的开发循环通常是：
+
+1. 修改 `src/index.ts` 和 `deskit.json`。
+2. 运行 `npm run check`。
+3. 运行 `npm run pack`。
+4. 在 DesKit 插件页安装新的 `.deskit`。
+5. 在启动器里搜索命令并测试交互。
+
+如果你的插件依赖 Marketplace 安装流程，请先发布 GitHub Release，再更新 Marketplace listing。调试期间没有必要频繁提交 Marketplace。
