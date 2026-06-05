@@ -145,6 +145,20 @@
       "removeFeature": "Remove {{name}}"
     }
   },
+  "permissions": {
+    "items": {
+      "storage:plugin": "Plugin storage",
+      "clipboard:read": "Read clipboard",
+      "clipboard:write": "Write clipboard",
+      "network:http": "HTTP network access",
+      "sync:plugin": "Settings sync storage",
+      "notification": "Show notifications",
+      "system:open-url": "Open URLs",
+      "system:open-path": "Open files or folders",
+      "system:capture-screen": "Capture screen",
+      "system:pin-image": "Pin images"
+    }
+  },
   "plugins": {
     "title": "Plugins",
     "subtitle": "Manage built-in, installed, and development plugins.",
@@ -156,6 +170,10 @@
     "emptyTitle": "No plugins found",
     "emptyBody": "No built-in, installed, or development plugins are registered yet.",
     "installedCount": "{{count}} plugins installed",
+    "visibleCount": "Showing {{visible}} / {{total}} plugins",
+    "filteredEmptyTitle": "No plugins match these filters",
+    "filteredEmptyBody": "Try another search term, source, or status filter.",
+    "searchPlaceholder": "Search plugins, authors, commands, or permissions…",
     "pluginErrorTitle": "Plugin error",
     "status": {
       "active": "Active",
@@ -176,6 +194,12 @@
       "commands": "Commands",
       "path": "Path"
     },
+    "filters": {
+      "source": "Source",
+      "status": "Status",
+      "allSources": "All sources",
+      "allStatuses": "All statuses"
+    },
     "actions": {
       "enable": "Enable",
       "disable": "Disable",
@@ -191,6 +215,10 @@
       "capture": "Capture",
       "capturing": "Press keys...",
       "shortcutPlaceholder": "Control+Super+C"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "none": "No permissions requested"
     },
     "toasts": {
       "enabled": "Plugin enabled.",
@@ -234,6 +262,14 @@
       "homepage": "Homepage",
       "categories": "Categories",
       "openHomepage": "Open homepage"
+    },
+    "permissions": {
+      "title": "Permissions",
+      "confirmTitle": "Review plugin permissions",
+      "confirmBody": "Before installing {{name}}, review the permissions this plugin requests.",
+      "none": "This plugin requests no permissions",
+      "cancel": "Cancel",
+      "confirm": "Install plugin"
     },
     "category": {
       "all": "All",

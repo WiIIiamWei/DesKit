@@ -145,6 +145,20 @@
       "removeFeature": "移除 {{name}}"
     }
   },
+  "permissions": {
+    "items": {
+      "storage:plugin": "插件本地存储",
+      "clipboard:read": "读取剪贴板",
+      "clipboard:write": "写入剪贴板",
+      "network:http": "HTTP 网络访问",
+      "sync:plugin": "设置同步存储",
+      "notification": "显示通知",
+      "system:open-url": "打开 URL",
+      "system:open-path": "打开文件或文件夹",
+      "system:capture-screen": "屏幕截图",
+      "system:pin-image": "贴图"
+    }
+  },
   "plugins": {
     "title": "插件",
     "subtitle": "管理内置、已安装与开发中的插件。",
@@ -156,6 +170,10 @@
     "emptyTitle": "未发现插件",
     "emptyBody": "当前还没有注册内置、已安装或开发插件。",
     "installedCount": "已安装 {{count}} 个插件",
+    "visibleCount": "显示 {{visible}} / {{total}} 个插件",
+    "filteredEmptyTitle": "没有符合筛选的插件",
+    "filteredEmptyBody": "请尝试更换搜索关键词、来源或状态筛选。",
+    "searchPlaceholder": "搜索插件、作者、命令或权限…",
     "pluginErrorTitle": "插件错误",
     "status": {
       "active": "已启用",
@@ -176,6 +194,12 @@
       "commands": "命令",
       "path": "路径"
     },
+    "filters": {
+      "source": "来源",
+      "status": "状态",
+      "allSources": "全部来源",
+      "allStatuses": "全部状态"
+    },
     "actions": {
       "enable": "启用",
       "disable": "停用",
@@ -191,6 +215,10 @@
       "capture": "捕获",
       "capturing": "请按键...",
       "shortcutPlaceholder": "Control+Super+C"
+    },
+    "permissions": {
+      "title": "权限",
+      "none": "未申请权限"
     },
     "toasts": {
       "enabled": "插件已启用。",
@@ -234,6 +262,14 @@
       "homepage": "主页",
       "categories": "分类",
       "openHomepage": "打开主页"
+    },
+    "permissions": {
+      "title": "权限",
+      "confirmTitle": "确认插件权限",
+      "confirmBody": "安装 {{name}} 前，请确认该插件申请的权限。",
+      "none": "该插件未申请权限",
+      "cancel": "取消",
+      "confirm": "安装插件"
     },
     "category": {
       "all": "全部",
