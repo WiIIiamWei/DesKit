@@ -1,5 +1,9 @@
 import type { ReactNode } from "react"
-import type { MarketplaceEntry, PluginRegistryEntry } from "@/lib/electron"
+import type {
+  MarketplaceEntry,
+  MarketplaceInstallPreview,
+  PluginRegistryEntry,
+} from "@/lib/electron"
 import {
   AlertCircle,
   ArrowLeft,
@@ -13,9 +17,21 @@ import {
 import { useCallback, useEffect, useMemo, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
+import { PermissionTagList } from "@/components/plugins/permission-tags"
 import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { localize } from "@/components/plugins/view-utils"
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogMedia,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
@@ -29,6 +45,7 @@ import {
   listPlugins,
   onPluginRegistryChanged,
   openExternalUrl,
+  previewMarketplacePluginInstall,
 } from "@/lib/electron"
 import { cn } from "@/lib/utils"
 
@@ -43,6 +60,8 @@ export function MarketplacePage() {
   const [category, setCategory] = useState(ALL_CATEGORY)
   const [loading, setLoading] = useState(electronReady)
   const [installingId, setInstallingId] = useState<string | null>(null)
+  const [installPreview, setInstallPreview] = useState<MarketplaceInstallPreview | null>(null)
+  const [installConfirming, setInstallConfirming] = useState(false)
   const [selectedEntryKey, setSelectedEntryKey] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -100,18 +119,39 @@ export function MarketplacePage() {
     return marketplace.find((entry) => marketplaceEntryKey(entry) === selectedEntryKey) ?? null
   }, [marketplace, selectedEntryKey])
 
-  async function install(entry: MarketplaceEntry) {
+  async function requestInstall(entry: MarketplaceEntry) {
     setInstallingId(entry.id)
     setError(null)
     try {
-      const plugin = await installMarketplacePlugin(entry.id, entry.version)
+      setInstallPreview(await previewMarketplacePluginInstall(entry.id, entry.version))
+    } catch (err) {
+      const message = errorMessage(err)
+      setError(message)
+      toast.error(message)
+    } finally {
+      setInstallingId(null)
+    }
+  }
+
+  async function confirmInstall() {
+    if (!installPreview) return
+    setInstallConfirming(true)
+    setInstallingId(installPreview.entry.id)
+    setError(null)
+    try {
+      const plugin = await installMarketplacePlugin(
+        installPreview.entry.id,
+        installPreview.entry.version
+      )
       setInstalled((current) => new Map(current).set(plugin.pluginId, plugin))
+      setInstallPreview(null)
       toast.success(t("marketplace.toasts.installed"))
     } catch (err) {
       const message = errorMessage(err)
       setError(message)
       toast.error(message)
     } finally {
+      setInstallConfirming(false)
       setInstallingId(null)
     }
   }
@@ -152,7 +192,7 @@ export function MarketplacePage() {
           installing={installingId === selectedEntry.id}
           locale={i18n.language}
           onBack={() => setSelectedEntryKey(null)}
-          onInstall={install}
+          onInstall={requestInstall}
         />
       ) : (
         <>
@@ -209,7 +249,7 @@ export function MarketplacePage() {
                   installed={installed.get(entry.id)}
                   installing={installingId === entry.id}
                   locale={i18n.language}
-                  onInstall={install}
+                  onInstall={requestInstall}
                   onSelect={(entry) => setSelectedEntryKey(marketplaceEntryKey(entry))}
                 />
               ))}
@@ -217,6 +257,15 @@ export function MarketplacePage() {
           )}
         </>
       )}
+      <InstallPermissionDialog
+        installing={installConfirming}
+        locale={i18n.language}
+        preview={installPreview}
+        onConfirm={confirmInstall}
+        onOpenChange={(open) => {
+          if (!open && !installConfirming) setInstallPreview(null)
+        }}
+      />
     </MarketplaceFrame>
   )
 }
@@ -422,6 +471,13 @@ function MarketplaceDetails({
             </div>
           )}
 
+          {entry.permissions && entry.permissions.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-medium">{t("marketplace.permissions.title")}</h2>
+              <PermissionTagList permissions={entry.permissions} />
+            </div>
+          )}
+
           <div className="flex flex-col gap-2 sm:flex-row">
             <Tooltip>
               <TooltipTrigger asChild>
@@ -459,6 +515,79 @@ function MarketplaceDetails({
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function InstallPermissionDialog({
+  installing,
+  locale,
+  onConfirm,
+  onOpenChange,
+  preview,
+}: {
+  installing: boolean
+  locale: string
+  onConfirm: () => Promise<void>
+  onOpenChange: (open: boolean) => void
+  preview: MarketplaceInstallPreview | null
+}) {
+  const { t } = useTranslation()
+  if (!preview) return null
+
+  const title =
+    localize(preview.manifest.displayName, locale) || preview.manifest.name || preview.entry.name
+
+  return (
+    <AlertDialog open onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogMedia>
+            <PluginIcon
+              icon={marketplaceIcon(preview.entry.icon) ?? marketplaceIcon(preview.manifest.icon)}
+              fallback={Store}
+              className="size-8 text-muted-foreground"
+            />
+          </AlertDialogMedia>
+          <AlertDialogTitle>{t("marketplace.permissions.confirmTitle")}</AlertDialogTitle>
+          <AlertDialogDescription>
+            {t("marketplace.permissions.confirmBody", { name: title })}
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+
+        <div className="space-y-3 rounded-lg border bg-muted/30 p-3">
+          <div className="flex min-w-0 items-center justify-between gap-3 text-sm">
+            <span className="truncate font-medium" title={title}>
+              {title}
+            </span>
+            <Badge variant="outline" className="shrink-0">
+              v{preview.manifest.version}
+            </Badge>
+          </div>
+          <PermissionTagList
+            permissions={preview.manifest.permissions}
+            emptyLabel={t("marketplace.permissions.none")}
+          />
+        </div>
+
+        <AlertDialogFooter>
+          <AlertDialogCancel disabled={installing}>
+            {t("marketplace.permissions.cancel")}
+          </AlertDialogCancel>
+          <AlertDialogAction
+            disabled={installing}
+            onClick={(event) => {
+              event.preventDefault()
+              void onConfirm()
+            }}
+          >
+            <Download className={cn("size-4", installing && "animate-pulse")} aria-hidden />
+            {installing
+              ? t("marketplace.actions.installing")
+              : t("marketplace.permissions.confirm")}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
   )
 }
 
