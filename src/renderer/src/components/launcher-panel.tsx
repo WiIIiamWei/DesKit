@@ -294,7 +294,7 @@ export function LauncherPanel() {
         if (item.kind === "app") {
           await launchApp(item.result.entry.id)
         } else {
-          await runPluginCommand(item.result)
+          await runPluginCommand(item.result, "")
         }
       } catch (err) {
         console.error("launcher selection failed", err)
