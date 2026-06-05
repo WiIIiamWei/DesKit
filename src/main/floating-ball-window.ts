@@ -204,11 +204,11 @@ export function expandFloatingBallMenu(): void {
 
   const menuWin = ensureFloatingBallMenuWindow(deps)
   const menuBounds = getPreparedExpandedFloatingBallWindowBounds(win)
+  requestFloatingBallMenuBounds(menuWin, menuBounds)
   requestFloatingBallBounds(
     win,
     getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds))
   )
-  requestFloatingBallMenuBounds(menuWin, menuBounds)
   pendingMenuReveal = true
   prepareHiddenFloatingBallMenuWindow(menuWin, { show: true })
   menuPhase = "expanded"

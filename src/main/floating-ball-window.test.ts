@@ -85,6 +85,41 @@ function hasBoundsCall(win: MockBrowserWindow, bounds: Electron.Rectangle): bool
   })
 }
 
+function installMacosParentMoveBoundsMock({
+  child,
+  parent,
+  childBounds,
+  parentBounds,
+}: {
+  child: MockBrowserWindow
+  parent: MockBrowserWindow
+  childBounds: Electron.Rectangle
+  parentBounds: Electron.Rectangle
+}): { childBounds: Electron.Rectangle; parentBounds: Electron.Rectangle } {
+  const state = {
+    childBounds: { ...childBounds },
+    parentBounds: { ...parentBounds },
+  }
+
+  child.getBounds.mockImplementation(() => state.childBounds)
+  child.setBounds.mockImplementation((bounds: Electron.Rectangle) => {
+    state.childBounds = { ...bounds }
+  })
+  parent.getBounds.mockImplementation(() => state.parentBounds)
+  parent.setBounds.mockImplementation((bounds: Electron.Rectangle) => {
+    const deltaX = bounds.x - state.parentBounds.x
+    const deltaY = bounds.y - state.parentBounds.y
+    state.parentBounds = { ...bounds }
+    state.childBounds = {
+      ...state.childBounds,
+      x: state.childBounds.x + deltaX,
+      y: state.childBounds.y + deltaY,
+    }
+  })
+
+  return state
+}
+
 describe("floating ball bounds helpers", () => {
   it("calculates the visual center from the current window bounds", () => {
     expect(getFloatingBallVisualCenter({ x: 100, y: 200, width: 72, height: 72 })).toEqual({
@@ -770,6 +805,50 @@ describe("floating ball window dragging", () => {
         })
       )
     ).toBe(true)
+  })
+
+  it("keeps the ball centered on macOS when the parent menu moves during expand", () => {
+    vi.mocked(screen.getDisplayMatching).mockReturnValue({
+      workArea: { x: 0, y: 0, width: 1440, height: 900 },
+    } as Electron.Display)
+    showFloatingBallWindow(deps)
+    const [ballWindow, menuWindow] = createdWindows()
+    const windowBounds = installMacosParentMoveBoundsMock({
+      child: ballWindow,
+      parent: menuWindow,
+      childBounds: {
+        x: 1344,
+        y: 414,
+        width: COLLAPSED_WINDOW_SIZE,
+        height: COLLAPSED_WINDOW_SIZE,
+      },
+      parentBounds: {
+        x: 0,
+        y: 0,
+        width: EXPANDED_WINDOW_SIZE,
+        height: EXPANDED_WINDOW_SIZE,
+      },
+    })
+    ballWindow.setBounds.mockClear()
+    menuWindow.setBounds.mockClear()
+
+    expandFloatingBallMenu()
+
+    const expectedMenuBounds = {
+      x: 1440 - EXPANDED_WINDOW_SIZE,
+      y: 450 - EXPANDED_WINDOW_SIZE / 2,
+      width: EXPANDED_WINDOW_SIZE,
+      height: EXPANDED_WINDOW_SIZE,
+    }
+    const expectedBallBounds = {
+      x: 1440 - EXPANDED_WINDOW_SIZE / 2 - COLLAPSED_WINDOW_SIZE / 2,
+      y: 414,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    }
+    expect(menuWindow.setBounds).toHaveBeenCalledWith(expectedMenuBounds)
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith(expectedBallBounds)
+    expect(windowBounds.childBounds).toEqual(expectedBallBounds)
   })
 
   it("closes the menu interaction area without changing the collapsed hit area", () => {
