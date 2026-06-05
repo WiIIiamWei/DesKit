@@ -1,8 +1,9 @@
 import type { AppEntry } from "../launcher/types"
 import { promises as fs } from "node:fs"
-import { shell } from "electron"
-import { beforeEach, describe, expect, it, vi } from "vitest"
-import { settingsFilePath } from "../settings/settings"
+import * as os from "node:os"
+import * as path from "node:path"
+import { app, shell } from "electron"
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { LauncherService } from "./launcher-service"
 
 function entry(name: string): AppEntry {
@@ -16,12 +17,20 @@ function entry(name: string): AppEntry {
 }
 
 describe("launcherService ranking", () => {
+  let userDataDir: string
+
   beforeEach(async () => {
     vi.mocked(shell.openPath).mockResolvedValue("")
-    // app.getPath("userData") is mocked to a fixed path, so settings.json
-    // persists on the real disk between tests/runs. Start each test from a
-    // clean slate so settings reads return defaults regardless of order.
-    await fs.rm(settingsFilePath("/mock/userData"), { force: true })
+    // Point app.getPath at a real, writable temp dir. The default mock returns
+    // "/mock/userData", which is fine on Windows but unwritable at the
+    // filesystem root on CI Linux (saveSettings would throw EACCES). A fresh
+    // dir per test also keeps settings reads order-independent.
+    userDataDir = await fs.mkdtemp(path.join(os.tmpdir(), "deskit-launcher-"))
+    vi.mocked(app.getPath).mockReturnValue(userDataDir)
+  })
+
+  afterEach(async () => {
+    await fs.rm(userDataDir, { recursive: true, force: true })
   })
 
   it("records successful app launches for dynamic ranking", async () => {
