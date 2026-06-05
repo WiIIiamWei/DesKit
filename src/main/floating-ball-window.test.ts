@@ -400,27 +400,26 @@ describe("floating ball window dragging", () => {
     )
   })
 
-  it("parents the expanded ball window to the menu window to preserve z-order", () => {
-    ensureFloatingBallWindow(deps)
-    const ballWindow = latestWindow()
-    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
-
-    expandFloatingBallMenu()
-    const menuWindow = latestWindow()
+  it("parents the ball window to the resident menu window before showing the ball", () => {
+    showFloatingBallWindow(deps)
+    const [ballWindow, menuWindow] = createdWindows()
 
     expect(ballWindow.setParentWindow).toHaveBeenCalledWith(menuWindow)
+    expect(ballWindow.setParentWindow.mock.invocationCallOrder[0]).toBeLessThan(
+      ballWindow.showInactive.mock.invocationCallOrder[0]
+    )
   })
 
-  it("detaches the ball window from the menu window after collapsing the expanded menu", () => {
-    ensureFloatingBallWindow(deps)
-    const ballWindow = latestWindow()
+  it("keeps the ball parent relationship stable when opening and closing the menu", () => {
+    showFloatingBallWindow(deps)
+    const [ballWindow] = createdWindows()
     ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
-    expandFloatingBallMenu()
     ballWindow.setParentWindow.mockClear()
 
+    expandFloatingBallMenu()
     collapseFloatingBallMenu()
 
-    expect(ballWindow.setParentWindow).toHaveBeenCalledWith(null)
+    expect(ballWindow.setParentWindow).not.toHaveBeenCalled()
   })
 
   it("shows and restacks the transparent menu before broadcasting the open state", () => {
@@ -959,8 +958,8 @@ describe("floating ball window dragging", () => {
   })
 
   it("opens the expanded ball context menu without restacking the ball window", () => {
-    ensureFloatingBallWindow(deps)
-    const ballWindow = latestWindow()
+    showFloatingBallWindow(deps)
+    const [ballWindow] = createdWindows()
     ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
     expandFloatingBallMenu()
     ballWindow.moveTop.mockClear()
@@ -984,8 +983,8 @@ describe("floating ball window dragging", () => {
   })
 
   it("relies on the expanded ball parent relationship before opening its context menu", () => {
-    ensureFloatingBallWindow(deps)
-    const ballWindow = latestWindow()
+    showFloatingBallWindow(deps)
+    const [ballWindow] = createdWindows()
     ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
     expandFloatingBallMenu()
     ballWindow.isFocused.mockReturnValue(true)
