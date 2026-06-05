@@ -37,6 +37,7 @@ type MockBrowserWindow = ElectronBrowserWindow & {
   focus: Mock
   isFocused: Mock
   moveTop: Mock
+  setParentWindow: Mock
   webContents: ElectronBrowserWindow["webContents"] & {
     send: Mock
   }
@@ -397,6 +398,29 @@ describe("floating ball window dragging", () => {
     expect(ballWindow.moveTop.mock.invocationCallOrder[0]).toBeGreaterThan(
       menuWindow.showInactive.mock.invocationCallOrder[0]
     )
+  })
+
+  it("parents the expanded ball window to the menu window to preserve z-order", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+
+    expect(ballWindow.setParentWindow).toHaveBeenCalledWith(menuWindow)
+  })
+
+  it("detaches the ball window from the menu window after collapsing the expanded menu", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    expandFloatingBallMenu()
+    ballWindow.setParentWindow.mockClear()
+
+    collapseFloatingBallMenu()
+
+    expect(ballWindow.setParentWindow).toHaveBeenCalledWith(null)
   })
 
   it("shows and restacks the transparent menu before broadcasting the open state", () => {
@@ -934,7 +958,7 @@ describe("floating ball window dragging", () => {
     expect(contextMenu?.popup).toHaveBeenCalledWith(expect.objectContaining({ window: menuWindow }))
   })
 
-  it("keeps the ball window above the menu window after right-clicking the expanded ball", () => {
+  it("opens the expanded ball context menu without restacking the ball window", () => {
     ensureFloatingBallWindow(deps)
     const ballWindow = latestWindow()
     ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
@@ -953,13 +977,13 @@ describe("floating ball window dragging", () => {
       | undefined
     expect(popupOptions?.callback).toEqual(expect.any(Function))
 
-    ballWindow.moveTop.mockClear()
+    expect(ballWindow.moveTop).not.toHaveBeenCalled()
     popupOptions?.callback?.()
 
-    expect(ballWindow.moveTop).toHaveBeenCalledTimes(1)
+    expect(ballWindow.moveTop).not.toHaveBeenCalled()
   })
 
-  it("restacks the focused expanded ball before opening its context menu", () => {
+  it("relies on the expanded ball parent relationship before opening its context menu", () => {
     ensureFloatingBallWindow(deps)
     const ballWindow = latestWindow()
     ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
@@ -973,10 +997,9 @@ describe("floating ball window dragging", () => {
     const contextMenu = vi.mocked(Menu.buildFromTemplate).mock.results[0]?.value as
       | { popup: Mock }
       | undefined
-    expect(ballWindow.moveTop).toHaveBeenCalledTimes(1)
-    expect(ballWindow.moveTop.mock.invocationCallOrder[0]).toBeLessThan(
-      contextMenu?.popup.mock.invocationCallOrder[0] ?? 0
-    )
+    expect(ballWindow.setParentWindow).toHaveBeenCalled()
+    expect(ballWindow.moveTop).not.toHaveBeenCalled()
+    expect(contextMenu?.popup).toHaveBeenCalled()
   })
 
   it("does not restore the pre-expand snapped edge after dragging the expanded menu away", () => {

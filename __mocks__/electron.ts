@@ -49,6 +49,7 @@ function createBrowserWindowMock() {
     restore: vi.fn(),
     focus: vi.fn(),
     moveTop: vi.fn(),
+    setParentWindow: vi.fn(),
     setOpacity: vi.fn(),
     setIgnoreMouseEvents: vi.fn(),
     setFocusable: vi.fn(),
