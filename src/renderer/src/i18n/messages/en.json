@@ -408,6 +408,7 @@
       "capture": "Capture",
       "close": "Close",
       "copy": "Copy",
+      "ocr": "OCR",
       "pin": "Pin",
       "reselect": "Reselect",
       "save": "Save",
@@ -422,6 +423,17 @@
     },
     "colorLabel": "Color {{color}}",
     "opacity": "Opacity",
-    "strokeWidth": "Stroke width"
+    "strokeWidth": "Stroke width",
+    "ocr": {
+      "copyFailed": "Copy failed",
+      "copied": "Copied",
+      "empty": "No text was recognized. Select an area that contains text.",
+      "loading": "Loading screenshot…",
+      "placeholder": "Recognized text appears here",
+      "recapture": "Retake",
+      "recaptureFailed": "Could not start screenshot OCR",
+      "recognizing": "Recognizing text…",
+      "title": "Screenshot OCR"
+    }
   }
 }

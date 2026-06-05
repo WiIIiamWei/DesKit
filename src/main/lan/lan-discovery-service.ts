@@ -6,10 +6,11 @@ import type {
   LanStatus,
   LocalLanIdentity,
   StoredLanIdentity,
+  TrustedLanDevice,
 } from "./types"
-import { EventEmitter } from "node:events"
 import process from "node:process"
 import { lanIdentityFilePath, LanIdentityStore } from "./identity-store"
+import { TypedEventEmitter } from "./typed-event-emitter"
 
 export interface LanDiscoveryServiceOptions {
   userDataDir: string
@@ -20,13 +21,21 @@ export interface LanDiscoveryServiceOptions {
   now?: () => number
 }
 
-export class LanDiscoveryService extends EventEmitter {
+export interface LanDiscoveryServiceEvents {
+  "devices-changed": [devices: LanDevice[]]
+  "status-changed": [status: LanStatus]
+  "device-discovered": [device: DiscoveredLanDevice]
+}
+
+export class LanDiscoveryService extends TypedEventEmitter<LanDiscoveryServiceEvents> {
   private readonly adapter: LanDiscoveryAdapter
   private readonly identityStore: Pick<LanIdentityStore, "loadOrCreate">
   private readonly now: () => number
   private readonly endpointPort: () => number
   private readonly isPaired: (deviceId: string) => boolean
   private readonly devices = new Map<string, LanDevice>()
+  private readonly learnedDeviceIds = new Set<string>()
+  private readonly bonjourSeenDeviceIds = new Set<string>()
   private identity: LocalLanIdentity | null = null
   private discovering = false
 
@@ -66,6 +75,8 @@ export class LanDiscoveryService extends EventEmitter {
         devicesChanged = true
       }
     }
+    this.learnedDeviceIds.clear()
+    this.bonjourSeenDeviceIds.clear()
     if (devicesChanged) this.emitDevicesChanged()
     this.emitStatusChanged()
     return this.getStatus()
@@ -95,24 +106,61 @@ export class LanDiscoveryService extends EventEmitter {
     this.emitDevicesChanged()
   }
 
+  learnDevice(device: DiscoveredLanDevice): void {
+    if (!this.identity || device.deviceId === this.identity.deviceId) return
+    this.learnedDeviceIds.add(device.deviceId)
+    this.upsertDevice(device)
+  }
+
+  restoreTrustedDevices(trustedDevices: TrustedLanDevice[]): void {
+    for (const trusted of trustedDevices) {
+      if (!trusted.host?.trim() || !trusted.port) continue
+      this.upsertDevice(
+        {
+          deviceId: trusted.deviceId,
+          name: trusted.name,
+          host: trusted.host,
+          addresses: trusted.addresses?.length ? [...trusted.addresses] : [trusted.host],
+          port: trusted.port,
+          platform: "unknown",
+          capabilities: ["pair", "https-chunks"],
+        },
+        { online: false, paired: true, lastSeenAt: trusted.lastEndpointSeenAt ?? this.now() }
+      )
+    }
+  }
+
   private readonly handleDeviceUp = (device: DiscoveredLanDevice): void => {
+    if (!this.identity || device.deviceId === this.identity.deviceId) return
+    this.bonjourSeenDeviceIds.add(device.deviceId)
+    this.upsertDevice(device)
+    // Proactively announce ourselves to every peer we can see, so a peer that
+    // is blind to us over mDNS still learns of us. Consumers listen for this.
+    this.emit("device-discovered", device)
+  }
+
+  private readonly handleDeviceDown = (deviceId: string): void => {
+    if (this.learnedDeviceIds.has(deviceId) && !this.bonjourSeenDeviceIds.has(deviceId)) return
+    const device = this.devices.get(deviceId)
+    if (!device || !device.online) return
+    device.online = false
+    this.emitDevicesChanged()
+    this.emitStatusChanged()
+  }
+
+  private upsertDevice(
+    device: DiscoveredLanDevice,
+    options?: { online?: boolean; paired?: boolean; lastSeenAt?: number }
+  ): void {
     if (!this.identity || device.deviceId === this.identity.deviceId) return
     this.devices.set(device.deviceId, {
       ...device,
       addresses: [...device.addresses],
       capabilities: [...device.capabilities],
-      lastSeenAt: this.now(),
-      online: true,
-      paired: this.isPaired(device.deviceId),
+      lastSeenAt: options?.lastSeenAt ?? this.now(),
+      online: options?.online ?? true,
+      paired: options?.paired ?? this.isPaired(device.deviceId),
     })
-    this.emitDevicesChanged()
-    this.emitStatusChanged()
-  }
-
-  private readonly handleDeviceDown = (deviceId: string): void => {
-    const device = this.devices.get(deviceId)
-    if (!device || !device.online) return
-    device.online = false
     this.emitDevicesChanged()
     this.emitStatusChanged()
   }

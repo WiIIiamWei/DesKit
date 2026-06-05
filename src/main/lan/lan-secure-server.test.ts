@@ -91,6 +91,73 @@ describe("lanSecureServer", () => {
     // markedly slower on shared CI runners than locally; allow generous headroom.
   }, 30_000)
 
+  it("only learns a trusted deviceId from the holder of its pinned certificate", async () => {
+    const alice = await createPeer("alice", "Alice desktop")
+    const bob = await createPeer("bob", "Bob laptop")
+    alice.devices.set("bob", deviceFor(bob))
+    bob.devices.set("alice", deviceFor(alice))
+
+    const outgoingPairing = await alice.server.pair(deviceFor(bob))
+    const incomingPairing = bob.server.listPairings()[0]!
+    await alice.server.confirmPairing(outgoingPairing.id, incomingPairing.sas)
+    await bob.server.confirmPairing(incomingPairing.id, outgoingPairing.sas)
+    expect(bob.trustedDevices.has("alice")).toBe(true)
+
+    const learned: string[] = []
+    bob.server.on("device-learned", (device) => learned.push(device.deviceId))
+
+    // An impostor that holds its own certificate but claims Alice's (trusted)
+    // deviceId must not be learned, so it cannot repoint Alice's endpoint.
+    const impostor = await createPeer("alice", "Fake Alice")
+    await impostor.server.announcePresence(deviceFor(bob))
+    expect(learned).not.toContain("alice")
+
+    // A brand-new, untrusted device is still learned (display only; transfers
+    // remain fingerprint-pinned).
+    const carol = await createPeer("carol", "Carol tablet")
+    await carol.server.announcePresence(deviceFor(bob))
+    expect(learned).toContain("carol")
+  }, 30_000)
+
+  it("lets the responder confirm when discovery is only visible from the initiator", async () => {
+    const alice = await createPeer("alice", "Alice desktop")
+    const bob = await createPeer("bob", "Bob laptop")
+    alice.devices.set("bob", deviceFor(bob))
+
+    const outgoingPairing = await alice.server.pair(deviceFor(bob))
+    const incomingPairing = bob.server.listPairings()[0]!
+
+    await alice.server.confirmPairing(outgoingPairing.id, incomingPairing.sas)
+    await expect(
+      bob.server.confirmPairing(incomingPairing.id, outgoingPairing.sas)
+    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ state: "confirmed" })]))
+
+    expect(bob.trustedDevices.has("alice")).toBe(true)
+    expect(alice.trustedDevices.has("bob")).toBe(true)
+  }, 30_000)
+
+  it("uses the pairing request endpoint when discovery has a stale offline record", async () => {
+    const alice = await createPeer("alice", "Alice desktop")
+    const bob = await createPeer("bob", "Bob laptop")
+    alice.devices.set("bob", deviceFor(bob))
+    bob.devices.set("alice", {
+      ...deviceFor(alice),
+      port: alice.server.port() + 1,
+      online: false,
+    })
+
+    const outgoingPairing = await alice.server.pair(deviceFor(bob))
+    const incomingPairing = bob.server.listPairings()[0]!
+
+    await alice.server.confirmPairing(outgoingPairing.id, incomingPairing.sas)
+    await expect(
+      bob.server.confirmPairing(incomingPairing.id, outgoingPairing.sas)
+    ).resolves.toEqual(expect.arrayContaining([expect.objectContaining({ state: "confirmed" })]))
+
+    expect(bob.trustedDevices.has("alice")).toBe(true)
+    expect(alice.trustedDevices.has("bob")).toBe(true)
+  }, 30_000)
+
   it("rejects a server whose certificate no longer matches the pinned fingerprint", async () => {
     const alice = await createPeer("alice", "Alice desktop")
     const bob = await createPeer("bob", "Bob laptop")

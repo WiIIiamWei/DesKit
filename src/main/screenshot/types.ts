@@ -9,7 +9,7 @@ export interface ScreenshotSelection {
   scaleFactor: number
 }
 
-export type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
+export type ScreenshotAction = "copy" | "save" | "pin" | "annotate" | "ocr"
 
 export interface ScreenshotSelectionResult {
   selection: ScreenshotSelection

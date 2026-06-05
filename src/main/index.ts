@@ -2,6 +2,7 @@ import type { ClipboardContent } from "@deskit/plugin-sdk"
 import type { IpcMainInvokeEvent } from "electron"
 import type { LanDevice, LanPairing, LanStatus, LanTransfer } from "./lan/types"
 import type { PluginRegistryEntry } from "./plugins/types"
+import type { ScreenshotAction } from "./screenshot/types"
 import type { SearchWindowDeps } from "./search-window"
 import type { FloatingBallFeature, UserSettingsPatch } from "./settings/settings"
 import type {
@@ -35,6 +36,7 @@ import {
   destroyFloatingBallWindow,
   finishFloatingBallDrag,
   hideFloatingBallWindow,
+  markFloatingBallMenuPainted,
   moveFloatingBallBy,
   moveFloatingBallDrag,
   openFloatingBallFeature,
@@ -69,6 +71,11 @@ import {
 } from "./screenshot/annotator-window"
 import { captureSelectionBitmap } from "./screenshot/capture-bitmap"
 import { captureRegion } from "./screenshot/capture-region"
+import {
+  closeScreenshotOcrWindow,
+  getScreenshotOcrState,
+  openScreenshotOcrWindow,
+} from "./screenshot/ocr-window"
 import {
   cancelScreenshotOverlay,
   completeScreenshotOverlay,
@@ -366,6 +373,12 @@ function registerIpc(): void {
     moveFloatingBallBy({ x: value.x, y: value.y })
   })
 
+  ipcMain.on("floating-ball:menu-painted", (event, expanded: unknown) => {
+    if (typeof expanded === "boolean") {
+      markFloatingBallMenuPainted(event.sender, expanded)
+    }
+  })
+
   ipcMain.handle("settings:get", () => launcher.getSettings())
 
   ipcMain.handle("settings:update", async (_event, patch: unknown) => {
@@ -406,7 +419,13 @@ function registerIpc(): void {
     if (!selection || typeof selection !== "object") return
     const s = selection as Record<string, unknown>
     const action = value.action
-    if (action !== "copy" && action !== "save" && action !== "pin" && action !== "annotate") {
+    if (
+      action !== "copy" &&
+      action !== "save" &&
+      action !== "pin" &&
+      action !== "annotate" &&
+      action !== "ocr"
+    ) {
       return
     }
     if (
@@ -467,6 +486,24 @@ function registerIpc(): void {
 
   ipcMain.on("pinned-image:close", (event) => {
     closePinnedImageWindow(event.sender)
+  })
+
+  ipcMain.handle("screenshot:ocr-state", (event) => {
+    return getScreenshotOcrState(event.sender)
+  })
+
+  ipcMain.on("screenshot:ocr-close", (event) => {
+    closeScreenshotOcrWindow(event.sender)
+  })
+
+  ipcMain.on("screenshot:ocr-recapture", (event) => {
+    if (!closeScreenshotOcrWindow(event.sender)) return
+    setTimeout(() => {
+      void startScreenshotCapture({
+        forcedAction: "ocr",
+        mode: "capture",
+      })
+    }, 0)
   })
 
   ipcMain.handle("sync:get-status", () => syncStatus())
@@ -1152,16 +1189,33 @@ function rebindScreenshotHotkey(accelerator: string): boolean {
   return ok
 }
 
-async function startScreenshotCapture(): Promise<void> {
+interface StartScreenshotCaptureOptions {
+  forcedAction?: ScreenshotAction
+  mode?: "actions" | "capture"
+  onCancel?: () => void
+}
+
+async function startScreenshotCapture(options: StartScreenshotCaptureOptions = {}): Promise<void> {
   const userDataDir = app.getPath("userData")
   let capturedTempPath: string | null = null
   try {
     await cleanupScreenshotTempDir(userDataDir)
     const result = await captureRegion({
-      selectRegion: () => selectScreenshotRegion({ rendererDevUrl, appOrigin: APP_ORIGIN }),
+      selectRegion: async () => {
+        const selected = await selectScreenshotRegion(
+          { rendererDevUrl, appOrigin: APP_ORIGIN },
+          { mode: options.mode }
+        )
+        return selected && options.forcedAction
+          ? { ...selected, action: options.forcedAction }
+          : selected
+      },
       captureSelection: (selection) => captureSelectionBitmap(selection, { userDataDir }),
     })
-    if (!result) return
+    if (!result) {
+      options.onCancel?.()
+      return
+    }
     capturedTempPath = result.imagePath
 
     if (result.action === "copy") {
@@ -1182,6 +1236,11 @@ async function startScreenshotCapture(): Promise<void> {
           appOrigin: APP_ORIGIN,
         }
       )
+      capturedTempPath = null
+      return
+    }
+    if (result.action === "ocr") {
+      openScreenshotOcrWindow({ rendererDevUrl, appOrigin: APP_ORIGIN }, result)
       capturedTempPath = null
       return
     }

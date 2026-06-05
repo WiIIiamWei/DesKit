@@ -408,6 +408,7 @@
       "capture": "截图",
       "close": "关闭",
       "copy": "复制",
+      "ocr": "OCR",
       "pin": "贴图",
       "reselect": "重选",
       "save": "保存",
@@ -422,6 +423,17 @@
     },
     "colorLabel": "颜色 {{color}}",
     "opacity": "不透明度",
-    "strokeWidth": "线宽"
+    "strokeWidth": "线宽",
+    "ocr": {
+      "copyFailed": "复制失败，请重试",
+      "copied": "已复制",
+      "empty": "未识别到文字，请重新选择包含文字的区域",
+      "loading": "正在加载截图…",
+      "placeholder": "识别结果将显示在这里",
+      "recapture": "重新截图",
+      "recaptureFailed": "无法启动截图 OCR",
+      "recognizing": "正在识别文字…",
+      "title": "截图 OCR"
+    }
   }
 }

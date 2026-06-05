@@ -60,6 +60,7 @@
     "selfsigned": "3.0.1",
     "sonner": "^2.0.7",
     "tailwind-merge": "^3.5.0",
+    "tesseract.js": "^6.0.1",
     "vaul": "^1.1.2",
     "yauzl": "2.10.0",
     "zod": "^4.4.3",
@@ -116,13 +117,27 @@
     "npmRebuild": false,
     "buildDependenciesFromSource": false,
     "nodeGypRebuild": false,
+    "asarUnpack": [
+      "node_modules/tesseract.js/**/*",
+      "node_modules/tesseract.js-core/**/*"
+    ],
     "directories": {
       "output": "release",
       "buildResources": "resources"
     },
+    "extraResources": [
+      {
+        "from": "resources/ocr",
+        "to": "ocr",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
     "files": [
       "out/**/*",
       "resources/**/*",
+      "!resources/ocr/**",
       "package.json",
       "!**/*.{md,markdown,test.ts,test.tsx,spec.ts,spec.tsx,map}",
       "!{.eslintrc,.prettierrc,.editorconfig,.gitignore,.gitattributes}",

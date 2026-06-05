@@ -142,7 +142,14 @@ declare global {
     | { status: "empty" | "created" | "updated" | "applied" }
     | { status: "conflict"; conflict: DeskitSyncConflict }
 
-  type DeskitScreenshotAction = "copy" | "save" | "pin" | "annotate"
+  type DeskitScreenshotAction = "copy" | "save" | "pin" | "annotate" | "ocr"
+  interface DeskitScreenshotOcrState {
+    error?: string
+    imageDataUrl?: string
+    isLoading: boolean
+    message?: string
+    text: string
+  }
   type DeskitLocalizedString = string | Record<string, string>
   type DeskitClipboardContent =
     | { type: "text"; text: string }
@@ -286,6 +293,7 @@ declare global {
       finishFloatingBallDrag: () => Promise<void>
       moveFloatingBallBy: (delta: { x: number; y: number }) => Promise<void>
       hideFloatingBall: () => Promise<void>
+      notifyFloatingBallMenuPainted: (expanded: boolean) => void
       getSettings: () => Promise<DeskitUserSettings>
       updateSettings: (patch: Partial<DeskitUserSettings>) => Promise<DeskitUserSettings>
       getSyncStatus: () => Promise<DeskitSyncStatus>
@@ -331,6 +339,10 @@ declare global {
       savePinnedImage: () => Promise<void>
       setPinnedImageOpacity: (opacity: number) => Promise<void>
       closePinnedImage: () => void
+      getScreenshotOcrState: () => Promise<DeskitScreenshotOcrState | null>
+      closeScreenshotOcrWindow: () => void
+      recaptureScreenshotOcr: () => void
+      onScreenshotOcrUpdated: (handler: () => void) => () => void
       listPlugins: () => Promise<DeskitPluginIpcResult<DeskitPluginRegistryEntry[]>>
       getPlugin: (
         pluginId: string

@@ -1,5 +1,12 @@
 import type { SecretProtector } from "./credential-store"
-import type { LanDevice, LanDiscoveryAdapter, LanPairing, LanStatus, LanTransfer } from "./types"
+import type {
+  DiscoveredLanDevice,
+  LanDevice,
+  LanDiscoveryAdapter,
+  LanPairing,
+  LanStatus,
+  LanTransfer,
+} from "./types"
 import { EventEmitter } from "node:events"
 import * as path from "node:path"
 import { lanCredentialFilePath, LanCredentialStore } from "./credential-store"
@@ -7,7 +14,11 @@ import { lanIdentityFilePath, LanIdentityStore } from "./identity-store"
 import { LanDiscoveryService } from "./lan-discovery-service"
 import { LanSecureServer } from "./lan-secure-server"
 import { IncomingTransferStore, OutgoingTransferStore } from "./transfer-store"
-import { trustedDevicesFilePath, TrustedDeviceStore } from "./trusted-device-store"
+import {
+  endpointFromDiscoveredDevice,
+  trustedDevicesFilePath,
+  TrustedDeviceStore,
+} from "./trusted-device-store"
 
 export interface LanServiceOptions {
   userDataDir: string
@@ -24,6 +35,8 @@ export class LanService extends EventEmitter {
   private readonly incomingTransfers: IncomingTransferStore
   private readonly outgoingTransfers: OutgoingTransferStore
   private readonly discovery: LanDiscoveryService
+  private readonly announcedEndpoints = new Map<string, string>()
+  private initialized = false
   private secure: LanSecureServer | null = null
 
   constructor(private readonly options: LanServiceOptions) {
@@ -56,30 +69,21 @@ export class LanService extends EventEmitter {
   }
 
   async init(enabled: boolean): Promise<LanStatus> {
-    const identity = await this.identityStore.loadOrCreate()
-    const credential = await this.credentialStore.loadOrCreate(identity)
+    await this.identityStore.loadOrCreate()
     await Promise.all([
       this.trustedDevices.init(),
       this.incomingTransfers.init(),
       this.outgoingTransfers.init(),
     ])
-    this.secure = new LanSecureServer({
-      identity,
-      credential,
-      trustedDevices: this.trustedDevices,
-      incomingTransfers: this.incomingTransfers,
-      outgoingTransfers: this.outgoingTransfers,
-      resolveDevice: (deviceId) => this.findDevice(deviceId),
-    })
-    this.secure.on("pairings-changed", (pairings) => this.emit("pairings-changed", pairings))
-    this.secure.on("transfers-changed", (transfers) => this.emit("transfers-changed", transfers))
-    this.secure.on("trusted-devices-changed", () => this.discovery.refreshDevices())
+    this.initialized = true
     await this.discovery.init(false)
+    this.discovery.restoreTrustedDevices(this.trustedDevices.list())
     if (enabled) await this.start()
     return this.getStatus()
   }
 
   async start(): Promise<LanStatus> {
+    await this.ensureSecure()
     await this.requireSecure().start()
     try {
       return await this.discovery.start()
@@ -92,6 +96,7 @@ export class LanService extends EventEmitter {
   async stop(): Promise<LanStatus> {
     const status = await this.discovery.stop()
     await this.secure?.stop()
+    this.announcedEndpoints.clear()
     return status
   }
 
@@ -104,11 +109,11 @@ export class LanService extends EventEmitter {
   }
 
   listPairings(): LanPairing[] {
-    return this.requireSecure().listPairings()
+    return this.secure?.listPairings() ?? []
   }
 
   listTransfers(): LanTransfer[] {
-    return this.requireSecure().listTransfers()
+    return [...this.incomingTransfers.list(), ...this.outgoingTransfers.list()]
   }
 
   async pair(deviceId: string): Promise<LanPairing> {
@@ -126,11 +131,11 @@ export class LanService extends EventEmitter {
   }
 
   async disconnect(deviceId: string): Promise<void> {
-    await this.requireSecure().disconnect(this.requireOnlineDevice(deviceId))
+    await this.requireSecure().disconnect(this.requireReachableDevice(deviceId))
   }
 
   async sendFile(deviceId: string, sourcePath: string): Promise<LanTransfer> {
-    return this.requireSecure().sendFile(this.requireOnlineDevice(deviceId), sourcePath)
+    return this.requireSecure().sendFile(this.requireReachableDevice(deviceId), sourcePath)
   }
 
   async resumeTransfer(id: string): Promise<LanTransfer> {
@@ -159,8 +164,74 @@ export class LanService extends EventEmitter {
     return device
   }
 
+  private requireReachableDevice(deviceId: string): LanDevice {
+    const device = this.findDevice(deviceId)
+    if (!device) throw new Error("Target device was not found.")
+    if (!device.online && !hasReachableEndpoint(device)) {
+      throw new Error("Target device is offline.")
+    }
+    return device
+  }
+
+  private async announcePresence(device: DiscoveredLanDevice): Promise<void> {
+    const secure = this.secure
+    if (!secure) return
+    const key = `${device.host}:${device.port}`
+    if (this.announcedEndpoints.get(device.deviceId) === key) return
+    this.announcedEndpoints.set(device.deviceId, key)
+    try {
+      await secure.announcePresence({
+        ...device,
+        addresses: [...device.addresses],
+        lastSeenAt: this.options.now?.() ?? Date.now(),
+        online: true,
+        paired: false,
+      })
+    } catch (err) {
+      // Allow a later re-announce if this attempt failed (peer not yet ready).
+      this.announcedEndpoints.delete(device.deviceId)
+      console.warn("[deskit] Failed to announce LAN presence", err)
+    }
+  }
+
+  private async persistLearnedEndpoint(device: DiscoveredLanDevice): Promise<void> {
+    if (!this.trustedDevices.has(device.deviceId)) return
+    await this.trustedDevices.updateEndpoint(
+      device.deviceId,
+      endpointFromDiscoveredDevice(device, this.options.now?.() ?? Date.now())
+    )
+  }
+
+  private async ensureSecure(): Promise<LanSecureServer> {
+    if (this.secure) return this.secure
+    if (!this.initialized) await this.init(false)
+    const identity = await this.identityStore.loadOrCreate()
+    const credential = await this.credentialStore.loadOrCreate(identity)
+    this.secure = new LanSecureServer({
+      identity,
+      credential,
+      trustedDevices: this.trustedDevices,
+      incomingTransfers: this.incomingTransfers,
+      outgoingTransfers: this.outgoingTransfers,
+      resolveDevice: (deviceId) => this.findDevice(deviceId),
+    })
+    this.secure.on("device-learned", (device) => {
+      this.discovery.learnDevice(device)
+      void this.persistLearnedEndpoint(device)
+    })
+    this.discovery.on("device-discovered", (device) => void this.announcePresence(device))
+    this.secure.on("pairings-changed", (pairings) => this.emit("pairings-changed", pairings))
+    this.secure.on("transfers-changed", (transfers) => this.emit("transfers-changed", transfers))
+    this.secure.on("trusted-devices-changed", () => this.discovery.refreshDevices())
+    return this.secure
+  }
+
   private requireSecure(): LanSecureServer {
     if (!this.secure) throw new Error("LAN service is not initialized.")
     return this.secure
   }
+}
+
+function hasReachableEndpoint(device: LanDevice): boolean {
+  return Boolean(device.host.trim() && device.port > 0)
 }

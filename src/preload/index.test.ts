@@ -5,6 +5,7 @@ import "./index"
 type ScreenshotAction = "copy" | "save" | "pin" | "annotate"
 
 interface ExposedApi {
+  notifyFloatingBallMenuPainted: (expanded: boolean) => void
   cancelScreenshotSelection: () => void
   completeScreenshotSelection: (
     selection: { x: number; y: number; width: number; height: number },
@@ -16,6 +17,8 @@ interface ExposedApi {
     action: Exclude<ScreenshotAction, "annotate">
   ) => void
   closePinnedImage: () => void
+  closeScreenshotOcrWindow: () => void
+  recaptureScreenshotOcr: () => void
 }
 
 function exposedApi(): ExposedApi {
@@ -33,6 +36,8 @@ describe("preload screenshot IPC", () => {
     api.cancelScreenshotAnnotation()
     api.completeScreenshotAnnotation("data:image/png;base64,abc", "pin")
     api.closePinnedImage()
+    api.closeScreenshotOcrWindow()
+    api.recaptureScreenshotOcr()
 
     expect(ipcRenderer.send).toHaveBeenCalledWith("screenshot:selection-cancel")
     expect(ipcRenderer.send).toHaveBeenCalledWith("screenshot:selection-complete", {
@@ -45,8 +50,31 @@ describe("preload screenshot IPC", () => {
       action: "pin",
     })
     expect(ipcRenderer.send).toHaveBeenCalledWith("pinned-image:close")
+    expect(ipcRenderer.send).toHaveBeenCalledWith("screenshot:ocr-close")
+    expect(ipcRenderer.send).toHaveBeenCalledWith("screenshot:ocr-recapture")
     expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("screenshot:selection-cancel")
     expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("screenshot:annotation-cancel")
     expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("pinned-image:close")
+    expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("screenshot:ocr-close")
+    expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("screenshot:ocr-recapture")
+  })
+})
+
+describe("preload floating ball IPC", () => {
+  it("sends menu paint acknowledgements without waiting for invoke replies", () => {
+    const api = exposedApi()
+
+    api.notifyFloatingBallMenuPainted(true)
+
+    expect(ipcRenderer.send).toHaveBeenCalledWith("floating-ball:menu-painted", true)
+    expect(ipcRenderer.invoke).not.toHaveBeenCalledWith("floating-ball:menu-painted", true)
+  })
+
+  it("does not expose single-window resize handshakes", () => {
+    const api = exposedApi() as unknown as Record<string, unknown>
+
+    expect(api.finishFloatingBallExpandPreparation).toBeUndefined()
+    expect(api.finishFloatingBallCollapseTransition).toBeUndefined()
+    expect(api.onFloatingBallWindowState).toBeUndefined()
   })
 })

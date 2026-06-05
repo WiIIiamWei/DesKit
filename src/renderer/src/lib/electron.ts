@@ -32,6 +32,7 @@ export type SyncStatus = DeskitSyncStatus
 export type GitHubDeviceAuthorization = DeskitGitHubDeviceAuthorization
 export type GitHubLoginPollResult = DeskitGitHubLoginPollResult
 export type SyncRunResult = DeskitSyncRunResult
+export type ScreenshotOcrState = DeskitScreenshotOcrState
 export type PluginIpcError = DeskitPluginIpcError
 export type PluginIpcErrorCode = DeskitPluginIpcErrorCode
 type PluginIpcResult<T> = DeskitPluginIpcResult<T>
@@ -116,6 +117,10 @@ export async function moveFloatingBallBy(delta: { x: number; y: number }): Promi
 
 export async function hideFloatingBall(): Promise<void> {
   await api().hideFloatingBall()
+}
+
+export function notifyFloatingBallMenuPainted(expanded: boolean): void {
+  api().notifyFloatingBallMenuPainted(expanded)
 }
 
 export async function getSettings(): Promise<UserSettings> {
@@ -269,6 +274,18 @@ export async function setPinnedImageOpacity(opacity: number): Promise<void> {
 
 export async function closePinnedImage(): Promise<void> {
   api().closePinnedImage()
+}
+
+export async function getScreenshotOcrState(): Promise<ScreenshotOcrState | null> {
+  return api().getScreenshotOcrState()
+}
+
+export async function closeScreenshotOcrWindow(): Promise<void> {
+  api().closeScreenshotOcrWindow()
+}
+
+export function recaptureScreenshotOcr(): void {
+  api().recaptureScreenshotOcr()
 }
 
 export async function listPlugins(): Promise<PluginRegistryEntry[]> {

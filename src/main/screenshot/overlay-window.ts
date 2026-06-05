@@ -1,4 +1,4 @@
-import type { BrowserWindow, WebContents } from "electron"
+import type { BrowserWindow, Rectangle, WebContents } from "electron"
 import type { ScreenshotAction, ScreenshotSelection, ScreenshotSelectionResult } from "./types"
 import * as path from "node:path"
 import { BrowserWindow as ElectronBrowserWindow, screen } from "electron"
@@ -16,6 +16,7 @@ export interface ScreenshotOverlayOptions {
 }
 
 interface ActiveOverlay {
+  displayBounds: Rectangle
   displayId: string
   scaleFactor: number
   resolve: (result: ScreenshotSelectionResult | null) => void
@@ -73,6 +74,7 @@ export function selectScreenshotRegion(
 
   return new Promise((resolve) => {
     activeOverlay = {
+      displayBounds: display.bounds,
       displayId: String(display.id),
       scaleFactor: display.scaleFactor,
       resolve,
@@ -105,13 +107,19 @@ export function completeScreenshotOverlay(
   }
 
   activeOverlay = null
+  const windowBounds = overlay.win.getBounds()
+  const selectionInDisplay = offsetSelectionByWindowBounds(
+    normalized,
+    windowBounds,
+    overlay.displayBounds
+  )
   overlay.resolve({
     action,
     selection: {
-      ...normalized,
+      ...selectionInDisplay,
       displayId: overlay.displayId,
-      displayWidth: overlay.win.getBounds().width,
-      displayHeight: overlay.win.getBounds().height,
+      displayWidth: overlay.displayBounds.width,
+      displayHeight: overlay.displayBounds.height,
       scaleFactor: overlay.scaleFactor,
     },
   })
@@ -133,4 +141,16 @@ function normalizeSelection(selection: OverlaySelection): OverlaySelection | nul
   const height = Math.round(selection.height)
   if (![x, y, width, height].every(Number.isFinite) || width <= 0 || height <= 0) return null
   return { x, y, width, height }
+}
+
+function offsetSelectionByWindowBounds(
+  selection: OverlaySelection,
+  windowBounds: Rectangle,
+  displayBounds: Rectangle
+): OverlaySelection {
+  return {
+    ...selection,
+    x: selection.x + windowBounds.x - displayBounds.x,
+    y: selection.y + windowBounds.y - displayBounds.y,
+  }
 }

@@ -10,7 +10,9 @@ vi.mock("react-i18next", () => ({
   }),
 }))
 
-type TestElectronApi = NonNullable<Window["electronAPI"]>
+type TestElectronApi = NonNullable<Window["electronAPI"]> & {
+  notifyFloatingBallMenuPainted: (expanded: boolean) => void
+}
 type MenuStateHandler = (expanded: boolean) => void
 type FeaturesHandler = (features: DeskitFloatingBallFeature[]) => void
 type SettingsChangedHandler = (settings: DeskitUserSettings) => void
@@ -56,6 +58,7 @@ function installElectronApi(settings: DeskitUserSettings): FloatingBallHarness {
         menuStateHandler = null
       }
     }),
+    notifyFloatingBallMenuPainted: vi.fn(),
     onFloatingBallFeatures: vi.fn((handler: FeaturesHandler) => {
       featuresHandler = handler
       return () => {
@@ -130,10 +133,27 @@ function firePointerEvent(
 describe("floating ball panel", () => {
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
+    vi.unstubAllGlobals()
+    window.location.hash = ""
     delete window.electronAPI
   })
 
-  it("keeps the dedicated floating ball feature event working", () => {
+  it("renders only the draggable ball in the collapsed hit area view", () => {
+    window.location.hash = "#floating-ball"
+    const api = installElectronApi(baseSettings(["appLauncher"]))
+    renderPanel()
+
+    api.emitMenuState(true)
+
+    expect(screen.getByRole("button", { name: "floatingBall.title" })).toBeVisible()
+    expect(
+      screen.queryByRole("button", { name: "floatingBall.features.appLauncher" })
+    ).not.toBeInTheDocument()
+  })
+
+  it("renders only menu actions in the menu interaction view", () => {
+    window.location.hash = "#floating-ball-menu"
     const api = installElectronApi(baseSettings())
     renderPanel()
 
@@ -141,9 +161,35 @@ describe("floating ball panel", () => {
     api.emitFloatingBallFeatures(["appLauncher"])
 
     expect(screen.getByRole("button", { name: "floatingBall.features.appLauncher" })).toBeVisible()
+    expect(screen.queryByRole("button", { name: "floatingBall.title" })).not.toBeInTheDocument()
+  })
+
+  it("notifies main after the menu interaction view paints the open state", () => {
+    vi.useFakeTimers()
+    window.location.hash = "#floating-ball-menu"
+    const api = installElectronApi(baseSettings(["appLauncher"]))
+    renderPanel()
+
+    api.emitMenuState(true)
+    act(() => {
+      vi.advanceTimersByTime(32)
+    })
+
+    expect(api.api.notifyFloatingBallMenuPainted).toHaveBeenCalledWith(true)
+  })
+
+  it("keeps menu actions hidden until main opens the menu interaction view", () => {
+    window.location.hash = "#floating-ball-menu"
+    installElectronApi(baseSettings(["appLauncher"]))
+    renderPanel()
+
+    expect(
+      screen.queryByRole("button", { name: "floatingBall.features.appLauncher" })
+    ).not.toBeInTheDocument()
   })
 
   it("updates menu features from the full settings broadcast fallback", () => {
+    window.location.hash = "#floating-ball-menu"
     const api = installElectronApi(baseSettings())
     renderPanel()
 
@@ -154,6 +200,7 @@ describe("floating ball panel", () => {
   })
 
   it("finishes a drag once when pointer up releases capture and suppresses the next click", () => {
+    window.location.hash = "#floating-ball"
     const { api } = installElectronApi(baseSettings())
     renderPanel()
     const ball = screen.getByRole("button", { name: "floatingBall.title" })
@@ -172,6 +219,7 @@ describe("floating ball panel", () => {
   })
 
   it("opens the floating ball menu after a click without dragging", () => {
+    window.location.hash = "#floating-ball"
     const { api } = installElectronApi(baseSettings())
     renderPanel()
     const ball = screen.getByRole("button", { name: "floatingBall.title" })
@@ -185,5 +233,21 @@ describe("floating ball panel", () => {
     expect(api.moveFloatingBallDrag).not.toHaveBeenCalled()
     expect(api.finishFloatingBallDrag).toHaveBeenCalledTimes(1)
     expect(api.toggleFloatingBallMenu).toHaveBeenCalledTimes(1)
+  })
+
+  it("hides menu actions in the menu interaction view after the menu closes", () => {
+    window.location.hash = "#floating-ball-menu"
+    const { emitMenuState } = installElectronApi(baseSettings(["appLauncher"]))
+    renderPanel()
+    emitMenuState(true)
+
+    const item = screen.getByRole("button", { name: "floatingBall.features.appLauncher" })
+    expect(item).toBeVisible()
+
+    emitMenuState(false)
+
+    expect(
+      screen.queryByRole("button", { name: "floatingBall.features.appLauncher" })
+    ).not.toBeInTheDocument()
   })
 })
