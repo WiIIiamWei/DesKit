@@ -190,7 +190,7 @@ function ocrErrorMessage(error: unknown): string {
     return "识别超时，请重新截图"
   }
   if (error instanceof OcrEngineLoadError) {
-    return "引擎加载失败，请重新安装或更新插件"
+    return "引擎加载失败，请重新安装或更新应用或 OCR 资源"
   }
   return "识别失败，请重新截图"
 }
