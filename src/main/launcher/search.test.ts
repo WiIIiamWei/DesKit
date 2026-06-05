@@ -58,6 +58,21 @@ describe("searchApps", () => {
     expect(results[0].entry.name).toBe("Code")
   })
 
+  it("boosts frequently used apps above slightly better text matches", () => {
+    const now = Date.UTC(2026, 5, 5)
+    const results = searchApps(apps, "code", {
+      now: () => now,
+      ranking: {
+        getSignals: (key: string) =>
+          key === "app:win32:Visual Studio Code"
+            ? { launchCount: 12, lastUsedAt: now - 60_000 }
+            : undefined,
+      },
+    })
+
+    expect(results[0].entry.name).toBe("Visual Studio Code")
+  })
+
   it("filters out non-matches entirely", () => {
     const results = searchApps(apps, "zzz")
     expect(results).toHaveLength(0)
@@ -66,5 +81,18 @@ describe("searchApps", () => {
   it("respects the limit option", () => {
     const results = searchApps(apps, "c", { limit: 2 })
     expect(results.length).toBeLessThanOrEqual(2)
+  })
+
+  it("orders empty queries by dynamic ranking before cache order", () => {
+    const now = Date.UTC(2026, 5, 5)
+    const results = searchApps(apps, "", {
+      now: () => now,
+      ranking: {
+        getSignals: (key: string) =>
+          key === "app:uwp:Calculator" ? { launchCount: 1, lastUsedAt: now } : undefined,
+      },
+    })
+
+    expect(results[0].entry.name).toBe("Calculator")
   })
 })

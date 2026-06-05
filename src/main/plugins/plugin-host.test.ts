@@ -59,11 +59,12 @@ function makeHostWithClipboard(
   })
 }
 
-function makeHost(): PluginHost {
+function makeHost(options: Partial<ConstructorParameters<typeof PluginHost>[0]> = {}): PluginHost {
   return new PluginHost({
     userDataDir: dir,
     resourcesDir: path.join(dir, "resources"),
     adapters: noopAdapters,
+    ...options,
   })
 }
 
@@ -564,6 +565,24 @@ describe("pluginHost facade forwards to registry", () => {
       .mockReturnValue([] as PluginCommandResult[])
     host.searchCommands("ts", "zh-CN", 5)
     expect(spy).toHaveBeenCalledWith("ts", "zh-CN", 5)
+  })
+
+  it("records successful run invocations for dynamic ranking", async () => {
+    const ranking = {
+      getSignals: vi.fn(),
+      recordSelection: vi.fn(async () => {}),
+      prune: vi.fn(async () => {}),
+    }
+    const host = makeHost({ ranking })
+    vi.spyOn(host.registry, "invoke").mockResolvedValue({
+      type: "toast",
+      level: "success",
+      message: "ok",
+    })
+
+    await host.invoke({ pluginId: "com.deskit.test", commandId: "test.run", phase: "run" })
+
+    expect(ranking.recordSelection).toHaveBeenCalledWith("plugin-command:com.deskit.test:test.run")
   })
 })
 

@@ -54,6 +54,7 @@ import {
   resolveDevLanSimulation,
 } from "./lan/dev-simulation"
 import { LanService } from "./lan/lan-service"
+import { launcherRankingFilePath, LauncherRankingStore } from "./launcher/ranking-store"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { collectPluginShortcutBindings } from "./plugin-shortcuts"
 import { createElectronPluginAdapters } from "./plugins/electron-adapters"
@@ -982,7 +983,7 @@ async function initLan(enabled: boolean): Promise<void> {
   }
 }
 
-function createPluginHost(): PluginHost {
+function createPluginHost(ranking: LauncherRankingStore): PluginHost {
   const userDataDir = app.getPath("userData")
   const fetchWithNet: typeof fetch = (input, init) =>
     net.fetch(input instanceof URL ? input.toString() : input, init)
@@ -993,6 +994,7 @@ function createPluginHost(): PluginHost {
     resourcesDir: pluginResourcesDir(),
     syncStatus: pluginSyncStatus,
     onSyncDataChanged: markSyncLocalChanged,
+    ranking,
     adapters: {
       ...adapters,
       system: {
@@ -1308,7 +1310,10 @@ if (!gotLock) {
 
     applyCsp()
     registerStaticProtocol()
-    plugins = createPluginHost()
+    const ranking = new LauncherRankingStore(launcherRankingFilePath(app.getPath("userData")))
+    await ranking.load()
+    let settings = await launcher.init({ ranking })
+    plugins = createPluginHost(ranking)
     lan = new LanService({
       userDataDir: app.getPath("userData"),
       adapter: new BonjourLanDiscoveryAdapter(),
@@ -1337,7 +1342,6 @@ if (!gotLock) {
     // and sidebar navigation instead.
     Menu.setApplicationMenu(null)
 
-    let settings = await launcher.init()
     try {
       await initLan(settings.lanEnabled)
     } catch (err) {

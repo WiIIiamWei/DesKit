@@ -1,4 +1,5 @@
 import type { ClipboardContent } from "@deskit/plugin-sdk"
+import type { LauncherRankingRecorder } from "../launcher/ranking-store"
 import type { MarketplaceEntry } from "./marketplace-registry"
 import type { PluginBridgeAdapters, PluginRuntimeSnapshot } from "./plugin-bridge"
 import type { PreferenceFile } from "./plugin-preferences"
@@ -12,6 +13,7 @@ import { Buffer as NodeBuffer } from "node:buffer"
 import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
+import { pluginCommandRankingKey } from "../launcher/ranking-store"
 import { createElectronPluginAdapters } from "./electron-adapters"
 import { isLucideIcon, resolvePluginIconFile } from "./icon-paths"
 import { extractDeskitPackage } from "./install-from-package"
@@ -51,6 +53,7 @@ export interface PluginHostOptions {
   }
   onSyncDataChanged?: () => void
   clipboardPollMs?: number
+  ranking?: LauncherRankingRecorder
 }
 
 /**
@@ -146,7 +149,7 @@ export class PluginHost {
       },
     })
     this.sandbox = new PluginSandbox({ bridge: this.bridge })
-    this.registry = new PluginRegistry({ sandbox: this.sandbox })
+    this.registry = new PluginRegistry({ sandbox: this.sandbox, ranking: options.ranking })
     this.registry.on("changed", this.handleRegistryChanged)
   }
 
@@ -158,6 +161,19 @@ export class PluginHost {
       devFilePath: this.devFilePath,
     })
     await this.registry.load(discovered)
+    await this.pruneStaleRankings()
+  }
+
+  // Evict ranking entries for commands that no longer exist (uninstalled or
+  // updated plugins). Runs after every full (re)load via init/reload. Best-
+  // effort: a failed prune must never break startup or install/uninstall.
+  private async pruneStaleRankings(): Promise<void> {
+    if (!this.options.ranking) return
+    try {
+      await this.options.ranking.prune("plugin-command:", this.registry.commandRankingKeys())
+    } catch (err) {
+      console.warn("[plugin-host] failed to prune stale command rankings", err)
+    }
   }
 
   list(): PluginRegistryEntry[] {
@@ -177,8 +193,20 @@ export class PluginHost {
     return this.registry.searchCommands(query, locale, limit)
   }
 
-  invoke(request: PluginInvokeRequest): Promise<unknown> {
-    return this.registry.invoke(request)
+  async invoke(request: PluginInvokeRequest): Promise<unknown> {
+    const result = await this.registry.invoke(request)
+    if (request.phase === "run") {
+      // Best-effort ranking signal; never let a failed write discard the
+      // command result or surface as an invocation error.
+      try {
+        await this.options.ranking?.recordSelection(
+          pluginCommandRankingKey(request.pluginId, request.commandId)
+        )
+      } catch (err) {
+        console.warn("[plugin-host] failed to record command run for ranking", err)
+      }
+    }
+    return result
   }
 
   disposeCommand(pluginId: string, commandId: string): Promise<void> {

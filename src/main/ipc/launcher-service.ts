@@ -1,8 +1,10 @@
+import type { LauncherRankingRecorder } from "../launcher/ranking-store"
 import type { AppEntry, SearchResult } from "../launcher/types"
 import type { UserSettings, UserSettingsPatch } from "../settings/settings"
 import { app } from "electron"
 import { AppCache } from "../launcher/app-cache"
 import { launchApp } from "../launcher/launch-app"
+import { appRankingKey } from "../launcher/ranking-store"
 import { searchApps } from "../launcher/search"
 import {
   defaultSettings,
@@ -20,8 +22,10 @@ export class LauncherService {
   readonly cache = new AppCache()
   private settings: UserSettings = { ...defaultSettings }
   private settingsPath: string | null = null
+  private ranking?: LauncherRankingRecorder
 
-  async init(): Promise<UserSettings> {
+  async init(options: { ranking?: LauncherRankingRecorder } = {}): Promise<UserSettings> {
+    this.ranking = options.ranking
     this.settingsPath = settingsFilePath(app.getPath("userData"))
     this.settings = await loadSettings(this.settingsPath)
     return this.settings
@@ -47,18 +51,44 @@ export class LauncherService {
 
   async search(query: string): Promise<SearchResult[]> {
     if (this.cache.list().length === 0) {
-      await this.cache.refresh()
+      await this.refreshApps()
     }
-    return searchApps(this.cache.list(), query, { limit: 30 })
+    return searchApps(this.cache.list(), query, { limit: 30, ranking: this.ranking })
   }
 
   async launchById(id: string): Promise<boolean> {
     const entry = this.cache.list().find((app) => app.id === id)
     if (!entry) return false
-    return launchApp(entry)
+    const ok = await launchApp(entry)
+    if (ok) {
+      // Ranking is best-effort telemetry; a failed write must not turn a
+      // successful launch into a user-facing error.
+      try {
+        await this.ranking?.recordSelection(appRankingKey(entry.id))
+      } catch (err) {
+        console.warn("[launcher] failed to record launch for ranking", err)
+      }
+    }
+    return ok
   }
 
-  refreshApps(): Promise<readonly AppEntry[]> {
-    return this.cache.refresh()
+  async refreshApps(): Promise<readonly AppEntry[]> {
+    const apps = await this.cache.refresh()
+    await this.pruneStaleRankings(apps)
+    return apps
+  }
+
+  // Evict ranking entries for apps that are no longer installed. Best-effort:
+  // a failed prune must never break a refresh.
+  private async pruneStaleRankings(apps: readonly AppEntry[]): Promise<void> {
+    if (!this.ranking) return
+    try {
+      await this.ranking.prune(
+        "app:",
+        apps.map((entry) => appRankingKey(entry.id))
+      )
+    } catch (err) {
+      console.warn("[launcher] failed to prune stale app rankings", err)
+    }
   }
 }
