@@ -152,6 +152,8 @@ const electronAPI = {
   disposePluginCommand: (pluginId: string, commandId: string) =>
     ipcRenderer.invoke("plugin:dispose-command", { pluginId, commandId }),
   listMarketplacePlugins: () => ipcRenderer.invoke("marketplace:list"),
+  previewMarketplacePluginInstall: (id: string, version?: string) =>
+    ipcRenderer.invoke("marketplace:preview-install", { id, version }),
   installMarketplacePlugin: (id: string, version?: string) =>
     ipcRenderer.invoke("marketplace:install", { id, version }),
 

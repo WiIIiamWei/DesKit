@@ -97,6 +97,7 @@ function installElectronApi(settings: DeskitUserSettings): TestElectronApiHarnes
     invokePluginCommand: vi.fn().mockResolvedValue(ok(undefined)),
     disposePluginCommand: vi.fn().mockResolvedValue(ok(undefined)),
     listMarketplacePlugins: vi.fn().mockResolvedValue(ok([])),
+    previewMarketplacePluginInstall: vi.fn().mockResolvedValue(ok(null)),
     installMarketplacePlugin: vi.fn().mockResolvedValue(ok(null)),
     onLauncherFocus: vi.fn(() => () => undefined),
     onFloatingBallMenuState: vi.fn(() => () => undefined),

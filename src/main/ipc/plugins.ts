@@ -58,6 +58,7 @@ export interface PluginIpcHandlers {
   invoke: (payload: unknown) => Promise<unknown>
   disposeCommand: (payload: unknown) => Promise<void>
   marketplaceList: () => unknown[] | Promise<unknown[]>
+  marketplacePreviewInstall: (payload: unknown) => Promise<unknown>
   marketplaceInstall: (payload: unknown) => Promise<unknown>
 }
 
@@ -133,6 +134,14 @@ export function createPluginIpcHandlers(
     },
 
     marketplaceList: () => host.listMarketplacePlugins(),
+
+    marketplacePreviewInstall(payload) {
+      const value = requireRecord(payload, "marketplace:preview-install payload")
+      return host.previewMarketplacePluginInstall(
+        requireString(value.id, "id"),
+        typeof value.version === "string" ? value.version : undefined
+      )
+    },
 
     marketplaceInstall(payload) {
       const value = requireRecord(payload, "marketplace:install payload")
@@ -250,6 +259,14 @@ export function registerPluginIpc(
       "marketplace:list",
       event,
       () => handlers.marketplaceList(),
+      options.isTrustedSender
+    )
+  )
+  ipcMain.handle("marketplace:preview-install", (event, payload: unknown) =>
+    invokePluginIpcHandler(
+      "marketplace:preview-install",
+      event,
+      () => handlers.marketplacePreviewInstall(payload),
       options.isTrustedSender
     )
   )

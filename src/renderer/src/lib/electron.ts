@@ -20,6 +20,7 @@ export type UserSettings = DeskitUserSettings
 export type FloatingBallFeature = DeskitFloatingBallFeature
 export type PluginRegistryEntry = DeskitPluginRegistryEntry
 export type MarketplaceEntry = DeskitMarketplaceEntry
+export type MarketplaceInstallPreview = DeskitMarketplaceInstallPreview
 export type PluginCommandResult = DeskitPluginCommandResult
 export type PluginInvokePhase = DeskitPluginInvokePhase
 export type PluginView = DeskitPluginView
@@ -280,6 +281,13 @@ export async function disposePluginCommand(pluginId: string, commandId: string):
 
 export async function listMarketplacePlugins(): Promise<MarketplaceEntry[]> {
   return unwrapIpcResult(await api().listMarketplacePlugins())
+}
+
+export async function previewMarketplacePluginInstall(
+  id: string,
+  version?: string
+): Promise<MarketplaceInstallPreview> {
+  return unwrapIpcResult(await api().previewMarketplacePluginInstall(id, version))
 }
 
 export async function installMarketplacePlugin(
