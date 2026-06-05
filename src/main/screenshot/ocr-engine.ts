@@ -4,10 +4,8 @@ import process from "node:process"
 import { app } from "electron"
 
 const OCR_TIMEOUT_MS = 10_000
-const OCR_MODEL_PROFILES = [
-  { directory: "tessdata_best", languages: ["eng", "chi_sim", "chi_tra"] },
-  { directory: "tessdata", languages: ["eng", "chi_sim"] },
-]
+const OCR_LANGUAGES = ["eng", "chi_sim"]
+const OCR_MODEL_DIRECTORIES = ["tessdata_best", "tessdata"]
 const OCR_PARAMETERS = {
   preserve_interword_spaces: "1",
   user_defined_dpi: "300",
@@ -15,10 +13,6 @@ const OCR_PARAMETERS = {
 
 type TesseractModule = typeof import("tesseract.js")
 type TesseractWorker = Awaited<ReturnType<TesseractModule["createWorker"]>>
-interface OcrModelProfile {
-  langPath: string
-  languages: string[]
-}
 
 export class OcrTimeoutError extends Error {
   constructor() {
@@ -53,29 +47,15 @@ export function isOcrWorkerReady(): boolean {
 }
 
 export function ocrLanguagePath(): string {
-  return resolveOcrModelProfile().langPath
-}
-
-export function ocrLanguages(): string[] {
-  return resolveOcrModelProfile().languages
-}
-
-export function resolveOcrModelProfile(): OcrModelProfile {
   const basePath = app.isPackaged
     ? path.join(process.resourcesPath, "ocr")
     : path.join(app.getAppPath(), "resources", "ocr")
 
-  const profile =
-    OCR_MODEL_PROFILES.find((candidate) =>
-      candidate.languages.every((language) =>
-        existsSync(path.join(basePath, candidate.directory, `${language}.traineddata`))
-      )
-    ) ?? OCR_MODEL_PROFILES[OCR_MODEL_PROFILES.length - 1]
-
-  return {
-    langPath: path.join(basePath, profile.directory),
-    languages: [...profile.languages],
-  }
+  return (
+    OCR_MODEL_DIRECTORIES.map((directory) => path.join(basePath, directory)).find((candidate) =>
+      OCR_LANGUAGES.every((language) => existsSync(path.join(candidate, `${language}.traineddata`)))
+    ) ?? path.join(basePath, "tessdata")
+  )
 }
 
 async function getWorker(): Promise<TesseractWorker> {
@@ -97,10 +77,9 @@ async function getWorker(): Promise<TesseractWorker> {
 
 async function createWorker(): Promise<TesseractWorker> {
   const tesseract = (await import("tesseract.js")) as TesseractModule
-  const modelProfile = resolveOcrModelProfile()
-  const worker = await tesseract.createWorker(modelProfile.languages, 1, {
-    langPath: modelProfile.langPath,
-    cachePath: modelProfile.langPath,
+  const worker = await tesseract.createWorker(OCR_LANGUAGES, 1, {
+    langPath: ocrLanguagePath(),
+    cachePath: ocrLanguagePath(),
     cacheMethod: "readOnly",
     gzip: false,
     logger: () => {},
