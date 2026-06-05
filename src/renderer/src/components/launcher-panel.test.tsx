@@ -26,6 +26,8 @@ class ResizeObserverMock implements ResizeObserver {
   unobserve = vi.fn()
 }
 
+let previousResizeObserver: typeof globalThis.ResizeObserver | undefined
+
 function ok<T>(data: T): DeskitPluginIpcResult<T> {
   return { ok: true, data }
 }
@@ -64,21 +66,28 @@ function installElectronApi(): TestElectronApi {
     pasteClipboardContent: vi.fn().mockResolvedValue(true),
     onLauncherFocus: vi.fn(() => () => undefined),
     onLauncherRunPluginCommand: vi.fn(() => () => undefined),
-  } as Partial<TestElectronApi>
+  } satisfies Partial<TestElectronApi>
 
-  window.electronAPI = api as TestElectronApi
+  window.electronAPI = api as unknown as TestElectronApi
   return window.electronAPI
 }
 
 describe("launcher panel", () => {
   beforeEach(() => {
     vi.useRealTimers()
+    previousResizeObserver = globalThis.ResizeObserver
     globalThis.ResizeObserver = ResizeObserverMock
     installElectronApi()
   })
 
   afterEach(() => {
     cleanup()
+    if (previousResizeObserver === undefined) {
+      Reflect.deleteProperty(globalThis, "ResizeObserver")
+    } else {
+      globalThis.ResizeObserver = previousResizeObserver
+    }
+    previousResizeObserver = undefined
     delete window.electronAPI
   })
 
@@ -91,13 +100,12 @@ describe("launcher panel", () => {
     await waitFor(() => expect(screen.getByText("JSON Formatter")).toBeVisible())
     fireEvent.click(screen.getByText("JSON Formatter"))
 
-    await waitFor(() =>
-      expect(api.invokePluginCommand).toHaveBeenCalledWith(
-        "com.sanqian.dev-utilities",
-        "dev.json",
-        "run",
-        { initialQuery: "" }
-      )
+    await waitFor(() => expect(api.invokePluginCommand).toHaveBeenCalledTimes(1))
+    expect(api.invokePluginCommand).toHaveBeenLastCalledWith(
+      "com.sanqian.dev-utilities",
+      "dev.json",
+      "run",
+      { initialQuery: "" }
     )
   })
 })
