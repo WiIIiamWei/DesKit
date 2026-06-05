@@ -29,11 +29,11 @@ import { defaultSettings } from "./settings/settings"
 type MockBrowserWindow = ElectronBrowserWindow & {
   getBounds: Mock
   setBounds: Mock
-  hide: Mock
-  showInactive: Mock
   setOpacity: Mock
   setIgnoreMouseEvents: Mock
   setFocusable: Mock
+  hide: Mock
+  showInactive: Mock
   focus: Mock
   isFocused: Mock
   moveTop: Mock
@@ -399,7 +399,7 @@ describe("floating ball window dragging", () => {
     )
   })
 
-  it("shows and restacks the menu before broadcasting the open state", () => {
+  it("shows and restacks the transparent menu before broadcasting the open state", () => {
     ensureFloatingBallWindow(deps)
     const ballWindow = latestWindow()
     ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
@@ -412,9 +412,11 @@ describe("floating ball window dragging", () => {
     const menuStateSendOrder =
       menuWindow.webContents.send.mock.invocationCallOrder[menuStateSendIndex]
 
-    expect(menuWindow.setBounds.mock.invocationCallOrder[0]).toBeLessThan(
-      menuWindow.showInactive.mock.invocationCallOrder[0]
-    )
+    const revealPreparationOrder = menuWindow.setOpacity.mock.invocationCallOrder.at(-1) ?? 0
+
+    expect(menuWindow.setBounds.mock.invocationCallOrder[0]).toBeLessThan(revealPreparationOrder)
+    expect(menuWindow.setOpacity).toHaveBeenCalledWith(0)
+    expect(revealPreparationOrder).toBeLessThan(menuWindow.showInactive.mock.invocationCallOrder[0])
     expect(menuWindow.showInactive.mock.invocationCallOrder[0]).toBeLessThan(
       ballWindow.moveTop.mock.invocationCallOrder[0]
     )
@@ -471,7 +473,7 @@ describe("floating ball window dragging", () => {
     expect(menuWindow.setOpacity).not.toHaveBeenCalledWith(0)
   })
 
-  it("reveals the resident menu window after the menu renderer paints the open state", async () => {
+  it("reveals the resident menu window after the menu renderer paints the open state", () => {
     ensureFloatingBallWindow(deps)
     const ballWindow = latestWindow()
     ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
@@ -481,12 +483,6 @@ describe("floating ball window dragging", () => {
     menuWindow.setOpacity.mockClear()
     menuWindow.setIgnoreMouseEvents.mockClear()
     menuWindow.setFocusable.mockClear()
-    const { markFloatingBallMenuPainted } = (await import("./floating-ball-window")) as unknown as {
-      markFloatingBallMenuPainted: (
-        sender: ElectronBrowserWindow["webContents"],
-        expanded: boolean
-      ) => void
-    }
 
     markFloatingBallMenuPainted(menuWindow.webContents, true)
 
@@ -534,6 +530,59 @@ describe("floating ball window dragging", () => {
       false
     )
     expect(menuWindow.setOpacity).not.toHaveBeenCalledWith(0)
+  })
+
+  it("keeps a left-snapped ball on the original display when opening beside another display", () => {
+    const leftDisplay = {
+      id: 1,
+      workArea: { x: 0, y: 0, width: 1440, height: 900 },
+    } as Electron.Display
+    const rightDisplay = {
+      id: 2,
+      workArea: { x: 1440, y: 0, width: 1440, height: 900 },
+    } as Electron.Display
+    vi.mocked(screen.getPrimaryDisplay).mockReturnValue(leftDisplay)
+    vi.mocked(screen.getDisplayMatching).mockImplementation((bounds: Electron.Rectangle) =>
+      bounds.x < 0 ? rightDisplay : leftDisplay
+    )
+
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    vi.mocked(screen.getCursorScreenPoint)
+      .mockReturnValueOnce({ x: 120, y: 430 })
+      .mockReturnValueOnce({ x: 40, y: 430 })
+    ballWindow.getBounds.mockReturnValue({ x: 100, y: 410, width: 72, height: 72 })
+
+    startFloatingBallDrag()
+    moveFloatingBallDrag()
+    ballWindow.getBounds.mockReturnValue({ x: 20, y: 410, width: 72, height: 72 })
+    finishFloatingBallDrag()
+    ballWindow.getBounds.mockReturnValue({
+      x: -(BALL_SIZE / 2) - (COLLAPSED_WINDOW_SIZE - BALL_SIZE) / 2,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    ballWindow.setBounds.mockClear()
+
+    expandFloatingBallMenu()
+
+    expect(ballWindow.setBounds).toHaveBeenLastCalledWith({
+      x: EXPANDED_WINDOW_SIZE / 2 - COLLAPSED_WINDOW_SIZE / 2,
+      y: 410,
+      width: COLLAPSED_WINDOW_SIZE,
+      height: COLLAPSED_WINDOW_SIZE,
+    })
+    expect(
+      createdWindows().some((win) =>
+        hasBoundsCall(win, {
+          x: 0,
+          y: 446 - EXPANDED_WINDOW_SIZE / 2,
+          width: EXPANDED_WINDOW_SIZE,
+          height: EXPANDED_WINDOW_SIZE,
+        })
+      )
+    ).toBe(true)
   })
 
   it("does not restack the ball window when the menu takes focus", () => {
