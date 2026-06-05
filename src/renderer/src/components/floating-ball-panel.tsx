@@ -191,7 +191,7 @@ export function FloatingBallPanel() {
       {isMenuView ? (
         <div
           className={cn(
-            "absolute left-1/2 top-1/2 size-[220px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/95 shadow-[0_6px_16px_-10px_rgba(15,23,42,0.14)] ring-1 ring-black/5 transition-[opacity,transform] duration-150 dark:bg-popover/95 dark:ring-white/10",
+            "absolute left-1/2 top-1/2 size-[240px] -translate-x-1/2 -translate-y-1/2 rounded-full bg-background/95 shadow-[0_6px_16px_-10px_rgba(15,23,42,0.14)] ring-1 ring-black/5 transition-[opacity,transform] duration-150 dark:bg-popover/95 dark:ring-white/10",
             expanded ? "opacity-100" : "pointer-events-none opacity-0",
             suppressMenuOpenTransition && "transition-none"
           )}
@@ -215,7 +215,9 @@ export function FloatingBallPanel() {
                       <span className="sr-only">{item.title}</span>
                     </button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">{item.title}</TooltipContent>
+                  <TooltipContent side="top" sideOffset={-5}>
+                    {item.title}
+                  </TooltipContent>
                 </Tooltip>
               )
             })}
@@ -281,7 +283,7 @@ function menuItem(
 }
 
 function menuItemPosition(index: number, count: number): { x: number; y: number } {
-  const radius = 78
+  const radius = 84 //菜单按钮距中心的半径
   const angle =
     count === MENU_SLOT_ANGLES.length
       ? MENU_SLOT_ANGLES[index]

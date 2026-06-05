@@ -5,14 +5,15 @@ import { BrowserWindow, Menu, screen } from "electron"
 import { defaultAppIcon } from "./app-icon"
 import { attachWindowSecurity } from "./window-security"
 
-export const EXPANDED_WINDOW_SIZE = process.platform === "darwin" ? 320 : 240
+export const EXPANDED_WINDOW_SIZE = process.platform === "darwin" ? 320 : 250
 export const BALL_SIZE = 56
 export const COLLAPSED_WINDOW_SIZE = 72
 export const EDGE_VISIBLE_BALL_WIDTH = BALL_SIZE / 2
 export const SNAP_EDGE_DISTANCE = 96
 
 const EDGE_MARGIN = 24
-const DRAG_THRESHOLD = 4
+const DRAG_THRESHOLD = 4 // 拖拽阈值。鼠标移动小于改阈值会被当成点击，超过才当成拖拽
+const BOUNDS_NORMALIZATION_TOLERANCE = 2 //  窗口 bounds 容差。避免因为微小误差反复 setBounds，导致漂移或重绘。
 const FLOATING_BALL_HASH = "floating-ball"
 const FLOATING_BALL_MENU_HASH = "floating-ball-menu"
 export type FloatingBallWindowPhase = "collapsed" | "expanded"
@@ -30,6 +31,8 @@ let floatingBallWindow: BrowserWindow | null = null
 let floatingBallMenuWindow: BrowserWindow | null = null
 let currentDeps: FloatingBallWindowDeps | null = null
 let menuPhase: FloatingBallWindowPhase = "collapsed"
+let lastRequestedBallBounds: Electron.Rectangle | null = null
+let lastRequestedMenuBounds: Electron.Rectangle | null = null
 let pendingBlurCollapseTimer: NodeJS.Timeout | null = null
 let dragState: {
   cursor: Electron.Point
@@ -52,6 +55,7 @@ export function ensureFloatingBallWindow(deps: FloatingBallWindowDeps): BrowserW
 
   floatingBallWindow.on("closed", () => {
     floatingBallWindow = null
+    lastRequestedBallBounds = null
   })
 
   floatingBallWindow.on("blur", () => {
@@ -81,6 +85,7 @@ function ensureFloatingBallMenuWindow(deps: FloatingBallWindowDeps): BrowserWind
 
   floatingBallMenuWindow.on("closed", () => {
     floatingBallMenuWindow = null
+    lastRequestedMenuBounds = null
   })
 
   floatingBallMenuWindow.on("blur", () => {
@@ -166,6 +171,8 @@ export function destroyFloatingBallWindow(): void {
   floatingBallMenuWindow = null
   currentDeps = null
   menuPhase = "collapsed"
+  lastRequestedBallBounds = null
+  lastRequestedMenuBounds = null
   snappedEdge = "none"
   finishFloatingBallDrag()
   if (win) win.destroy()
@@ -179,12 +186,15 @@ export function expandFloatingBallMenu(): void {
 
   const menuWin = ensureFloatingBallMenuWindow(deps)
   const menuBounds = getPreparedExpandedFloatingBallWindowBounds(win)
-  win.setBounds(getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds)))
-  menuWin.setBounds(menuBounds)
+  requestFloatingBallBounds(
+    win,
+    getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds))
+  )
+  requestFloatingBallMenuBounds(menuWin, menuBounds)
   menuPhase = "expanded"
-  sendFloatingBallMenuState(true)
   menuWin.showInactive()
   keepFloatingBallWindowAboveMenu()
+  sendFloatingBallMenuState(true)
 }
 
 export function collapseFloatingBallMenu(): void {
@@ -214,9 +224,11 @@ export function startFloatingBallDrag(): void {
   if (!win) return
   dragState = {
     cursor: screen.getCursorScreenPoint(),
-    bounds: fixedCollapsedBounds(win.getBounds()),
+    bounds: getCurrentFloatingBallBounds(win),
     menuBounds:
-      menuPhase === "expanded" ? (getFloatingBallMenuWindow()?.getBounds() ?? null) : null,
+      menuPhase === "expanded"
+        ? getCurrentFloatingBallMenuBounds(getFloatingBallMenuWindow())
+        : null,
     moved: false,
   }
 }
@@ -242,8 +254,11 @@ export function moveFloatingBallDrag(): void {
       },
       getPrimaryWorkArea()
     )
-    menuWin.setBounds(nextMenu)
-    win.setBounds(getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(nextMenu)))
+    requestFloatingBallMenuBounds(menuWin, nextMenu)
+    requestFloatingBallBounds(
+      win,
+      getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(nextMenu))
+    )
     return
   }
 
@@ -253,7 +268,7 @@ export function moveFloatingBallDrag(): void {
     width: COLLAPSED_WINDOW_SIZE,
     height: COLLAPSED_WINDOW_SIZE,
   }
-  win.setBounds(clampBounds(next, screen.getDisplayMatching(next).workArea))
+  requestFloatingBallBounds(win, clampBounds(next, screen.getDisplayMatching(next).workArea))
 }
 
 export function finishFloatingBallDrag(): void {
@@ -271,14 +286,14 @@ export function finishFloatingBallDrag(): void {
 export function moveFloatingBallBy(delta: { x: number; y: number }): void {
   const win = getFloatingBallWindow()
   if (!win) return
-  const bounds = win.getBounds()
+  const bounds = getCurrentFloatingBallBounds(win)
   const next = {
     x: bounds.x + Math.round(delta.x),
     y: bounds.y + Math.round(delta.y),
     width: COLLAPSED_WINDOW_SIZE,
     height: COLLAPSED_WINDOW_SIZE,
   }
-  win.setBounds(clampBounds(next, screen.getDisplayMatching(next).workArea))
+  requestFloatingBallBounds(win, clampBounds(next, screen.getDisplayMatching(next).workArea))
 }
 
 export function syncFloatingBallWindow(deps: FloatingBallWindowDeps): void {
@@ -314,7 +329,7 @@ export function getFloatingBallSnappedEdge(): "none" | "left" | "right" {
 function moveFloatingBallToDefaultPosition(win: BrowserWindow): void {
   const display = screen.getPrimaryDisplay()
   const { x, y, width, height } = display.workArea
-  win.setBounds({
+  requestFloatingBallBounds(win, {
     x: Math.round(x + width - COLLAPSED_WINDOW_SIZE - EDGE_MARGIN),
     y: Math.round(y + height / 2 - COLLAPSED_WINDOW_SIZE / 2),
     width: COLLAPSED_WINDOW_SIZE,
@@ -323,23 +338,21 @@ function moveFloatingBallToDefaultPosition(win: BrowserWindow): void {
 }
 
 function getPreparedExpandedFloatingBallWindowBounds(win: BrowserWindow): Electron.Rectangle {
-  const collapsedBounds = fixedCollapsedBounds(win.getBounds())
+  const collapsedBounds = getCurrentFloatingBallBounds(win)
   const expandedBounds = getExpandedFloatingBallBounds(getFloatingBallVisualCenter(collapsedBounds))
   return clampBoundsToWorkArea(expandedBounds, getPrimaryWorkArea())
 }
 
 function applyExpandedMenuClosePosition(): void {
   const win = getFloatingBallWindow()
-  const menuBounds = getFloatingBallMenuWindow()?.getBounds()
+  const menuBounds = getCurrentFloatingBallMenuBounds(getFloatingBallMenuWindow())
   if (!win || !menuBounds) return
 
   const workArea = getPrimaryWorkArea()
   const collapsedBounds = getCollapsedFloatingBallBounds(getFloatingBallVisualCenter(menuBounds))
   const target = getExpandedMenuEdgeSnapBounds(collapsedBounds, menuBounds, workArea)
   snappedEdge = target.edge
-  if (!sameBounds(fixedCollapsedBounds(win.getBounds()), target.bounds)) {
-    win.setBounds(target.bounds)
-  }
+  requestFloatingBallBounds(win, target.bounds)
 }
 
 function sendFloatingBallMenuState(expanded: boolean): void {
@@ -372,12 +385,12 @@ function keepFloatingBallWindowAboveMenu(): void {
 }
 
 function applyFloatingBallEdgeSnap(win: BrowserWindow): void {
-  const bounds = fixedCollapsedBounds(win.getBounds())
+  const bounds = getCurrentFloatingBallBounds(win)
   const workArea = screen.getDisplayMatching(bounds).workArea
   const target = getEdgeSnapBounds(bounds, workArea)
   snappedEdge = target.edge
   if (target.edge === "none") return
-  win.setBounds(target.bounds)
+  requestFloatingBallBounds(win, target.bounds)
 }
 
 function getPrimaryWorkArea(): Electron.Rectangle {
@@ -459,6 +472,53 @@ function fixedCollapsedBounds(bounds: Electron.Rectangle): Electron.Rectangle {
   }
 }
 
+function fixedExpandedBounds(bounds: Electron.Rectangle): Electron.Rectangle {
+  return {
+    x: bounds.x,
+    y: bounds.y,
+    width: EXPANDED_WINDOW_SIZE,
+    height: EXPANDED_WINDOW_SIZE,
+  }
+}
+
+function getCurrentFloatingBallBounds(win: BrowserWindow): Electron.Rectangle {
+  const actual = fixedCollapsedBounds(win.getBounds())
+  if (
+    !lastRequestedBallBounds ||
+    boundsDifferBeyondNormalizationTolerance(lastRequestedBallBounds, actual)
+  ) {
+    lastRequestedBallBounds = actual
+  }
+  return lastRequestedBallBounds
+}
+
+function getCurrentFloatingBallMenuBounds(win: BrowserWindow | null): Electron.Rectangle | null {
+  if (!win) return null
+
+  const actual = fixedExpandedBounds(win.getBounds())
+  if (
+    !lastRequestedMenuBounds ||
+    boundsDifferBeyondNormalizationTolerance(lastRequestedMenuBounds, actual)
+  ) {
+    lastRequestedMenuBounds = actual
+  }
+  return lastRequestedMenuBounds
+}
+
+function requestFloatingBallBounds(win: BrowserWindow, bounds: Electron.Rectangle): void {
+  const next = fixedCollapsedBounds(bounds)
+  if (lastRequestedBallBounds && sameBounds(lastRequestedBallBounds, next)) return
+  lastRequestedBallBounds = next
+  win.setBounds(next)
+}
+
+function requestFloatingBallMenuBounds(win: BrowserWindow, bounds: Electron.Rectangle): void {
+  const next = fixedExpandedBounds(bounds)
+  if (lastRequestedMenuBounds && sameBounds(lastRequestedMenuBounds, next)) return
+  lastRequestedMenuBounds = next
+  win.setBounds(next)
+}
+
 export function getFloatingBallVisualCenter(bounds: Electron.Rectangle): Electron.Point {
   return {
     x: Math.round(bounds.x + bounds.width / 2),
@@ -500,6 +560,18 @@ function getCenteredBounds(center: Electron.Point, size: number): Electron.Recta
 
 function sameBounds(a: Electron.Rectangle, b: Electron.Rectangle): boolean {
   return a.x === b.x && a.y === b.y && a.width === b.width && a.height === b.height
+}
+
+function boundsDifferBeyondNormalizationTolerance(
+  a: Electron.Rectangle,
+  b: Electron.Rectangle
+): boolean {
+  return (
+    Math.abs(a.x - b.x) > BOUNDS_NORMALIZATION_TOLERANCE ||
+    Math.abs(a.y - b.y) > BOUNDS_NORMALIZATION_TOLERANCE ||
+    a.width !== b.width ||
+    a.height !== b.height
+  )
 }
 
 function clamp(value: number, min: number, max: number): number {
