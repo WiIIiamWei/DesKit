@@ -445,13 +445,14 @@ function registerIpc(): void {
     closeScreenshotOcrWindow(event.sender)
   })
 
-  ipcMain.handle("screenshot:ocr-recapture", async (event) => {
-    if (!closeScreenshotOcrWindow(event.sender)) return false
-    await startScreenshotCapture({
-      forcedAction: "ocr",
-      mode: "capture",
-    })
-    return true
+  ipcMain.on("screenshot:ocr-recapture", (event) => {
+    if (!closeScreenshotOcrWindow(event.sender)) return
+    setTimeout(() => {
+      void startScreenshotCapture({
+        forcedAction: "ocr",
+        mode: "capture",
+      })
+    }, 0)
   })
 
   ipcMain.handle("sync:get-status", () => syncStatus())

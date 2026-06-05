@@ -65,9 +65,8 @@ export function ScreenshotOcrPage() {
     }
   }
 
-  async function recapture(): Promise<void> {
-    const started = await recaptureScreenshotOcr()
-    if (!started) toast.error(t("screenshot.ocr.recaptureFailed"))
+  function recapture(): void {
+    recaptureScreenshotOcr()
   }
 
   return (
@@ -127,7 +126,7 @@ export function ScreenshotOcrPage() {
               <Copy className="size-4" aria-hidden />
               {t("screenshot.actions.copy")}
             </Button>
-            <Button type="button" variant="secondary" onClick={() => void recapture()}>
+            <Button type="button" variant="secondary" onClick={recapture}>
               <RotateCcw className="size-4" aria-hidden />
               {t("screenshot.ocr.recapture")}
             </Button>

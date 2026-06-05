@@ -126,7 +126,7 @@ const electronAPI = {
   closePinnedImage: () => ipcRenderer.send("pinned-image:close"),
   getScreenshotOcrState: () => ipcRenderer.invoke("screenshot:ocr-state"),
   closeScreenshotOcrWindow: () => ipcRenderer.send("screenshot:ocr-close"),
-  recaptureScreenshotOcr: () => ipcRenderer.invoke("screenshot:ocr-recapture"),
+  recaptureScreenshotOcr: () => ipcRenderer.send("screenshot:ocr-recapture"),
   onScreenshotOcrUpdated: (handler: () => void) => {
     ipcRenderer.on("screenshot:ocr-updated", handler)
     return () => ipcRenderer.off("screenshot:ocr-updated", handler)
