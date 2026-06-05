@@ -398,7 +398,11 @@
       "rescanning": "Rescanning…",
       "rescanned": "App list refreshed.",
       "saved": "Hotkey updated.",
-      "invalid": "Could not register that combination. The previous shortcut is still active."
+      "invalid": "Could not register that combination. The previous shortcut is still active.",
+      "learnTitle": "Learn from search history",
+      "learnHint": "Rank results higher when you've picked them under what you typed. Stored locally only and never synced; turn off to stop recording search text.",
+      "clearLearning": "Clear search learning",
+      "learningCleared": "Search learning history cleared."
     }
   },
   "screenshot": {

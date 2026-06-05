@@ -33,6 +33,7 @@ function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSe
     floatingBallEnabled: false,
     floatingBallFeatures: [],
     lanEnabled: false,
+    learnFromSearchHistory: true,
     ...overrides,
   }
 }
@@ -75,6 +76,7 @@ function installElectronApi(settings: Partial<DeskitUserSettings> = {}): TestEle
     rejectLanTransfer: vi.fn().mockResolvedValue({ id: "transfer" }),
     removeLanTransferHistory: vi.fn().mockResolvedValue([]),
     refreshApps: vi.fn().mockResolvedValue([]),
+    clearSearchLearning: vi.fn().mockResolvedValue(undefined),
     searchApps: vi.fn().mockResolvedValue([]),
     launchApp: vi.fn().mockResolvedValue(true),
     hideLauncher: vi.fn().mockResolvedValue(undefined),

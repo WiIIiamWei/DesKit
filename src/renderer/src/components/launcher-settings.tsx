@@ -2,6 +2,7 @@ import type { KeyboardEvent } from "react"
 import { Keyboard, RefreshCw, Sparkles } from "lucide-react"
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
+import { toast } from "sonner"
 import { Button } from "@/components/ui/button"
 import {
   Card,
@@ -15,8 +16,10 @@ import { Field, FieldDescription, FieldLabel } from "@/components/ui/field"
 import { Input } from "@/components/ui/input"
 import { Kbd, KbdGroup } from "@/components/ui/kbd"
 import { Separator } from "@/components/ui/separator"
+import { Switch } from "@/components/ui/switch"
 import { acceleratorFromKeyboardEvent, modifierKeys, splitAccelerator } from "@/lib/accelerators"
 import {
+  clearSearchLearning,
   getSettings,
   isElectron,
   onSettingsChanged,
@@ -77,6 +80,8 @@ export function LauncherSettings() {
   const [savedHotkeys, setSavedHotkeys] = useState<DeskitHotkeySettings>(createEmptyHotkeys)
   const [status, setStatus] = useState<{ kind: "ok" | "error"; text: string } | null>(null)
   const [refreshing, setRefreshing] = useState(false)
+  const [learnFromSearchHistory, setLearnFromSearchHistory] = useState(true)
+  const [clearing, setClearing] = useState(false)
   const [capturingHotkey, setCapturingHotkey] = useState<HotkeyTarget | null>(null)
   const hotkeysRef = useRef<DeskitHotkeySettings>(createEmptyHotkeys())
   const savedHotkeysRef = useRef<DeskitHotkeySettings>(createEmptyHotkeys())
@@ -98,8 +103,10 @@ export function LauncherSettings() {
       savedHotkeysRef.current = settings.hotkeys
       setHotkeys(settings.hotkeys)
       setSavedHotkeys(settings.hotkeys)
+      setLearnFromSearchHistory(settings.learnFromSearchHistory)
     })
     return onSettingsChanged((settings) => {
+      setLearnFromSearchHistory(settings.learnFromSearchHistory)
       const incoming = settings.hotkeys
       const currentHotkeys = hotkeysRef.current
       const currentSavedHotkeys = savedHotkeysRef.current
@@ -208,6 +215,31 @@ export function LauncherSettings() {
       setStatus({ kind: "ok", text: t("launcher.settings.rescanned") })
     } finally {
       setRefreshing(false)
+    }
+  }
+
+  async function onToggleLearn(next: boolean) {
+    // Optimistic: reflect immediately, then persist. The settings broadcast
+    // will re-confirm (or correct) the value.
+    setLearnFromSearchHistory(next)
+    setStatus(null)
+    try {
+      await updateSettings({ learnFromSearchHistory: next })
+    } catch (err) {
+      setLearnFromSearchHistory(!next)
+      setStatus({ kind: "error", text: err instanceof Error ? err.message : String(err) })
+    }
+  }
+
+  async function onClearLearning() {
+    setClearing(true)
+    try {
+      await clearSearchLearning()
+      // Transient confirmation: a sonner toast fades in, lingers, then fades
+      // out on its own — unlike the inline status which would stay pinned.
+      toast.success(t("launcher.settings.learningCleared"))
+    } finally {
+      setClearing(false)
     }
   }
 
@@ -324,6 +356,30 @@ export function LauncherSettings() {
           <Button variant="outline" size="sm" onClick={onRefresh} disabled={refreshing}>
             <RefreshCw className={`size-3.5 ${refreshing ? "animate-spin" : ""}`} aria-hidden />
             {refreshing ? t("launcher.settings.rescanning") : t("launcher.settings.rescan")}
+          </Button>
+        </div>
+
+        <Separator />
+
+        <div className="flex items-start justify-between gap-4">
+          <div className="flex min-w-0 flex-col gap-1">
+            <FieldLabel htmlFor="learn-from-search-history">
+              {t("launcher.settings.learnTitle")}
+            </FieldLabel>
+            <FieldDescription className="text-xs">
+              {t("launcher.settings.learnHint")}
+            </FieldDescription>
+          </div>
+          <Switch
+            id="learn-from-search-history"
+            checked={learnFromSearchHistory}
+            onCheckedChange={onToggleLearn}
+            aria-label={t("launcher.settings.learnTitle")}
+          />
+        </div>
+        <div className="flex justify-end">
+          <Button variant="outline" size="sm" onClick={onClearLearning} disabled={clearing}>
+            {t("launcher.settings.clearLearning")}
           </Button>
         </div>
       </CardContent>

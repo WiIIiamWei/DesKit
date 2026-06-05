@@ -71,6 +71,14 @@ export interface LauncherRankingRecorder extends LauncherRankingProvider {
    * never wipe the rankings.
    */
   prune: (keyPrefix: string, liveKeys: Iterable<string>) => Promise<void> | void
+  /**
+   * Toggle per-query learning. When off, the search text is neither recorded
+   * nor used for boosting (global frecency is unaffected). Optional so test
+   * stubs can omit it.
+   */
+  setQueryLearningEnabled?: (enabled: boolean) => void
+  /** Forget all learned per-query preferences (the search-history component). */
+  clearQueryLearning?: () => Promise<void> | void
 }
 
 interface RankingFile {
@@ -118,6 +126,7 @@ export function queryBoost(signals: QueryRankingSignals | undefined, now = Date.
 export class LauncherRankingStore implements LauncherRankingRecorder {
   private items: Record<string, LauncherRankingSignals> = {}
   private queries: Record<string, Record<string, QueryRankingSignals>> = {}
+  private queryLearningEnabled = true
   private loaded = false
   // Serializes writes so overlapping recordSelection calls persist in order
   // and never run write+rename concurrently against the same file.
@@ -151,8 +160,13 @@ export class LauncherRankingStore implements LauncherRankingRecorder {
     return item ? { ...item } : undefined
   }
 
+  setQueryLearningEnabled(enabled: boolean): void {
+    this.queryLearningEnabled = enabled
+  }
+
   getQueryBoost(currentQuery: string, key: string, now = Date.now()): number {
     this.ensureLoaded()
+    if (!this.queryLearningEnabled) return 0
     const norm = normalizeQuery(currentQuery)
     if (!norm) return 0
     // Conservative prefix match: only a learned query that is a prefix of (or
@@ -212,7 +226,15 @@ export class LauncherRankingStore implements LauncherRankingRecorder {
     if (removed) await this.save()
   }
 
+  async clearQueryLearning(): Promise<void> {
+    this.ensureLoaded()
+    if (Object.keys(this.queries).length === 0) return
+    this.queries = {}
+    await this.save()
+  }
+
   private recordQuerySelection(key: string, query: string | undefined, now: number): void {
+    if (!this.queryLearningEnabled) return
     const norm = normalizeQuery(query)
     if (!norm) return
     let bucket = this.queries[norm]

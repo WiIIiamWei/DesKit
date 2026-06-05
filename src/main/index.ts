@@ -304,6 +304,8 @@ function registerIpc(): void {
     return ok
   })
 
+  ipcMain.handle("launcher:clear-search-learning", () => launcher.clearSearchLearning())
+
   ipcMain.handle("launcher:refresh", () => launcher.refreshApps())
 
   ipcMain.handle("launcher:hide", () => {
@@ -761,6 +763,9 @@ function coercePatch(value: unknown): UserSettingsPatch {
     out.floatingBallFeatures = v.floatingBallFeatures.filter(isFloatingBallFeature)
   }
   if (typeof v.lanEnabled === "boolean") out.lanEnabled = v.lanEnabled
+  if (typeof v.learnFromSearchHistory === "boolean") {
+    out.learnFromSearchHistory = v.learnFromSearchHistory
+  }
   return out
 }
 

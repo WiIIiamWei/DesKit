@@ -276,4 +276,40 @@ describe("launcherRankingStore query learning", () => {
     expect(store.getQueryBoost("q", "app:win32:app1", at)).toBeGreaterThan(0)
     expect(store.getQueryBoost("q", "app:win32:app8", at)).toBeGreaterThan(0)
   })
+
+  it("does not learn from or boost queries while learning is disabled", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const store = new LauncherRankingStore(launcherRankingFilePath(dir))
+    await store.load()
+    store.setQueryLearningEnabled(false)
+
+    await store.recordSelection("app:win32:Excel", { query: "ex", now })
+
+    // Global frecency is still recorded; only the per-query layer is paused.
+    expect(store.getSignals("app:win32:Excel")?.launchCount).toBe(1)
+    expect(store.getQueryBoost("ex", "app:win32:Excel", now)).toBe(0)
+
+    // Re-enabling exposes nothing retroactively (nothing was recorded).
+    store.setQueryLearningEnabled(true)
+    expect(store.getQueryBoost("ex", "app:win32:Excel", now)).toBe(0)
+  })
+
+  it("clears learned queries but keeps global usage counts", async () => {
+    const now = Date.UTC(2026, 5, 5)
+    const filePath = launcherRankingFilePath(dir)
+    const store = new LauncherRankingStore(filePath)
+    await store.load()
+    await store.recordSelection("app:win32:Excel", { query: "ex", now })
+
+    await store.clearQueryLearning()
+
+    expect(store.getQueryBoost("ex", "app:win32:Excel", now)).toBe(0)
+    expect(store.getSignals("app:win32:Excel")?.launchCount).toBe(1)
+
+    // The cleared state survives a reload.
+    const reloaded = new LauncherRankingStore(filePath)
+    await reloaded.load()
+    expect(reloaded.getQueryBoost("ex", "app:win32:Excel", now)).toBe(0)
+    expect(reloaded.getSignals("app:win32:Excel")?.launchCount).toBe(1)
+  })
 })

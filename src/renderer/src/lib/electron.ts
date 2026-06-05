@@ -71,6 +71,10 @@ export async function refreshApps(): Promise<AppEntry[]> {
   return api().refreshApps()
 }
 
+export async function clearSearchLearning(): Promise<void> {
+  await api().clearSearchLearning()
+}
+
 export async function hideLauncher(): Promise<void> {
   await api().hideLauncher()
 }

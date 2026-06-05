@@ -40,6 +40,7 @@ declare global {
     floatingBallEnabled: boolean
     floatingBallFeatures: DeskitFloatingBallFeature[]
     lanEnabled: boolean
+    learnFromSearchHistory: boolean
   }
 
   type DeskitLanPlatform = "win32" | "darwin" | "linux" | "unknown"
@@ -281,6 +282,7 @@ declare global {
       searchApps: (query: string) => Promise<LauncherSearchResult[]>
       launchApp: (id: string, query?: string) => Promise<boolean>
       refreshApps: () => Promise<LauncherAppEntry[]>
+      clearSearchLearning: () => Promise<void>
       hideLauncher: () => Promise<void>
       openExternalUrl: (url: string) => Promise<boolean>
       writeClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>

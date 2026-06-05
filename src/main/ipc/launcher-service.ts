@@ -28,6 +28,7 @@ export class LauncherService {
     this.ranking = options.ranking
     this.settingsPath = settingsFilePath(app.getPath("userData"))
     this.settings = await loadSettings(this.settingsPath)
+    this.ranking?.setQueryLearningEnabled?.(this.settings.learnFromSearchHistory)
     return this.settings
   }
 
@@ -45,8 +46,19 @@ export class LauncherService {
       },
     })
     this.settings = next
+    this.ranking?.setQueryLearningEnabled?.(next.learnFromSearchHistory)
     if (this.settingsPath) await saveSettings(this.settingsPath, next)
     return next
+  }
+
+  // Forget the per-query learned preferences (the search-history component of
+  // ranking); anonymous app/command usage counts are kept. Best-effort.
+  async clearSearchLearning(): Promise<void> {
+    try {
+      await this.ranking?.clearQueryLearning?.()
+    } catch (err) {
+      console.warn("[launcher] failed to clear search learning", err)
+    }
   }
 
   async search(query: string): Promise<SearchResult[]> {
