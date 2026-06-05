@@ -87,6 +87,8 @@ const electronAPI = {
   moveFloatingBallBy: (delta: { x: number; y: number }) =>
     ipcRenderer.invoke("floating-ball:move-by", delta),
   hideFloatingBall: () => ipcRenderer.invoke("floating-ball:hide"),
+  notifyFloatingBallMenuPainted: (expanded: boolean) =>
+    ipcRenderer.send("floating-ball:menu-painted", expanded),
 
   // ---- Settings ----
   getSettings: () => ipcRenderer.invoke("settings:get"),

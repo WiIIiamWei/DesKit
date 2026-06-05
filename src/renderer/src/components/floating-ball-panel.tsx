@@ -11,6 +11,7 @@ import {
   getSettings,
   listPlugins,
   moveFloatingBallDrag,
+  notifyFloatingBallMenuPainted,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
   onPluginRegistryChanged,
@@ -92,6 +93,7 @@ export function FloatingBallPanel() {
           menuOpenTransitionFrameRef.current = window.requestAnimationFrame(() => {
             menuOpenTransitionFrameRef.current = null
             setSuppressMenuOpenTransition(false)
+            notifyFloatingBallMenuPainted(true)
           })
         })
         return

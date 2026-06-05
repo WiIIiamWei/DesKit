@@ -23,6 +23,7 @@ import {
   listPlugins,
   moveFloatingBallBy,
   moveFloatingBallDrag,
+  notifyFloatingBallMenuPainted,
   notifyLauncherReady,
   onFloatingBallFeatures,
   onFloatingBallMenuState,
@@ -74,6 +75,7 @@ function mockApi() {
     finishFloatingBallDrag: vi.fn().mockResolvedValue(undefined),
     moveFloatingBallBy: vi.fn().mockResolvedValue(undefined),
     hideFloatingBall: vi.fn().mockResolvedValue(undefined),
+    notifyFloatingBallMenuPainted: vi.fn(),
     listPlugins: vi.fn().mockResolvedValue(ok([])),
     getPlugin: vi.fn().mockResolvedValue(ok(null)),
     setPluginEnabled: vi.fn().mockResolvedValue(ok({ pluginId: "plugin" })),
@@ -272,6 +274,12 @@ describe("lib/electron", () => {
       const api = mockApi()
       await hideFloatingBall()
       expect(api.hideFloatingBall).toHaveBeenCalled()
+    })
+
+    it("notifyFloatingBallMenuPainted forwards menu paint state", () => {
+      const api = mockApi()
+      notifyFloatingBallMenuPainted(true)
+      expect(api.notifyFloatingBallMenuPainted).toHaveBeenCalledWith(true)
     })
 
     it("getSettings calls getSettings", async () => {
