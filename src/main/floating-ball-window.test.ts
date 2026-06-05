@@ -1,7 +1,7 @@
 import type { BrowserWindow as ElectronBrowserWindow } from "electron"
 import type { Mock } from "vitest"
 import type { FloatingBallWindowDeps } from "./floating-ball-window"
-import { BrowserWindow, screen } from "electron"
+import { BrowserWindow, Menu, screen } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import {
   BALL_SIZE,
@@ -913,6 +913,70 @@ describe("floating ball window dragging", () => {
     expect(menuWindow.setIgnoreMouseEvents).toHaveBeenCalledWith(true)
     expect(menuWindow.setFocusable).toHaveBeenCalledWith(false)
     expect(ballWindow.webContents.send).toHaveBeenLastCalledWith("floating-ball:menu-state", false)
+  })
+
+  it("opens the floating ball context menu from the expanded menu window", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    expandFloatingBallMenu()
+    const menuWindow = latestWindow()
+    vi.mocked(Menu.buildFromTemplate).mockClear()
+
+    menuWindow.webContents.emit("context-menu")
+
+    expect(Menu.buildFromTemplate).toHaveBeenCalledWith([
+      expect.objectContaining({ label: "Close Floating Ball" }),
+    ])
+    const contextMenu = vi.mocked(Menu.buildFromTemplate).mock.results[0]?.value as
+      | { popup: Mock }
+      | undefined
+    expect(contextMenu?.popup).toHaveBeenCalledWith(expect.objectContaining({ window: menuWindow }))
+  })
+
+  it("keeps the ball window above the menu window after right-clicking the expanded ball", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    expandFloatingBallMenu()
+    ballWindow.moveTop.mockClear()
+    ballWindow.isFocused.mockReturnValue(true)
+    vi.mocked(Menu.buildFromTemplate).mockClear()
+
+    ballWindow.webContents.emit("context-menu")
+
+    const contextMenu = vi.mocked(Menu.buildFromTemplate).mock.results[0]?.value as
+      | { popup: Mock }
+      | undefined
+    const popupOptions = contextMenu?.popup.mock.calls[0]?.[0] as
+      | { callback?: () => void }
+      | undefined
+    expect(popupOptions?.callback).toEqual(expect.any(Function))
+
+    ballWindow.moveTop.mockClear()
+    popupOptions?.callback?.()
+
+    expect(ballWindow.moveTop).toHaveBeenCalledTimes(1)
+  })
+
+  it("restacks the focused expanded ball before opening its context menu", () => {
+    ensureFloatingBallWindow(deps)
+    const ballWindow = latestWindow()
+    ballWindow.getBounds.mockReturnValue({ x: 604, y: 414, width: 72, height: 72 })
+    expandFloatingBallMenu()
+    ballWindow.isFocused.mockReturnValue(true)
+    ballWindow.moveTop.mockClear()
+    vi.mocked(Menu.buildFromTemplate).mockClear()
+
+    ballWindow.webContents.emit("context-menu")
+
+    const contextMenu = vi.mocked(Menu.buildFromTemplate).mock.results[0]?.value as
+      | { popup: Mock }
+      | undefined
+    expect(ballWindow.moveTop).toHaveBeenCalledTimes(1)
+    expect(ballWindow.moveTop.mock.invocationCallOrder[0]).toBeLessThan(
+      contextMenu?.popup.mock.invocationCallOrder[0] ?? 0
+    )
   })
 
   it("does not restore the pre-expand snapped edge after dragging the expanded menu away", () => {
