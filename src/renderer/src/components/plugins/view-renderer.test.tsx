@@ -39,7 +39,7 @@ describe("viewRenderer", () => {
     })
   })
 
-  it("renders active action icons persistently without duplicating compact actions", async () => {
+  it("uses action placement to keep status actions pinned after inline actions", async () => {
     const user = userEvent.setup()
     const onAction = vi.fn()
     const view: RenderablePluginView = {
@@ -49,13 +49,20 @@ describe("viewRenderer", () => {
           id: "first",
           title: "First item",
           actions: [
-            { type: "custom", id: "copy-item", label: "Copy", icon: "lucide:copy" },
+            {
+              type: "custom",
+              id: "copy-item",
+              label: "Copy",
+              icon: "lucide:copy",
+              placement: "inline",
+            },
             {
               type: "custom",
               id: "toggle-favorite",
               label: "Star",
               icon: "lucide:star",
               active: true,
+              placement: "status",
             },
           ],
         },
@@ -79,6 +86,36 @@ describe("viewRenderer", () => {
     ).toEqual(["Copy", "Star"])
     expect(container.querySelector(".fill-current")).toBeInTheDocument()
     await user.hover(screen.getByRole("button", { name: /second item/i }))
+    expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
+    expect(screen.getAllByRole("button", { name: "Star" })).toHaveLength(1)
+  })
+
+  it("keeps legacy active icon actions as pinned status actions", async () => {
+    const user = userEvent.setup()
+    const onAction = vi.fn()
+    const view: RenderablePluginView = {
+      type: "list",
+      items: [
+        {
+          id: "legacy",
+          title: "Legacy item",
+          actions: [
+            { type: "custom", id: "copy-item", label: "Copy", icon: "lucide:copy" },
+            {
+              type: "custom",
+              id: "toggle-favorite",
+              label: "Star",
+              icon: "lucide:star",
+              active: true,
+            },
+          ],
+        },
+      ],
+    }
+
+    render(<ViewRenderer view={view} onAction={onAction} />)
+    await user.hover(screen.getByRole("button", { name: /legacy item/i }))
+
     expect(screen.getByRole("button", { name: "Copy" })).toBeInTheDocument()
     expect(screen.getAllByRole("button", { name: "Star" })).toHaveLength(1)
   })
@@ -118,7 +155,7 @@ describe("viewRenderer", () => {
     expect(container.querySelectorAll(".fill-current")).toHaveLength(1)
   })
 
-  it("renders selected row status without requiring accessory icons", () => {
+  it("does not render host-owned selected row status icons", () => {
     const onAction = vi.fn()
     const view: RenderablePluginView = {
       type: "list",
@@ -132,11 +169,11 @@ describe("viewRenderer", () => {
       ],
     }
 
-    const { container } = render(<ViewRenderer view={view} onAction={onAction} />)
+    render(<ViewRenderer view={view} onAction={onAction} />)
 
     expect(screen.getByText("5 minutes ago")).toBeInTheDocument()
-    expect(container.querySelector(".text-primary")).toBeInTheDocument()
     expect(screen.queryByText("✓")).not.toBeInTheDocument()
+    expect(screen.queryByRole("button", { name: "Action" })).not.toBeInTheDocument()
   })
 
   it("submits form values through the submit action", async () => {

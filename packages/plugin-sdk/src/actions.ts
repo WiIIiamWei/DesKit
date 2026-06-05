@@ -20,6 +20,8 @@ export type Action =
   | CloseAction
   | CustomAction
 
+export type ActionPlacement = "inline" | "status" | "overflow"
+
 export interface CopyAction {
   type: "copy"
   label?: LocalizedString
@@ -27,6 +29,12 @@ export interface CopyAction {
   icon?: string
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
+  /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
   /**
    * A plain string is treated as `{ type: "text", text: value }`.
    * Use a `ClipboardContent` object for image clipboard entries.
@@ -43,6 +51,12 @@ export interface PasteAction {
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
   /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
+  /**
    * A plain string is treated as `{ type: "text", text: value }`.
    * Use a `ClipboardContent` object for image clipboard entries.
    */
@@ -57,6 +71,12 @@ export interface OpenUrlAction {
   icon?: string
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
+  /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
   /** Only `http(s)` URLs are honoured — host opens via `shell.openExternal`. */
   url: string
   shortcut?: string
@@ -69,6 +89,12 @@ export interface OpenPathAction {
   icon?: string
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
+  /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
   path: string
   shortcut?: string
 }
@@ -80,6 +106,12 @@ export interface RunCommandAction {
   icon?: string
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
+  /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
   /** Plugin command id — typically owned by the same plugin. */
   commandId: string
   args?: unknown
@@ -92,6 +124,12 @@ export interface SubmitAction {
   icon?: string
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
+  /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
 }
 
 export interface CloseAction {
@@ -101,6 +139,12 @@ export interface CloseAction {
   icon?: string
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
+  /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
 }
 
 export interface CustomAction {
@@ -110,6 +154,12 @@ export interface CustomAction {
   icon?: string
   /** Whether the action is currently active; host may render it highlighted/filled. */
   active?: boolean
+  /**
+   * Semantic action slot for list rows. `inline` appears with row actions,
+   * `status` is persistently pinned to the right, and `overflow` is reserved
+   * for host overflow menus. Omit for host-compatible defaults.
+   */
+  placement?: ActionPlacement
   /** Identifier the plugin sees in `onAction(actionId, payload, ctx)`. */
   id: string
   payload?: unknown

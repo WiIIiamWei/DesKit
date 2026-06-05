@@ -10,6 +10,7 @@
 
 export type {
   Action,
+  ActionPlacement,
   CloseAction,
   CopyAction,
   CustomAction,
