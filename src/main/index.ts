@@ -42,6 +42,7 @@ import {
 } from "./floating-ball-window"
 import { LauncherService } from "./ipc/launcher-service"
 import { registerPluginIpc } from "./ipc/plugins"
+import { isTrustedSenderUrl } from "./ipc/trusted-sender"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { collectPluginShortcutBindings } from "./plugin-shortcuts"
 import { createElectronPluginAdapters } from "./plugins/electron-adapters"
@@ -545,16 +546,11 @@ function registerIpc(): void {
 
 function isTrustedIpcSender(event: IpcMainInvokeEvent): boolean {
   const url = event.senderFrame?.url || event.sender.getURL()
-  let target: URL
-  try {
-    target = new URL(url)
-  } catch {
-    return false
-  }
-
-  if (target.origin === APP_ORIGIN) return true
-  if (rendererDevUrl && target.origin === new URL(rendererDevUrl).origin) return true
-  return false
+  return isTrustedSenderUrl(url, {
+    appScheme: APP_SCHEME,
+    appHost: "app",
+    rendererDevUrl,
+  })
 }
 
 function isClipboardContent(value: unknown): value is ClipboardContent {
