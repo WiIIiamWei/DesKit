@@ -1,7 +1,7 @@
 import type { BrowserWindow as BrowserWindowType, NativeImage } from "electron"
 import { BrowserWindow, nativeImage } from "electron"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
-import { recognizeScreenshotText } from "./ocr-engine"
+import { OcrEngineLoadError, recognizeScreenshotText } from "./ocr-engine"
 import {
   closeScreenshotOcrWindow,
   getScreenshotOcrState,
@@ -85,6 +85,19 @@ describe("screenshot OCR window", () => {
       imageDataUrl: "data:image/png;base64,capture",
       message: "选择区域过大，请重新选择较小区域",
       text: "previous text",
+    })
+  })
+
+  it("describes OCR resource load failures without plugin wording", async () => {
+    vi.mocked(recognizeScreenshotText).mockRejectedValue(new OcrEngineLoadError())
+
+    openScreenshotOcrWindow(deps, { height: 100, imagePath: "/tmp/capture.png", width: 100 })
+    const win = lastWindow()
+
+    await vi.waitFor(() => {
+      expect(getScreenshotOcrState(win!.webContents)?.error).toBe(
+        "引擎加载失败，请重新安装或更新应用或 OCR 资源"
+      )
     })
   })
 
