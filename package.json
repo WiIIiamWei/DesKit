@@ -127,6 +127,14 @@
     },
     "extraResources": [
       {
+        "from": "resources",
+        "to": "resources",
+        "filter": [
+          "icon.*",
+          "logo.svg"
+        ]
+      },
+      {
         "from": "resources/ocr",
         "to": "ocr",
         "filter": [
