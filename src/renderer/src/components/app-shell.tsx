@@ -75,16 +75,6 @@ export function AppShell() {
                 </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
-                    isActive={nav === "lan-transfer"}
-                    onClick={() => setNav("lan-transfer")}
-                    tooltip={t("nav.lanTransfer")}
-                  >
-                    <Wifi />
-                    <span>{t("nav.lanTransfer")}</span>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
                     isActive={nav === "settings"}
                     onClick={() => setNav("settings")}
                     tooltip={t("nav.settings")}
@@ -109,6 +99,16 @@ export function AppShell() {
                   >
                     <Search />
                     <span>{t("nav.appLauncher")}</span>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    isActive={nav === "lan-transfer"}
+                    onClick={() => setNav("lan-transfer")}
+                    tooltip={t("nav.lanTransfer")}
+                  >
+                    <Wifi />
+                    <span>{t("nav.lanTransfer")}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
                 <SidebarMenuItem>
