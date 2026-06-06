@@ -18,6 +18,7 @@ interface SettingsPatch {
   floatingBallEnabled?: boolean
   floatingBallFeatures?: FloatingBallFeature[]
   lanEnabled?: boolean
+  learnFromSearchHistory?: boolean
 }
 
 interface Settings {
@@ -31,6 +32,7 @@ interface Settings {
   floatingBallEnabled: boolean
   floatingBallFeatures: FloatingBallFeature[]
   lanEnabled: boolean
+  learnFromSearchHistory: boolean
 }
 
 type ScreenshotAction = "copy" | "save" | "pin" | "annotate" | "ocr"

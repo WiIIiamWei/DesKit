@@ -8,7 +8,7 @@ import type {
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react"
 import { useTranslation } from "react-i18next"
 import { toast } from "sonner"
-import { mergeLauncherResults } from "@/components/launcher-results"
+import { launcherSegments, mergeLauncherResults } from "@/components/launcher-results"
 import { PluginIcon } from "@/components/plugins/plugin-icon"
 import { ViewRenderer } from "@/components/plugins/view-renderer"
 import {
@@ -92,7 +92,7 @@ export function LauncherPanel() {
   // in main using fuzzy scoring, so we disable cmdk's filter and pass the
   // backend results straight through.
   const items = useMemo(() => results, [results])
-  const groups = useMemo(() => launcherGroups(items), [items])
+  const segments = useMemo(() => launcherSegments(items), [items])
 
   const runSearch = useCallback(
     async (next: string) => {
@@ -217,18 +217,24 @@ export function LauncherPanel() {
   }, [activeCommand, invokeActiveCommand, mode, pluginSearchText])
 
   const runPluginCommand = useCallback(
-    async (command: DeskitPluginCommandResult, initialQuery = query) => {
+    async (
+      command: DeskitPluginCommandResult,
+      options: { initialQuery?: string; rankingQuery?: string } = {}
+    ) => {
+      const { initialQuery = "", rankingQuery } = options
       try {
         ++pluginSearchSeqRef.current
-        // `initialQuery` is the command's own input; `query` is the launcher
-        // search text the command was found under, recorded for per-query
-        // ranking (the two are distinct).
+        // `initialQuery` is the command's own starting input. `rankingQuery` is
+        // the launcher search text the command was *selected from*, recorded for
+        // per-query learning — set only when picked out of search results, left
+        // undefined when a command is opened directly by id (floating ball /
+        // global hotkey) so stale search text can't pollute the ranking.
         const view = await invokePluginCommand(
           command.pluginId,
           command.commandId,
           "run",
           { initialQuery },
-          query
+          rankingQuery
         )
         if (isPluginToastView(view)) {
           showPluginToast(view, i18n.language)
@@ -252,7 +258,7 @@ export function LauncherPanel() {
         toast.error("Command failed")
       }
     },
-    [i18n.language, query]
+    [i18n.language]
   )
 
   const runPluginCommandById = useCallback(
@@ -277,7 +283,8 @@ export function LauncherPanel() {
             score: 0,
             matches: [],
           },
-          ""
+          // Opened directly by id — not a search selection, so no ranking query.
+          {}
         )
       } catch (err) {
         console.error("run floating ball plugin command failed", err)
@@ -301,7 +308,7 @@ export function LauncherPanel() {
         if (item.kind === "app") {
           await launchApp(item.result.entry.id, query)
         } else {
-          await runPluginCommand(item.result, "")
+          await runPluginCommand(item.result, { rankingQuery: query })
         }
       } catch (err) {
         console.error("launcher selection failed", err)
@@ -419,14 +426,14 @@ export function LauncherPanel() {
             />
             <CommandList className="max-h-none flex-1">
               {!loading && items.length === 0 && <CommandEmpty>{t("launcher.empty")}</CommandEmpty>}
-              {groups.map((group) => (
+              {segments.map((segment) => (
                 <CommandGroup
-                  key={group.kind}
+                  key={segment.key}
                   heading={
-                    group.kind === "plugin" ? t("launcher.commands") : t("launcher.installed")
+                    segment.kind === "plugin" ? t("launcher.commands") : t("launcher.installed")
                   }
                 >
-                  {group.items.map((item) =>
+                  {segment.items.map((item) =>
                     item.kind === "plugin" ? (
                       <CommandItem
                         key={item.value}
@@ -463,15 +470,6 @@ export function LauncherPanel() {
       </Command>
     </div>
   )
-}
-
-function launcherGroups(
-  items: LauncherItem[]
-): Array<{ kind: LauncherItem["kind"]; items: LauncherItem[] }> {
-  const order: LauncherItem["kind"][] = ["plugin", "app"]
-  return order
-    .map((kind) => ({ kind, items: items.filter((item) => item.kind === kind) }))
-    .filter((group) => group.items.length > 0)
 }
 
 function isPluginToastView(value: unknown): value is PluginToastView {

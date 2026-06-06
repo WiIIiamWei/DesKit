@@ -23,6 +23,32 @@ export function mergeLauncherResults(
   ].sort((a, b) => compareLauncherItems(a, b, locale))
 }
 
+export interface LauncherSegment {
+  kind: LauncherItem["kind"]
+  key: string
+  items: LauncherItem[]
+}
+
+/**
+ * Split the already score-sorted items into contiguous same-kind runs, so the
+ * rendered order follows the merged score exactly (a high-scoring app can sit
+ * above plugin commands). Headings may repeat when kinds interleave — that is
+ * the intended trade-off for honoring cross-type ranking, instead of forcing a
+ * fixed plugin-then-app layout that discards the sort.
+ */
+export function launcherSegments(items: LauncherItem[]): LauncherSegment[] {
+  const segments: LauncherSegment[] = []
+  for (const item of items) {
+    const last = segments.at(-1)
+    if (last && last.kind === item.kind) {
+      last.items.push(item)
+    } else {
+      segments.push({ kind: item.kind, key: `${item.kind}-${segments.length}`, items: [item] })
+    }
+  }
+  return segments
+}
+
 export function launcherItemTitle(item: LauncherItem, locale: string): string {
   return item.kind === "plugin" ? localize(item.result.title, locale) : item.result.entry.name
 }
