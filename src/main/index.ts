@@ -56,6 +56,7 @@ import {
   resolveDevLanSimulation,
 } from "./lan/dev-simulation"
 import { LanService } from "./lan/lan-service"
+import { launcherRankingFilePath, LauncherRankingStore } from "./launcher/ranking-store"
 import { defaultNotificationIcon, showStartupNotification } from "./notifications"
 import { collectPluginShortcutBindings } from "./plugin-shortcuts"
 import { createElectronPluginAdapters } from "./plugins/electron-adapters"
@@ -298,12 +299,14 @@ function registerIpc(): void {
     return launcher.search(typeof query === "string" ? query : "")
   })
 
-  ipcMain.handle("launcher:launch", async (_event, id: unknown) => {
+  ipcMain.handle("launcher:launch", async (_event, id: unknown, query: unknown) => {
     if (typeof id !== "string") return false
-    const ok = await launcher.launchById(id)
+    const ok = await launcher.launchById(id, typeof query === "string" ? query : undefined)
     if (ok) hideSearchWindow()
     return ok
   })
+
+  ipcMain.handle("launcher:clear-search-learning", () => launcher.clearSearchLearning())
 
   ipcMain.handle("launcher:refresh", () => launcher.refreshApps())
 
@@ -765,6 +768,9 @@ function coercePatch(value: unknown): UserSettingsPatch {
     out.floatingBallFeatures = v.floatingBallFeatures.filter(isFloatingBallFeature)
   }
   if (typeof v.lanEnabled === "boolean") out.lanEnabled = v.lanEnabled
+  if (typeof v.learnFromSearchHistory === "boolean") {
+    out.learnFromSearchHistory = v.learnFromSearchHistory
+  }
   return out
 }
 
@@ -1024,7 +1030,7 @@ async function initLan(enabled: boolean): Promise<void> {
   }
 }
 
-function createPluginHost(): PluginHost {
+function createPluginHost(ranking: LauncherRankingStore): PluginHost {
   const userDataDir = app.getPath("userData")
   const fetchWithNet: typeof fetch = (input, init) =>
     net.fetch(input instanceof URL ? input.toString() : input, init)
@@ -1035,6 +1041,7 @@ function createPluginHost(): PluginHost {
     resourcesDir: pluginResourcesDir(),
     syncStatus: pluginSyncStatus,
     onSyncDataChanged: markSyncLocalChanged,
+    ranking,
     adapters: {
       ...adapters,
       system: {
@@ -1377,7 +1384,10 @@ if (!gotLock) {
 
     applyCsp()
     registerStaticProtocol()
-    plugins = createPluginHost()
+    const ranking = new LauncherRankingStore(launcherRankingFilePath(app.getPath("userData")))
+    await ranking.load()
+    let settings = await launcher.init({ ranking })
+    plugins = createPluginHost(ranking)
     lan = new LanService({
       userDataDir: app.getPath("userData"),
       adapter: new BonjourLanDiscoveryAdapter(),
@@ -1406,7 +1416,6 @@ if (!gotLock) {
     // and sidebar navigation instead.
     Menu.setApplicationMenu(null)
 
-    let settings = await launcher.init()
     try {
       await initLan(settings.lanEnabled)
     } catch (err) {

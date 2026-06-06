@@ -398,7 +398,11 @@
       "rescanning": "扫描中…",
       "rescanned": "应用列表已刷新。",
       "saved": "快捷键已更新。",
-      "invalid": "无法注册该组合，仍使用上一次的快捷键。"
+      "invalid": "无法注册该组合，仍使用上一次的快捷键。",
+      "learnTitle": "从搜索历史学习",
+      "learnHint": "根据你在某个输入下选过的结果，让它在搜索中更靠前。仅保存在本地、不参与同步；关闭后将停止记录搜索文字。",
+      "clearLearning": "清除搜索学习记录",
+      "learningCleared": "搜索学习记录已清除。"
     }
   },
   "screenshot": {

@@ -37,6 +37,7 @@ function baseSettings(features: DeskitFloatingBallFeature[] = []): DeskitUserSet
     floatingBallEnabled: true,
     floatingBallFeatures: features,
     lanEnabled: false,
+    learnFromSearchHistory: true,
   }
 }
 

@@ -20,6 +20,7 @@ interface SettingsPatch {
   floatingBallEnabled?: boolean
   floatingBallFeatures?: FloatingBallFeature[]
   lanEnabled?: boolean
+  learnFromSearchHistory?: boolean
 }
 
 interface Settings {
@@ -34,6 +35,7 @@ interface Settings {
   floatingBallEnabled: boolean
   floatingBallFeatures: FloatingBallFeature[]
   lanEnabled: boolean
+  learnFromSearchHistory: boolean
 }
 
 type ScreenshotAction = "copy" | "save" | "pin" | "annotate" | "ocr"
@@ -72,8 +74,9 @@ type SyncRunResult =
 const electronAPI = {
   // ---- Launcher ----
   searchApps: (query: string) => ipcRenderer.invoke("launcher:search", query),
-  launchApp: (id: string) => ipcRenderer.invoke("launcher:launch", id),
+  launchApp: (id: string, query?: string) => ipcRenderer.invoke("launcher:launch", id, query),
   refreshApps: () => ipcRenderer.invoke("launcher:refresh"),
+  clearSearchLearning: () => ipcRenderer.invoke("launcher:clear-search-learning"),
   hideLauncher: () => ipcRenderer.invoke("launcher:hide"),
   openExternalUrl: (url: string) => ipcRenderer.invoke("system:open-external", url),
   writeClipboardContent: (content: unknown) =>
@@ -178,8 +181,9 @@ const electronAPI = {
     pluginId: string,
     commandId: string,
     phase: "run" | "onSearchChange" | "onAction",
-    payload?: unknown
-  ) => ipcRenderer.invoke("plugin:invoke", { pluginId, commandId, phase, payload }),
+    payload?: unknown,
+    query?: string
+  ) => ipcRenderer.invoke("plugin:invoke", { pluginId, commandId, phase, payload, query }),
   disposePluginCommand: (pluginId: string, commandId: string) =>
     ipcRenderer.invoke("plugin:dispose-command", { pluginId, commandId }),
   listMarketplacePlugins: () => ipcRenderer.invoke("marketplace:list"),

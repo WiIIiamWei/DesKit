@@ -80,12 +80,38 @@ describe("plugin ipc handlers", () => {
       payload: { initialQuery: "42" },
     })
 
-    expect(host.invoke).toHaveBeenCalledWith({
+    expect(host.invoke).toHaveBeenCalledWith(
+      {
+        pluginId: "com.deskit.test",
+        commandId: "test.run",
+        phase: "run",
+        payload: { initialQuery: "42" },
+      },
+      { query: undefined }
+    )
+  })
+
+  it("forwards the launcher search query separately from the command payload", async () => {
+    const host = fakeHost()
+    const handlers = createPluginIpcHandlers(host)
+
+    await handlers.invoke({
       pluginId: "com.deskit.test",
       commandId: "test.run",
       phase: "run",
       payload: { initialQuery: "42" },
+      query: "te",
     })
+
+    expect(host.invoke).toHaveBeenCalledWith(
+      {
+        pluginId: "com.deskit.test",
+        commandId: "test.run",
+        phase: "run",
+        payload: { initialQuery: "42" },
+      },
+      { query: "te" }
+    )
   })
 
   it("rejects unknown invoke phases", async () => {

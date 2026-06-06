@@ -222,7 +222,7 @@ describe("lib/electron", () => {
     it("launchApp forwards id", async () => {
       const api = mockApi()
       await launchApp("app-id")
-      expect(api.launchApp).toHaveBeenCalledWith("app-id")
+      expect(api.launchApp).toHaveBeenCalledWith("app-id", undefined)
     })
 
     it("refreshApps calls refreshApps", async () => {
@@ -449,9 +449,13 @@ describe("lib/electron", () => {
     it("invokePluginCommand forwards invocation payload", async () => {
       const api = mockApi()
       await invokePluginCommand("com.deskit.test", "test.run", "run", { initialQuery: "1" })
-      expect(api.invokePluginCommand).toHaveBeenCalledWith("com.deskit.test", "test.run", "run", {
-        initialQuery: "1",
-      })
+      expect(api.invokePluginCommand).toHaveBeenCalledWith(
+        "com.deskit.test",
+        "test.run",
+        "run",
+        { initialQuery: "1" },
+        undefined
+      )
     })
 
     it("disposePluginCommand forwards command identity", async () => {

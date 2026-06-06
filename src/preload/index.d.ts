@@ -42,6 +42,7 @@ declare global {
     floatingBallEnabled: boolean
     floatingBallFeatures: DeskitFloatingBallFeature[]
     lanEnabled: boolean
+    learnFromSearchHistory: boolean
   }
 
   type DeskitLanPlatform = "win32" | "darwin" | "linux" | "unknown"
@@ -281,8 +282,9 @@ declare global {
   interface Window {
     electronAPI?: {
       searchApps: (query: string) => Promise<LauncherSearchResult[]>
-      launchApp: (id: string) => Promise<boolean>
+      launchApp: (id: string, query?: string) => Promise<boolean>
       refreshApps: () => Promise<LauncherAppEntry[]>
+      clearSearchLearning: () => Promise<void>
       hideLauncher: () => Promise<void>
       openExternalUrl: (url: string) => Promise<boolean>
       writeClipboardContent: (content: DeskitClipboardContent) => Promise<boolean>
@@ -380,7 +382,8 @@ declare global {
         pluginId: string,
         commandId: string,
         phase: DeskitPluginInvokePhase,
-        payload?: unknown
+        payload?: unknown,
+        query?: string
       ) => Promise<DeskitPluginIpcResult<DeskitPluginView | void>>
       disposePluginCommand: (
         pluginId: string,

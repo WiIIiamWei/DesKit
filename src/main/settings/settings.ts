@@ -50,6 +50,12 @@ export interface UserSettings {
   floatingBallFeatures: FloatingBallFeature[]
   /** Whether DesKit advertises and browses devices on the local network. */
   lanEnabled: boolean
+  /**
+   * Whether the launcher learns per-query result preferences from the search
+   * text. When off, only anonymous app/command usage counts feed ranking and
+   * no search strings are written to disk. Global frecency still applies.
+   */
+  learnFromSearchHistory: boolean
 }
 
 export type UserSettingsPatch = Partial<Omit<UserSettings, "hotkeys">> & {
@@ -69,6 +75,7 @@ export const defaultSettings: UserSettings = {
   floatingBallEnabled: false,
   floatingBallFeatures: ["appLauncher", "screenshot"],
   lanEnabled: false,
+  learnFromSearchHistory: true,
 }
 
 export function settingsFilePath(userDataDir: string): string {
@@ -107,6 +114,9 @@ export function normalizeSettings(raw: unknown): UserSettings {
     }
     if (typeof r.lanEnabled === "boolean") {
       next.lanEnabled = r.lanEnabled
+    }
+    if (typeof r.learnFromSearchHistory === "boolean") {
+      next.learnFromSearchHistory = r.learnFromSearchHistory
     }
   }
   return next

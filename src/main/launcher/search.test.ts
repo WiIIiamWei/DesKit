@@ -58,6 +58,37 @@ describe("searchApps", () => {
     expect(results[0].entry.name).toBe("Code")
   })
 
+  it("boosts frequently used apps above slightly better text matches", () => {
+    const now = Date.UTC(2026, 5, 5)
+    const results = searchApps(apps, "code", {
+      now: () => now,
+      ranking: {
+        getSignals: (key: string) =>
+          key === "app:win32:Visual Studio Code"
+            ? { launchCount: 12, lastUsedAt: now - 60_000 }
+            : undefined,
+      },
+    })
+
+    expect(results[0].entry.name).toBe("Visual Studio Code")
+  })
+
+  it("lets a learned query boost lift a weaker text match on prefix match", () => {
+    const now = Date.UTC(2026, 5, 5)
+    // "Code Composer Studio" scores below "Code" on text alone, but the user
+    // has repeatedly picked it under the query "co".
+    const results = searchApps(apps, "co", {
+      now: () => now,
+      ranking: {
+        getSignals: () => undefined,
+        getQueryBoost: (query, key) =>
+          query === "co" && key === "app:win32:Code Composer Studio" ? 9 : 0,
+      },
+    })
+
+    expect(results[0].entry.name).toBe("Code Composer Studio")
+  })
+
   it("filters out non-matches entirely", () => {
     const results = searchApps(apps, "zzz")
     expect(results).toHaveLength(0)
@@ -66,5 +97,18 @@ describe("searchApps", () => {
   it("respects the limit option", () => {
     const results = searchApps(apps, "c", { limit: 2 })
     expect(results.length).toBeLessThanOrEqual(2)
+  })
+
+  it("orders empty queries by dynamic ranking before cache order", () => {
+    const now = Date.UTC(2026, 5, 5)
+    const results = searchApps(apps, "", {
+      now: () => now,
+      ranking: {
+        getSignals: (key: string) =>
+          key === "app:uwp:Calculator" ? { launchCount: 1, lastUsedAt: now } : undefined,
+      },
+    })
+
+    expect(results[0].entry.name).toBe("Calculator")
   })
 })

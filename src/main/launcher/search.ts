@@ -1,4 +1,6 @@
+import type { LauncherRankingProvider } from "./ranking-store"
 import type { AppEntry, SearchResult } from "./types"
+import { appRankingKey, rankingBoost } from "./ranking-store"
 
 // Subsequence fuzzy match (Sublime/VSCode style). Returns null when the
 // query is not a subsequence of the candidate. Score rewards consecutive
@@ -55,6 +57,8 @@ function isWordBoundary(text: string, i: number): boolean {
 
 export interface SearchOptions {
   limit?: number
+  ranking?: LauncherRankingProvider
+  now?: () => number
 }
 
 export function searchApps(
@@ -64,16 +68,33 @@ export function searchApps(
 ): SearchResult[] {
   const limit = options.limit ?? 50
   const trimmed = query.trim()
+  const now = options.now?.() ?? Date.now()
 
   if (!trimmed) {
-    return apps.slice(0, limit).map((entry) => ({ entry, score: 0, matches: [] }))
+    return apps
+      .map((entry, index) => ({
+        result: {
+          entry,
+          score: rankingBoost(options.ranking?.getSignals(appRankingKey(entry.id)), now),
+          matches: [],
+        },
+        index,
+      }))
+      .sort((a, b) => b.result.score - a.result.score || a.index - b.index)
+      .slice(0, limit)
+      .map((item) => item.result)
   }
 
   const results: SearchResult[] = []
   for (const entry of apps) {
     const match = fuzzyMatch(trimmed, entry.name)
     if (!match) continue
-    results.push({ entry, score: match.score, matches: match.matches })
+    const key = appRankingKey(entry.id)
+    const score =
+      match.score +
+      rankingBoost(options.ranking?.getSignals(key), now) +
+      (options.ranking?.getQueryBoost?.(trimmed, key, now) ?? 0)
+    results.push({ entry, score, matches: match.matches })
   }
   results.sort((a, b) => b.score - a.score || a.entry.name.localeCompare(b.entry.name))
   return results.slice(0, limit)
