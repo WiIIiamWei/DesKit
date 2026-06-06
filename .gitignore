@@ -37,6 +37,7 @@ yarn-error.log*
 *.tsbuildinfo
 
 # local editor / agents
+.Trash/
 .windsurfrules
 .ace-tool/
 .agents/

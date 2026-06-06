@@ -4,10 +4,10 @@ on:
   push:
     branches: [main]
     paths:
-      - "docs/**"
-      - ".github/workflows/deploy-docs.yml"
-      - "pnpm-lock.yaml"
-      - "package.json"
+      - docs/**
+      - .github/workflows/deploy-docs.yml
+      - pnpm-lock.yaml
+      - package.json
   workflow_dispatch:
 
 permissions:

@@ -1445,7 +1445,7 @@ if (!gotLock) {
       iconPath: defaultNotificationIcon(),
     })
     if (isSmokeTest) {
-      console.log("[deskit] smoke test bootstrap completed")
+      console.warn("[deskit] smoke test bootstrap completed")
       setTimeout(() => app.quit(), 1000)
     }
 

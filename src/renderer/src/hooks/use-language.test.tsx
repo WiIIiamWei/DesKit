@@ -43,6 +43,7 @@ function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSe
     floatingBallEnabled: false,
     floatingBallFeatures: [],
     lanEnabled: false,
+    learnFromSearchHistory: true,
     ...overrides,
   }
 }
