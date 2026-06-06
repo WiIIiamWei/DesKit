@@ -6,6 +6,7 @@ import zhCN from "./messages/zh-CN.json"
 export const locales = ["en", "zh-CN"] as const
 export type Locale = (typeof locales)[number]
 export const defaultLocale: Locale = "en"
+export type LanguageMode = "system" | Locale
 
 /**
  * Pick a supported locale from whatever the OS / Chromium reports.
@@ -23,6 +24,10 @@ export function detectLocale(): Locale {
     if (lower.startsWith("en")) return "en"
   }
   return defaultLocale
+}
+
+export function resolveLanguageMode(language: LanguageMode): Locale {
+  return language === "system" ? detectLocale() : language
 }
 
 // `translation` is i18next's default namespace; flat keys like "app.title"

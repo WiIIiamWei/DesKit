@@ -30,6 +30,7 @@ function baseSettings(overrides: Partial<DeskitUserSettings> = {}): DeskitUserSe
     hotkeys,
     themeMode: "system",
     accent: "neutral",
+    language: "system",
     floatingBallEnabled: false,
     floatingBallFeatures: [],
     lanEnabled: false,

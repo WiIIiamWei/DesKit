@@ -33,6 +33,7 @@ function baseSettings(features: DeskitFloatingBallFeature[] = []): DeskitUserSet
     },
     themeMode: "system",
     accent: "neutral",
+    language: "system",
     floatingBallEnabled: true,
     floatingBallFeatures: features,
     lanEnabled: false,

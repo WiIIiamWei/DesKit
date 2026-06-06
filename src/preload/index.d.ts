@@ -26,6 +26,7 @@ declare global {
 
   type DeskitThemeMode = "light" | "dark" | "system"
   type DeskitThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
+  type DeskitLanguageMode = "system" | "en" | "zh-CN"
 
   interface DeskitHotkeySettings {
     launcher: string
@@ -37,6 +38,7 @@ declare global {
     hotkeys: DeskitHotkeySettings
     themeMode: DeskitThemeMode
     accent: DeskitThemeAccent
+    language: DeskitLanguageMode
     floatingBallEnabled: boolean
     floatingBallFeatures: DeskitFloatingBallFeature[]
     lanEnabled: boolean

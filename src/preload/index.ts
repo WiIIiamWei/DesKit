@@ -6,6 +6,7 @@ import { contextBridge, ipcRenderer } from "electron"
 // compilation; the preload tsconfig doesn't pick up that .d.ts, so we
 // keep a structurally identical type here for type-only use.
 type FloatingBallFeature = "appLauncher" | "screenshot" | `plugin:${string}:${string}`
+type LanguageMode = "system" | "en" | "zh-CN"
 
 interface SettingsPatch {
   hotkey?: string
@@ -15,6 +16,7 @@ interface SettingsPatch {
   }
   themeMode?: "light" | "dark" | "system"
   accent?: "neutral" | "blue" | "green" | "rose" | "violet"
+  language?: LanguageMode
   floatingBallEnabled?: boolean
   floatingBallFeatures?: FloatingBallFeature[]
   lanEnabled?: boolean
@@ -28,6 +30,7 @@ interface Settings {
   }
   themeMode: "light" | "dark" | "system"
   accent: "neutral" | "blue" | "green" | "rose" | "violet"
+  language: LanguageMode
   floatingBallEnabled: boolean
   floatingBallFeatures: FloatingBallFeature[]
   lanEnabled: boolean
