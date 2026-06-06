@@ -99,6 +99,15 @@ describe("normalizeSettings", () => {
     expect(normalizeSettings({ accent: "puce" })).toEqual(defaultSettings)
   })
 
+  it("accepts known language modes and rejects others", () => {
+    expect(normalizeSettings({ language: "zh-CN" })).toEqual({
+      ...defaultSettings,
+      language: "zh-CN",
+    })
+    expect(normalizeSettings({ language: "system" })).toEqual(defaultSettings)
+    expect(normalizeSettings({ language: "fr" })).toEqual(defaultSettings)
+  })
+
   it("normalizes floating ball settings", () => {
     expect(
       normalizeSettings({

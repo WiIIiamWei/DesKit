@@ -439,5 +439,16 @@
       "recognizing": "正在识别文字…",
       "title": "截图 OCR"
     }
+  },
+  "language": {
+    "subtitle": "选择 DesKit 界面使用的语言。",
+    "title": "语言",
+    "label": "应用语言",
+    "options": {
+      "en": "English",
+      "zh-CN": "简体中文",
+      "system": "跟随系统"
+    },
+    "description": "默认跟随系统语言，也可以固定为指定语言。"
   }
 }

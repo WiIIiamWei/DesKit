@@ -6,12 +6,14 @@ import * as path from "node:path"
 // versions of the app interoperate cleanly.
 export type ThemeMode = "light" | "dark" | "system"
 export type ThemeAccent = "neutral" | "blue" | "green" | "rose" | "violet"
+export type LanguageMode = "system" | "en" | "zh-CN"
 export type BuiltinFloatingBallFeature = "appLauncher" | "screenshot"
 export type PluginFloatingBallFeature = `plugin:${string}:${string}`
 export type FloatingBallFeature = BuiltinFloatingBallFeature | PluginFloatingBallFeature
 
 export const THEME_MODES: readonly ThemeMode[] = ["light", "dark", "system"]
 export const THEME_ACCENTS: readonly ThemeAccent[] = ["neutral", "blue", "green", "rose", "violet"]
+export const LANGUAGE_MODES: readonly LanguageMode[] = ["system", "en", "zh-CN"]
 export const FLOATING_BALL_FEATURES: readonly BuiltinFloatingBallFeature[] = [
   "appLauncher",
   "screenshot",
@@ -40,6 +42,8 @@ export interface UserSettings {
   themeMode: ThemeMode
   /** Accent palette key — only --primary / --ring shift per accent. */
   accent: ThemeAccent
+  /** Preferred UI language. "system" defers to OS / Chromium language. */
+  language: LanguageMode
   /** Whether the desktop floating ball is shown after startup. */
   floatingBallEnabled: boolean
   /** Features shown in the floating ball radial menu. */
@@ -67,6 +71,7 @@ export const defaultSettings: UserSettings = {
   },
   themeMode: "system",
   accent: "neutral",
+  language: "system",
   floatingBallEnabled: false,
   floatingBallFeatures: ["appLauncher", "screenshot"],
   lanEnabled: false,
@@ -91,6 +96,12 @@ export function normalizeSettings(raw: unknown): UserSettings {
     }
     if (typeof r.accent === "string" && (THEME_ACCENTS as readonly string[]).includes(r.accent)) {
       next.accent = r.accent as ThemeAccent
+    }
+    if (
+      typeof r.language === "string" &&
+      (LANGUAGE_MODES as readonly string[]).includes(r.language)
+    ) {
+      next.language = r.language as LanguageMode
     }
     if (typeof r.floatingBallEnabled === "boolean") {
       next.floatingBallEnabled = r.floatingBallEnabled

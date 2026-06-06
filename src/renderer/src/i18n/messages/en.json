@@ -439,5 +439,16 @@
       "recognizing": "Recognizing text…",
       "title": "Screenshot OCR"
     }
+  },
+  "language": {
+    "subtitle": "Choose the UI language used by DesKit.",
+    "title": "Language",
+    "label": "App language",
+    "options": {
+      "en": "English",
+      "zh-CN": "简体中文",
+      "system": "Follow system"
+    },
+    "description": "Use system language by default, or pin DesKit to a specific language."
   }
 }

@@ -1,6 +1,7 @@
 import { useTranslation } from "react-i18next"
 import { AppearanceSettings } from "@/components/appearance-settings"
 import { FloatingBallSettings } from "@/components/floating-ball-settings"
+import { LanguageSettings } from "@/components/language-settings"
 import { LauncherSettings } from "@/components/launcher-settings"
 import { SyncSettings } from "@/components/sync-settings"
 
@@ -16,6 +17,7 @@ export function SettingsPage() {
       <AppearanceSettings />
       <FloatingBallSettings />
       <LauncherSettings />
+      <LanguageSettings />
     </div>
   )
 }

@@ -8,6 +8,7 @@ import { ScreenshotOcrPage } from "@/components/screenshot/screenshot-ocr-page"
 import { ScreenshotOverlayPage } from "@/components/screenshot/screenshot-overlay-page"
 import { Toaster } from "@/components/ui/sonner"
 import { TooltipProvider } from "@/components/ui/tooltip"
+import { LanguageProvider } from "@/hooks/use-language"
 import { ThemeProvider } from "@/hooks/use-theme"
 
 type RendererRoute =
@@ -49,27 +50,29 @@ export function App() {
   }, [])
 
   return (
-    <ThemeProvider>
-      <TooltipProvider>
-        {route === "launcher" ? (
-          <LauncherPanel />
-        ) : route === "floating-ball" || route === "floating-ball-menu" ? (
-          <FloatingBallPanel />
-        ) : route === "screenshot-overlay" ? (
-          <ScreenshotOverlayPage />
-        ) : route === "screenshot-annotator" ? (
-          <ImageAnnotatorPage />
-        ) : route === "screenshot-ocr" ? (
-          <ScreenshotOcrPage />
-        ) : route === "pinned-image" ? (
-          <PinnedImagePage />
-        ) : (
-          <div className="h-screen bg-background font-sans text-foreground">
-            <AppShell />
-          </div>
-        )}
-        <Toaster />
-      </TooltipProvider>
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <TooltipProvider>
+          {route === "launcher" ? (
+            <LauncherPanel />
+          ) : route === "floating-ball" || route === "floating-ball-menu" ? (
+            <FloatingBallPanel />
+          ) : route === "screenshot-overlay" ? (
+            <ScreenshotOverlayPage />
+          ) : route === "screenshot-annotator" ? (
+            <ImageAnnotatorPage />
+          ) : route === "screenshot-ocr" ? (
+            <ScreenshotOcrPage />
+          ) : route === "pinned-image" ? (
+            <PinnedImagePage />
+          ) : (
+            <div className="h-screen bg-background font-sans text-foreground">
+              <AppShell />
+            </div>
+          )}
+          <Toaster />
+        </TooltipProvider>
+      </ThemeProvider>
+    </LanguageProvider>
   )
 }

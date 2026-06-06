@@ -19,6 +19,7 @@ export default antfu(
       "release/**",
       "coverage/**",
       "node_modules/**",
+      ".Trash/**",
       "docs/**",
       // shadcn primitives are vendored from upstream; treat as third-party
       "src/renderer/src/components/ui/**",

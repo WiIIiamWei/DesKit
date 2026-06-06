@@ -760,6 +760,9 @@ function coercePatch(value: unknown): UserSettingsPatch {
   ) {
     out.accent = v.accent
   }
+  if (v.language === "system" || v.language === "en" || v.language === "zh-CN") {
+    out.language = v.language
+  }
   if (typeof v.floatingBallEnabled === "boolean") out.floatingBallEnabled = v.floatingBallEnabled
   if (Array.isArray(v.floatingBallFeatures)) {
     out.floatingBallFeatures = v.floatingBallFeatures.filter(isFloatingBallFeature)
@@ -1072,7 +1075,7 @@ function createPluginHost(ranking: LauncherRankingStore): PluginHost {
     runtime: () => {
       const settings = launcher.getSettings()
       return {
-        locale: app.getLocale(),
+        locale: effectiveLocale(),
         theme: {
           mode: settings.themeMode === "dark" ? "dark" : "light",
           accent: settings.accent,
@@ -1086,12 +1089,17 @@ function pluginResourcesDir(): string {
   return path.join(app.getAppPath(), "resources")
 }
 
+function effectiveLocale(): string {
+  const language = launcher.getSettings().language
+  return language === "system" ? app.getLocale() : language
+}
+
 function floatingBallDeps() {
   return {
     rendererDevUrl,
     appOrigin: APP_ORIGIN,
     getSettings: () => launcher.getSettings(),
-    getLocale: () => app.getLocale(),
+    getLocale: effectiveLocale,
     onOpenFeature: (feature: FloatingBallFeature) => {
       if (feature === "appLauncher") {
         showSearchWindow(searchWindowDeps())
@@ -1344,7 +1352,7 @@ function trayActions() {
     },
     getHotkey: () => launcher.getSettings().hotkeys.launcher,
     shouldIgnoreOpenSearch: consumeSearchWindowTrayOpenSuppression,
-    getLocale: () => app.getLocale(),
+    getLocale: effectiveLocale,
   }
 }
 
@@ -1433,11 +1441,11 @@ if (!gotLock) {
     syncFloatingBallWindow(floatingBallDeps())
     showStartupNotification({
       hotkey: settings.hotkeys.launcher,
-      locale: app.getLocale(),
+      locale: effectiveLocale(),
       iconPath: defaultNotificationIcon(),
     })
     if (isSmokeTest) {
-      console.log("[deskit] smoke test bootstrap completed")
+      console.warn("[deskit] smoke test bootstrap completed")
       setTimeout(() => app.quit(), 1000)
     }
 
