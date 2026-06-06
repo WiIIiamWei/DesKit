@@ -48,6 +48,28 @@ describe("pluginRegistry", () => {
     expect(registry.searchCommands("run")[0]?.icon).toBe("lucide:puzzle")
   })
 
+  it("boosts frequently used commands above slightly better text matches", async () => {
+    const sandbox = fakeSandbox()
+    const now = Date.UTC(2026, 5, 5)
+    const registry = new PluginRegistry({
+      sandbox,
+      now: () => now,
+      ranking: {
+        getSignals: (key: string) =>
+          key === "plugin-command:com.deskit.timer:timer.convert"
+            ? { launchCount: 12, lastUsedAt: now - 60_000 }
+            : undefined,
+      },
+    })
+
+    await registry.load([
+      discovered({ id: "com.deskit.timer", commandId: "timer.convert", title: "Time Converter" }),
+      discovered({ id: "com.deskit.tools", commandId: "tools.time", title: "Time" }),
+    ])
+
+    expect(registry.searchCommands("time")[0]?.commandId).toBe("timer.convert")
+  })
+
   it("continues reload when unloading an old plugin fails", async () => {
     const sandbox = fakeSandbox()
     const registry = new PluginRegistry({ sandbox, now: () => 1 })

@@ -1,4 +1,5 @@
 import type { ClipboardContent, LocalizedString, PluginModule, View } from "@deskit/plugin-sdk"
+import type { LauncherRankingProvider } from "../launcher/ranking-store"
 import type {
   DiscoveredPlugin,
   ManifestCommand,
@@ -10,6 +11,7 @@ import type {
   PluginSandboxRuntime,
 } from "./types"
 import { EventEmitter } from "node:events"
+import { pluginCommandRankingKey, rankingBoost } from "../launcher/ranking-store"
 import { fuzzyMatch } from "../launcher/search"
 import { PermissionDenied } from "./permissions"
 
@@ -38,6 +40,7 @@ export interface PluginRegistryEvents {
 export interface PluginRegistryOptions {
   sandbox: PluginSandboxRuntime
   now?: () => number
+  ranking?: LauncherRankingProvider
 }
 
 interface CommandIndexEntry {
@@ -79,6 +82,13 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
 
   list(): PluginRegistryEntry[] {
     return [...this.entries.values()]
+  }
+
+  /** Ranking keys for every currently indexed command (for orphan pruning). */
+  commandRankingKeys(): string[] {
+    return [...this.commandIndex.values()].map((indexed) =>
+      pluginCommandRankingKey(indexed.pluginId, indexed.command.id)
+    )
   }
 
   get(pluginId: string): PluginRegistryEntry | undefined {
@@ -125,10 +135,12 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
   searchCommands(query: string, locale = "en", limit = 20): PluginCommandResult[] {
     const trimmed = query.trim()
     const results: PluginCommandResult[] = []
+    const now = this.now()
     for (const indexed of this.commandIndex.values()) {
       const candidate = commandSearchText(indexed.command, locale)
       const match = fuzzyMatch(trimmed, candidate)
       if (!match) continue
+      const rankingKey = pluginCommandRankingKey(indexed.pluginId, indexed.command.id)
       results.push({
         kind: "plugin-command",
         pluginId: indexed.pluginId,
@@ -137,7 +149,10 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
         subtitle: indexed.command.subtitle,
         icon: indexed.command.icon ?? indexed.pluginIcon,
         mode: indexed.command.mode,
-        score: match.score,
+        score:
+          match.score +
+          rankingBoost(this.options.ranking?.getSignals(rankingKey), now) +
+          (this.options.ranking?.getQueryBoost?.(trimmed, rankingKey, now) ?? 0),
         matches: match.matches,
       })
     }

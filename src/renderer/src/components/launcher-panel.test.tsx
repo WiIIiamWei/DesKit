@@ -1,4 +1,4 @@
-import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
+import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import userEvent from "@testing-library/user-event"
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest"
 import { LauncherPanel } from "./launcher-panel"
@@ -27,6 +27,7 @@ class ResizeObserverMock implements ResizeObserver {
 }
 
 let previousResizeObserver: typeof globalThis.ResizeObserver | undefined
+let runByIdHandler: ((command: { pluginId: string; commandId: string }) => void) | null = null
 
 function ok<T>(data: T): DeskitPluginIpcResult<T> {
   return { ok: true, data }
@@ -65,7 +66,12 @@ function installElectronApi(): TestElectronApi {
     writeClipboardContent: vi.fn().mockResolvedValue(true),
     pasteClipboardContent: vi.fn().mockResolvedValue(true),
     onLauncherFocus: vi.fn(() => () => undefined),
-    onLauncherRunPluginCommand: vi.fn(() => () => undefined),
+    onLauncherRunPluginCommand: vi.fn(
+      (cb: (command: { pluginId: string; commandId: string }) => void) => {
+        runByIdHandler = cb
+        return () => undefined
+      }
+    ),
   } satisfies Partial<TestElectronApi>
 
   window.electronAPI = api as unknown as TestElectronApi
@@ -88,6 +94,7 @@ describe("launcher panel", () => {
       globalThis.ResizeObserver = previousResizeObserver
     }
     previousResizeObserver = undefined
+    runByIdHandler = null
     delete window.electronAPI
   })
 
@@ -101,11 +108,47 @@ describe("launcher panel", () => {
     fireEvent.click(screen.getByText("JSON Formatter"))
 
     await waitFor(() => expect(api.invokePluginCommand).toHaveBeenCalledTimes(1))
+    // The search text "json" must not leak into the command input (initialQuery
+    // stays ""), but it IS forwarded as the trailing ranking query so the
+    // command can be learned under it.
     expect(api.invokePluginCommand).toHaveBeenLastCalledWith(
       "com.sanqian.dev-utilities",
       "dev.json",
       "run",
-      { initialQuery: "" }
+      { initialQuery: "" },
+      "json"
+    )
+  })
+
+  it("does not pass a ranking query when a command is opened directly by id", async () => {
+    const api = window.electronAPI!
+    // Direct-open path (floating ball / global hotkey) resolves the command
+    // from its manifest, not from a search selection.
+    vi.mocked(api.getPlugin).mockResolvedValueOnce(
+      ok({
+        manifest: {
+          contributes: {
+            commands: [{ id: "dev.json", title: { en: "JSON Formatter" }, mode: "view" }],
+          },
+        },
+      }) as never
+    )
+    render(<LauncherPanel />)
+    expect(typeof runByIdHandler).toBe("function")
+
+    await act(async () => {
+      runByIdHandler!({ pluginId: "com.sanqian.dev-utilities", commandId: "dev.json" })
+    })
+
+    await waitFor(() => expect(api.invokePluginCommand).toHaveBeenCalled())
+    // initialQuery stays empty AND the ranking query is undefined — no stale
+    // launcher search text leaks into per-query learning.
+    expect(api.invokePluginCommand).toHaveBeenLastCalledWith(
+      "com.sanqian.dev-utilities",
+      "dev.json",
+      "run",
+      { initialQuery: "" },
+      undefined
     )
   })
 })
