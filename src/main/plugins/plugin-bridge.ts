@@ -79,6 +79,7 @@ interface StorageState {
   loaded: boolean
   data: Record<string, unknown>
   flushTimer?: ReturnType<typeof setTimeout>
+  flushPromise?: Promise<void>
 }
 
 const defaultRuntime: PluginRuntimeSnapshot = {
@@ -212,12 +213,7 @@ export class PluginBridge {
   }
 
   storageBlobDir(pluginId: string): string {
-    return path.join(
-      this.options.userDataDir,
-      "plugin-data",
-      safePluginFileName(pluginId),
-      "blobs"
-    )
+    return path.join(this.options.userDataDir, "plugin-data", safePluginFileName(pluginId), "blobs")
   }
 
   async readClipboardForHost(): Promise<ClipboardContent | undefined> {
@@ -333,11 +329,25 @@ export class PluginBridge {
   private async flushStorage(pluginId: string): Promise<void> {
     const state = this.storage.get(pluginId)
     if (!state?.loaded) return
+    if (state.flushPromise) {
+      await state.flushPromise
+      return this.flushStorage(pluginId)
+    }
     if (state.flushTimer) {
       clearTimeout(state.flushTimer)
       state.flushTimer = undefined
     }
 
+    const flushPromise = this.writeStorageFile(pluginId, state)
+    state.flushPromise = flushPromise
+    try {
+      await flushPromise
+    } finally {
+      if (state.flushPromise === flushPromise) state.flushPromise = undefined
+    }
+  }
+
+  private async writeStorageFile(pluginId: string, state: StorageState): Promise<void> {
     const filePath = this.storageFilePath(pluginId)
     await fs.mkdir(path.dirname(filePath), { recursive: true })
     const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`

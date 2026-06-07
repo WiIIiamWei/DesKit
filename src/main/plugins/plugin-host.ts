@@ -488,7 +488,9 @@ export class PluginHost {
     this.clipboardWatchGeneration += 1
   }
 
-  private async readAndDispatchClipboard(generation = this.clipboardWatchGeneration): Promise<void> {
+  private async readAndDispatchClipboard(
+    generation = this.clipboardWatchGeneration
+  ): Promise<void> {
     if (this.clipboardReadInFlight) return
     this.clipboardReadInFlight = true
     try {
