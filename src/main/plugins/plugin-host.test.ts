@@ -416,6 +416,39 @@ describe("pluginHost unsupported operations", () => {
   })
 })
 
+describe("pluginHost uninstall", () => {
+  it("removes plugin blob storage", async () => {
+    const host = makeHost()
+    await writeHostPlugin({
+      id: "com.deskit.blob",
+      code: `
+module.exports = {
+  commands: {
+    "clipboard.run": {
+      async run(_input, ctx) {
+        await ctx.storage.writeBlob("images/one.txt", "payload")
+        return { type: "toast", level: "success", message: "ok" }
+      }
+    }
+  }
+}
+`,
+    })
+
+    await host.init()
+    await host.invoke({ pluginId: "com.deskit.blob", commandId: "clipboard.run", phase: "run" })
+
+    const blobRoot = path.dirname(host.bridge.storageBlobDir("com.deskit.blob"))
+    await expect(
+      fs.readFile(path.join(blobRoot, "blobs", "images", "one.txt"), "utf-8")
+    ).resolves.toBe("payload")
+
+    await host.uninstall("com.deskit.blob")
+
+    await expect(fs.stat(blobRoot)).rejects.toMatchObject({ code: "ENOENT" })
+  })
+})
+
 describe("pluginHost package installation", () => {
   it("installs a .deskit package into user plugins", async () => {
     const host = makeHost()
@@ -655,5 +688,66 @@ describe("pluginHost clipboard watcher", () => {
       host.dispose()
       vi.useRealTimers()
     }
+  })
+
+  it("does not start overlapping clipboard reads when polling is slower than the interval", async () => {
+    vi.useFakeTimers()
+    let resolveRead: ((content: ClipboardContent) => void) | undefined
+    const read = vi.fn(
+      () =>
+        new Promise<ClipboardContent>((resolve) => {
+          resolveRead = resolve
+        })
+    )
+    const host = makeHostWithClipboard(read)
+    await writeHostPlugin({ activationEvents: ["clipboard:change"] })
+
+    try {
+      await host.init()
+      await vi.advanceTimersByTimeAsync(50)
+
+      expect(read).toHaveBeenCalledTimes(1)
+      resolveRead?.({ type: "text", text: "hello" })
+      await vi.runOnlyPendingTimersAsync()
+      await host.flush()
+
+      const raw = await fs.readFile(
+        path.join(dir, "plugin-data", "com.deskit.clipboard.json"),
+        "utf-8"
+      )
+      expect(JSON.parse(raw)).toEqual({ entries: ["hello"] })
+    } finally {
+      host.dispose()
+      vi.useRealTimers()
+    }
+  })
+
+  it("unloads active plugins during shutdown so dispose hooks can flush plugin cleanup", async () => {
+    const host = makeHostWithClipboard(async () => undefined)
+    await writeHostPlugin({
+      code: `
+module.exports = {
+  commands: {
+    "clipboard.run": {
+      run() {
+        return { type: "toast", level: "info", message: "ok" }
+      },
+      async dispose(ctx) {
+        await ctx.storage.set("disposed", true)
+      }
+    }
+  }
+}
+`,
+    })
+
+    await host.init()
+    await host.shutdown()
+
+    const raw = await fs.readFile(
+      path.join(dir, "plugin-data", "com.deskit.clipboard.json"),
+      "utf-8"
+    )
+    expect(JSON.parse(raw)).toEqual({ disposed: true })
   })
 })

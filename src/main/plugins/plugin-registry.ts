@@ -132,6 +132,25 @@ export class PluginRegistry extends EventEmitter<PluginRegistryEvents> {
     }
   }
 
+  async unloadAll(): Promise<void> {
+    const activeEntries = [...this.entries.values()].filter((entry) => entry.status === "active")
+    await Promise.all(
+      activeEntries.map(async (entry) => {
+        try {
+          await this.options.sandbox.unloadPlugin(entry.pluginId)
+        } catch (err) {
+          console.warn(`[plugin-registry] Failed to unload ${entry.pluginId}`, err)
+        }
+      })
+    )
+    this.commandIndex.clear()
+    this.clipboardChangeListeners.clear()
+    for (const entry of activeEntries) {
+      this.entries.set(entry.pluginId, { ...entry, status: "disabled" })
+    }
+    if (activeEntries.length > 0) this.emitChanged()
+  }
+
   searchCommands(query: string, locale = "en", limit = 20): PluginCommandResult[] {
     const trimmed = query.trim()
     const results: PluginCommandResult[] = []

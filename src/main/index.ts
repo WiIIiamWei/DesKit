@@ -1468,9 +1468,8 @@ if (!gotLock) {
 
   // Plugin storage uses a 250ms throttled tmp+rename flush. Without this
   // hook the user clicks Quit at t=240ms after a `storage.set` and Electron
-  // exits before the flush timer fires — the write is dropped. We block
-  // before-quit once, run flushAll, then quit again. The `pluginsFlushed`
-  // flag ensures the second quit goes through normally instead of looping.
+  // exits before the flush timer fires. We block before-quit once, dispose
+  // plugin hooks so they can clean up, flush storage, then quit again.
   let pluginsFlushed = false
   app.on("before-quit", (event) => {
     quitRequested = true
@@ -1478,8 +1477,8 @@ if (!gotLock) {
     if (pluginsFlushed || !plugins) return
     event.preventDefault()
     void plugins
-      .flush()
-      .catch((err) => console.error("[deskit] plugin flush failed during shutdown", err))
+      .shutdown()
+      .catch((err) => console.error("[deskit] plugin shutdown failed", err))
       .finally(() => {
         pluginsFlushed = true
         app.quit()
