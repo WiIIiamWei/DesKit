@@ -51,6 +51,49 @@ describe("pluginBridge", () => {
     expect(JSON.parse(raw)).toEqual({ name: "DesKit", count: 2 })
   })
 
+  it("stores plugin blobs outside JSON storage", async () => {
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters(),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["storage:plugin"] })
+    )
+
+    await expect(pluginCtx.storage.writeBlob("images/one.txt", "payload")).resolves.toMatchObject({
+      key: "images/one.txt",
+      size: 7,
+    })
+    await expect(pluginCtx.storage.readBlob("images/one.txt")).resolves.toBe("payload")
+    await expect(pluginCtx.storage.listBlobs()).resolves.toEqual([
+      expect.objectContaining({ key: "images/one.txt", size: 7 }),
+    ])
+
+    await pluginCtx.storage.deleteBlob("images/one.txt")
+    await expect(pluginCtx.storage.readBlob("images/one.txt")).resolves.toBeUndefined()
+  })
+
+  it("rejects plugin blob keys that escape the blob directory", async () => {
+    const bridge = new PluginBridge({
+      userDataDir: dir,
+      adapters: adapters(),
+      storageFlushMs: 0,
+    })
+    const pluginCtx = bridge.createContext(
+      "com.deskit.test",
+      manifest({ permissions: ["storage:plugin"] })
+    )
+
+    await expect(pluginCtx.storage.writeBlob("../escape.txt", "payload")).rejects.toThrow(
+      "Storage blob key is invalid"
+    )
+    await expect(pluginCtx.storage.writeBlob("nested/../escape.txt", "payload")).rejects.toThrow(
+      "Storage blob key is invalid"
+    )
+  })
+
   it("routes plugin sync through permission-checked sync bridge", async () => {
     const sync = {
       status: vi.fn(() => ({ enabled: true, available: true })),

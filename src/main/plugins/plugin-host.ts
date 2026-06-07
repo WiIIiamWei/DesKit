@@ -114,7 +114,17 @@ interface InstallExpectations {
 }
 
 function clipboardSnapshot(content: ClipboardContent): string {
-  return JSON.stringify(content)
+  if (content.type === "text") {
+    return `text:${content.text.length}:${createHash("sha256").update(content.text).digest("hex")}`
+  }
+  return [
+    "image",
+    content.mimeType,
+    content.width ?? "",
+    content.height ?? "",
+    content.dataUrl.length,
+    createHash("sha256").update(content.dataUrl).digest("hex"),
+  ].join(":")
 }
 
 export class PluginHost {
@@ -127,6 +137,8 @@ export class PluginHost {
   private readonly devFilePath: string
   private clipboardTimer?: ReturnType<typeof setInterval>
   private lastClipboardSnapshot?: string
+  private clipboardReadInFlight = false
+  private clipboardWatchGeneration = 0
   private readonly handleRegistryChanged = (): void => {
     this.syncClipboardWatcher()
   }
@@ -400,6 +412,10 @@ export class PluginHost {
       this.bridge.storageFilePath(pluginId),
       path.join(this.options.userDataDir, "plugin-data")
     )
+    await removeDirectoryInside(
+      path.dirname(this.bridge.storageBlobDir(pluginId)),
+      path.join(this.options.userDataDir, "plugin-data")
+    )
     await this.reload()
   }
 
@@ -410,6 +426,12 @@ export class PluginHost {
   }
 
   async flush(): Promise<void> {
+    await this.bridge.flushAll()
+  }
+
+  async shutdown(): Promise<void> {
+    this.stopClipboardWatcher()
+    await this.registry.unloadAll()
     await this.bridge.flushAll()
   }
 
@@ -449,10 +471,11 @@ export class PluginHost {
   private startClipboardWatcher(): void {
     if (this.clipboardTimer) return
     const pollMs = this.options.clipboardPollMs ?? 500
+    const generation = this.clipboardWatchGeneration
     this.clipboardTimer = setInterval(() => {
-      void this.readAndDispatchClipboard()
+      void this.readAndDispatchClipboard(generation)
     }, pollMs)
-    void this.readAndDispatchClipboard()
+    void this.readAndDispatchClipboard(generation)
   }
 
   private stopClipboardWatcher(): void {
@@ -461,22 +484,33 @@ export class PluginHost {
       this.clipboardTimer = undefined
     }
     this.lastClipboardSnapshot = undefined
+    this.clipboardReadInFlight = false
+    this.clipboardWatchGeneration += 1
   }
 
-  private async readAndDispatchClipboard(): Promise<void> {
-    const content = await this.bridge.readClipboardForHost().catch((err) => {
-      console.warn("[plugin-host] Clipboard watch read failed", err)
-      return undefined
-    })
-    if (!content) return
+  private async readAndDispatchClipboard(generation = this.clipboardWatchGeneration): Promise<void> {
+    if (this.clipboardReadInFlight) return
+    this.clipboardReadInFlight = true
+    try {
+      const content = await this.bridge.readClipboardForHost().catch((err) => {
+        console.warn("[plugin-host] Clipboard watch read failed", err)
+        return undefined
+      })
+      if (!content) return
+      if (generation !== this.clipboardWatchGeneration) return
 
-    const snapshot = clipboardSnapshot(content)
-    if (snapshot === this.lastClipboardSnapshot) return
-    this.lastClipboardSnapshot = snapshot
+      const snapshot = clipboardSnapshot(content)
+      if (snapshot === this.lastClipboardSnapshot) return
+      this.lastClipboardSnapshot = snapshot
 
-    await this.registry.dispatchClipboardChange(content).catch((err) => {
-      console.warn("[plugin-host] Clipboard change dispatch failed", err)
-    })
+      await this.registry.dispatchClipboardChange(content).catch((err) => {
+        console.warn("[plugin-host] Clipboard change dispatch failed", err)
+      })
+    } finally {
+      if (generation === this.clipboardWatchGeneration) {
+        this.clipboardReadInFlight = false
+      }
+    }
   }
 
   private async downloadMarketplacePackage(entry: MarketplaceEntry): Promise<string> {

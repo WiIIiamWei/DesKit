@@ -7,17 +7,35 @@ export interface CaptureRegionResult {
   displayId: string
 }
 
+export interface StorageBlobInfo {
+  key: string
+  size: number
+  updatedAt: number
+}
+
+export interface StorageBlobOptions {
+  encoding?: "utf8" | "base64"
+}
+
 /**
  * Per-plugin key/value store. Backed by `userData/plugin-data/<pluginId>.json`
  * with throttled atomic writes (250ms batch) on the host. Values must be
  * JSON-serialisable. Reads are synchronous-feeling (host caches the file in
  * memory), writes are async to surface I/O errors.
+ *
+ * Blob helpers are stored under `userData/plugin-data/<pluginId>/blobs/`.
+ * They are intended for large plugin-owned payloads that should not live in
+ * the JSON hot path, such as clipboard image history entries.
  */
 export interface StorageAPI {
   get: <T = unknown>(key: string) => Promise<T | undefined>
   set: <T = unknown>(key: string, value: T) => Promise<void>
   delete: (key: string) => Promise<void>
   list: () => Promise<string[]>
+  writeBlob: (key: string, data: string, options?: StorageBlobOptions) => Promise<StorageBlobInfo>
+  readBlob: (key: string, options?: StorageBlobOptions) => Promise<string | undefined>
+  deleteBlob: (key: string) => Promise<void>
+  listBlobs: () => Promise<StorageBlobInfo[]>
 }
 
 /**

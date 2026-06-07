@@ -6,7 +6,7 @@ import type {
   View,
 } from "@deskit/plugin-sdk"
 
-export const PLUGIN_HOST_VERSION = "0.2.0"
+export const PLUGIN_HOST_VERSION = "0.2.1"
 
 export type PluginSourceKind = "builtin" | "user" | "dev"
 

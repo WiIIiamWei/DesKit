@@ -11,6 +11,7 @@ import type {
   SystemAPI,
 } from "@deskit/plugin-sdk"
 import type { PluginManifest } from "./types"
+import { createHash } from "node:crypto"
 import { promises as fs } from "node:fs"
 import * as path from "node:path"
 import process from "node:process"
@@ -210,6 +211,15 @@ export class PluginBridge {
     )
   }
 
+  storageBlobDir(pluginId: string): string {
+    return path.join(
+      this.options.userDataDir,
+      "plugin-data",
+      safePluginFileName(pluginId),
+      "blobs"
+    )
+  }
+
   async readClipboardForHost(): Promise<ClipboardContent | undefined> {
     return this.options.adapters.clipboard.read()
   }
@@ -240,6 +250,22 @@ export class PluginBridge {
         gate.check("storage:plugin")
         const state = await this.loadStorage(pluginId)
         return Object.keys(state.data)
+      },
+      writeBlob: async (key: string, data: string, options?: { encoding?: "utf8" | "base64" }) => {
+        gate.check("storage:plugin")
+        return this.writeStorageBlob(pluginId, key, data, options?.encoding)
+      },
+      readBlob: async (key: string, options?: { encoding?: "utf8" | "base64" }) => {
+        gate.check("storage:plugin")
+        return this.readStorageBlob(pluginId, key, options?.encoding)
+      },
+      deleteBlob: async (key: string) => {
+        gate.check("storage:plugin")
+        await this.deleteStorageBlob(pluginId, key)
+      },
+      listBlobs: async () => {
+        gate.check("storage:plugin")
+        return this.listStorageBlobs(pluginId)
       },
     }
   }
@@ -319,24 +345,87 @@ export class PluginBridge {
     await fs.rename(tempPath, filePath)
   }
 
+  private async writeStorageBlob(
+    pluginId: string,
+    key: string,
+    data: string,
+    encoding: "utf8" | "base64" = "utf8"
+  ): Promise<{ key: string; size: number; updatedAt: number }> {
+    const filePath = this.storageBlobPath(pluginId, key)
+    await fs.mkdir(path.dirname(filePath), { recursive: true })
+    const tempPath = `${filePath}.${process.pid}.${Date.now()}.tmp`
+    await fs.writeFile(tempPath, data, encoding === "base64" ? "base64" : "utf-8")
+    await fs.rename(tempPath, filePath)
+    const stat = await fs.stat(filePath)
+    return { key: normalizeStorageBlobKey(key), size: stat.size, updatedAt: stat.mtimeMs }
+  }
+
+  private async readStorageBlob(
+    pluginId: string,
+    key: string,
+    encoding: "utf8" | "base64" = "utf8"
+  ): Promise<string | undefined> {
+    try {
+      return await fs.readFile(
+        this.storageBlobPath(pluginId, key),
+        encoding === "base64" ? "base64" : "utf-8"
+      )
+    } catch (err) {
+      if (isFileNotFound(err)) return undefined
+      throw err
+    }
+  }
+
+  private async deleteStorageBlob(pluginId: string, key: string): Promise<void> {
+    try {
+      await fs.unlink(this.storageBlobPath(pluginId, key))
+    } catch (err) {
+      if (isFileNotFound(err)) return
+      throw err
+    }
+  }
+
+  private async listStorageBlobs(
+    pluginId: string
+  ): Promise<Array<{ key: string; size: number; updatedAt: number }>> {
+    const root = this.storageBlobDir(pluginId)
+    return listBlobFiles(root, root)
+  }
+
+  private storageBlobPath(pluginId: string, key: string): string {
+    const root = this.storageBlobDir(pluginId)
+    const normalizedKey = normalizeStorageBlobKey(key)
+    const resolved = path.resolve(root, normalizedKey)
+    if (!isInsideOrSameDirectory(resolved, path.resolve(root))) {
+      throw new Error("Storage blob key must stay inside the plugin blob directory")
+    }
+    return resolved
+  }
+
   private watchClipboard(
     pluginId: string,
     listener: (content: ClipboardContent) => void
   ): () => void {
-    let lastSerialized: string | undefined
+    let lastSnapshot: string | undefined
+    let readInFlight = false
+    let disposed = false
     const timer = setInterval(() => {
-      void this.options.adapters.clipboard
-        .read()
-        .then((content) => {
-          if (!content) return
-          const serialized = JSON.stringify(content)
-          if (serialized === lastSerialized) return
-          lastSerialized = serialized
+      if (readInFlight) return
+      readInFlight = true
+      void (async () => {
+        try {
+          const content = await this.options.adapters.clipboard.read()
+          if (disposed || !content) return
+          const snapshot = clipboardSnapshot(content)
+          if (snapshot === lastSnapshot) return
+          lastSnapshot = snapshot
           listener(content)
-        })
-        .catch((err) => {
+        } catch (err) {
           console.warn(`[plugin:${pluginId}] Clipboard watch read failed`, err)
-        })
+        } finally {
+          readInFlight = false
+        }
+      })()
     }, this.clipboardPollMs)
 
     let timers = this.watchers.get(pluginId)
@@ -347,6 +436,7 @@ export class PluginBridge {
     timers.add(timer)
 
     return () => {
+      disposed = true
       clearInterval(timer)
       timers.delete(timer)
       if (timers.size === 0) this.watchers.delete(pluginId)
@@ -364,6 +454,67 @@ function preferencesFromManifest(manifest: PluginManifest): Record<string, unkno
 
 function safePluginFileName(pluginId: string): string {
   return pluginId.replace(/[^\w.-]/g, "_")
+}
+
+function clipboardSnapshot(content: ClipboardContent): string {
+  if (content.type === "text") {
+    return `text:${content.text.length}:${createHash("sha256").update(content.text).digest("hex")}`
+  }
+  return [
+    "image",
+    content.mimeType,
+    content.width ?? "",
+    content.height ?? "",
+    content.dataUrl.length,
+    createHash("sha256").update(content.dataUrl).digest("hex"),
+  ].join(":")
+}
+
+function normalizeStorageBlobKey(key: string): string {
+  if (typeof key !== "string" || !key.trim()) throw new Error("Storage blob key is required")
+  const normalized = key.replace(/\\/g, "/").replace(/^\/+/, "")
+  if (
+    normalized.includes("\0") ||
+    normalized.split("/").some((segment) => !segment || segment === "." || segment === "..")
+  ) {
+    throw new Error("Storage blob key is invalid")
+  }
+  return normalized
+}
+
+async function listBlobFiles(
+  dir: string,
+  root: string
+): Promise<Array<{ key: string; size: number; updatedAt: number }>> {
+  let entries
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true })
+  } catch (err) {
+    if (isFileNotFound(err)) return []
+    throw err
+  }
+
+  const blobs: Array<{ key: string; size: number; updatedAt: number }> = []
+  for (const entry of entries) {
+    const filePath = path.join(dir, entry.name)
+    if (entry.isDirectory()) {
+      blobs.push(...(await listBlobFiles(filePath, root)))
+      continue
+    }
+    if (!entry.isFile()) continue
+    const stat = await fs.stat(filePath)
+    blobs.push({
+      key: path.relative(root, filePath).replace(/\\/g, "/"),
+      size: stat.size,
+      updatedAt: stat.mtimeMs,
+    })
+  }
+  return blobs
+}
+
+function isInsideOrSameDirectory(target: string, parent: string): boolean {
+  const relative = path.relative(parent, target)
+  return !relative || (!relative.startsWith("..") && !path.isAbsolute(relative))
 }
 
 function normalizeHttpUrl(url: string): string {
